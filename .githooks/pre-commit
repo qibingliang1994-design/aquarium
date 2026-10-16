@@ -1,0 +1,8 @@
+#!/bin/sh
+# 提交前本地检查：lint → typecheck → test（不含 build，保持提交够快）
+# 启用：npm install 时由 prepare 脚本自动设置 core.hooksPath=.githooks
+# 临时跳过：git commit --no-verify
+set -e
+echo "[pre-commit] lint"      && npm run --silent lint
+echo "[pre-commit] typecheck" && npm run --silent typecheck
+echo "[pre-commit] test"      && npm run --silent test

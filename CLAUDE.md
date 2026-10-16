@@ -17,8 +17,10 @@ npm run lint      # ESLint (correctness rules only; eslint.config.js)
 npm run typecheck # tsc -p jsconfig.json — only files with `// @ts-check` are checked
 npm test          # Vitest, tests/**/*.test.js, Node environment
 npx vitest run tests/care.test.js -t "离线"   # single file / single test by name
-npm run check     # lint + typecheck + test + build (what CI runs, .github/workflows/ci.yml)
+npm run check     # lint + typecheck + test + build
 ```
+
+The project is developed and run locally only (no remote, no hosted CI). A git pre-commit hook in `.githooks/pre-commit` runs lint → typecheck → test; `npm install` enables it via the `prepare` script (`core.hooksPath=.githooks`). Skip once with `git commit --no-verify`.
 
 - No formatter on purpose: the code uses a dense, shader-like style; don't mass-reformat files. ESLint enforces no unused vars, no empty `catch`, `prefer-const`, `eqeqeq` (smart).
 - Type checking is opt-in per file (`// @ts-check` + JSDoc); `src/utils.js` and `src/systems/care.js` are opted in. Opt more pure modules in as they're touched rather than enabling `checkJs` globally.

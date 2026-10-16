@@ -72,7 +72,7 @@
     不同步、昼夜按钮文案不随存档的问题），识鱼卡/帮助/图鉴/加载页统一重做；加载超时判定改为有报错或 25 秒。
 - 工程化（v1.7）：ESLint 9（只查正确性，不引入格式化器——保留紧凑代码风格）、Vitest 单测（`tests/`：utils / care /
   Feeder，Node 环境 + 按用例 stub 浏览器全局）、渐进式类型检查（`jsconfig.json` + 文件级 `// @ts-check` + JSDoc）、
-  `npm run check` 一键串联、GitHub Actions CI（`.github/workflows/ci.yml`）、`.editorconfig` / `.nvmrc` / `engines`。
+  `npm run check` 一键串联、本地 pre-commit 钩子（`.githooks/`，提交前跑 lint/typecheck/test；项目仅本地开发，不设远程 CI）、`.editorconfig` / `.nvmrc` / `engines`。
   顺带修掉 lint 发现的空 catch（设置读写失败现在会告警）与几处未用变量。
 
 ## 后续拆分顺序

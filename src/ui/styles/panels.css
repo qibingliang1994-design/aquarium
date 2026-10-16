@@ -1,0 +1,75 @@
+/* ================================================================
+ * 浮层：设置弹层 / 识鱼卡片 / 帮助
+ * ================================================================ */
+
+/* ---------- 设置弹层（锚定 Dock 按钮，位置由 settings-panel.js 计算） ---------- */
+#settingsPop{position:fixed;z-index:20;width:236px;padding:10px 8px 8px;border-radius:var(--r-md);
+  transform-origin:50% 100%;animation:popIn .2s var(--ease)}
+#settingsPop[hidden]{display:none}
+@keyframes popIn{from{opacity:0;transform:translateY(8px) scale(.97)}}
+.pop-title{margin:6px 10px 4px;font-size:10px;letter-spacing:.24em;color:var(--ink-3)}
+.pop-title:first-child{margin-top:0}
+.switch-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 10px;border-radius:var(--r-sm);font-size:13px;color:var(--ink-2);cursor:pointer;
+  transition:background .15s,color .15s}
+.switch-row:hover{background:rgba(120,210,230,.07);color:var(--ink)}
+.switch-row input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.switch{position:relative;flex:0 0 auto;width:34px;height:20px;border-radius:999px;
+  background:rgba(150,220,235,.16);transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;
+  background:#cfe4ea;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .22s var(--ease),background .2s}
+.switch-row input:checked + .switch{background:linear-gradient(90deg,var(--accent-2),var(--accent))}
+.switch-row input:checked + .switch::after{transform:translateX(14px);background:#fff}
+.switch-row input:focus-visible + .switch{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- 识鱼卡片 ---------- */
+#fishCard{--sp:var(--accent);position:fixed;z-index:20;width:268px;padding:16px 16px 14px;
+  border-radius:var(--r-md);overflow:hidden;animation:popIn .2s var(--ease)}
+#fishCard[hidden]{display:none}
+#fishCard::before{content:"";position:absolute;inset:0 0 auto;height:3px;
+  background:linear-gradient(90deg,var(--sp),transparent 85%)}
+#fishCard::after{content:"";position:absolute;top:-60px;right:-60px;width:160px;height:160px;border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--sp) 22%,transparent),transparent 70%);pointer-events:none}
+#fishCard[data-species=tetra]{--sp:#3cc8ff}
+#fishCard[data-species=gold]{--sp:#ff9a3c}
+#fishCard[data-species=angel]{--sp:#ffd24a}
+#fishCard[data-species=cory]{--sp:#cdb48e}
+#fishCard[data-species=koi]{--sp:#ff6a4f}
+#fishCard[data-species=clown]{--sp:#ff7a1a}
+#fishCard[data-species=lion]{--sp:#ef5a3c}
+#fishCard[data-species=mandarin]{--sp:#2fd8c8}
+#fishCard[data-species=parrot]{--sp:#3fe0b0}
+.fc-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.fc-name{display:flex;align-items:baseline;gap:8px}
+#fcTitle{font-size:17px;font-weight:600;letter-spacing:.08em;color:var(--ink)}
+#fcNo{font-size:11px;color:var(--sp);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.fc-latin{margin:5px 0 0;font-size:11px;font-style:italic;color:var(--ink-3)}
+.fc-meta{position:relative;margin:14px 0 0;padding:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fc-meta div{display:flex;flex-direction:column;gap:4px}
+.fc-meta dt{font-size:10px;letter-spacing:.14em;color:var(--ink-3)}
+.fc-meta dd{margin:0;font-size:12.5px;color:var(--ink)}
+.fc-foot{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.fc-chip{padding:4px 10px;border-radius:999px;font-size:11px;letter-spacing:.08em;white-space:nowrap;
+  color:var(--warm);background:rgba(243,194,107,.12);border:1px solid rgba(243,194,107,.25)}
+.fc-grow{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-3)}
+.fc-grow i{display:block;width:64px;height:5px;border-radius:3px;background:rgba(150,220,235,.14);overflow:hidden}
+#fcGrowBar{display:block;height:100%;width:0;border-radius:3px;
+  background:linear-gradient(90deg,var(--sp),color-mix(in srgb,var(--sp) 60%,#fff));transition:width .5s var(--ease)}
+#fcGrowth{font-style:normal;color:var(--ink);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- 帮助 ---------- */
+.modal{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:rgba(2,8,14,.55);backdrop-filter:blur(6px);animation:fadeIn .2s ease}
+.modal[hidden]{display:none}
+@keyframes fadeIn{from{opacity:0}}
+#helpCard{width:min(460px,100%);padding:26px 28px 22px;border-radius:var(--r-lg);animation:popIn .24s var(--ease)}
+#helpCard h2{margin:0 0 16px;font-size:18px;font-weight:600;letter-spacing:.18em;color:var(--ink)}
+.help-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+.help-list li{display:grid;grid-template-columns:92px 1fr;align-items:baseline;gap:12px;
+  font-size:13px;line-height:1.65;color:var(--ink-2)}
+kbd{justify-self:start;padding:3px 8px;border-radius:7px;font:500 11px/1.4 var(--font);letter-spacing:.06em;
+  color:var(--accent);background:rgba(95,212,232,.08);border:1px solid rgba(95,212,232,.28);
+  box-shadow:inset 0 -1px 0 rgba(95,212,232,.2);white-space:nowrap}
+.help-cast{margin:18px 0 0;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;line-height:1.8;color:var(--ink-3)}
+#helpClose{display:block;margin:18px 0 0 auto}

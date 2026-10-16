@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#04070c"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235fd4e8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 12c2.8-4.6 8.6-5.8 12.6-2.8L20.5 6v12l-5.4-3.2C11.1 17.8 5.3 16.6 2.5 12z'/%3E%3C/svg%3E"/>
+<title>水族箱 · Aquarium</title>
+<link rel="stylesheet" href="./src/ui/styles/base.css"/>
+<link rel="stylesheet" href="./src/ui/styles/panels.css"/>
+<link rel="stylesheet" href="./src/ui/styles/encyclopedia.css"/>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<!-- 线性图标集（Dock / 品牌 / 面板共用），以 <use href="#i-xxx"> 引用 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="careGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6d27a"/><stop offset="1" stop-color="#e38a4a"/>
+    </linearGradient>
+  </defs>
+  <symbol id="i-fish" viewBox="0 0 24 24"><path d="M2.5 12c2.8-4.6 8.6-5.8 12.6-2.8L20.5 6v12l-5.4-3.2C11.1 17.8 5.3 16.6 2.5 12z"/><circle cx="7.6" cy="11.2" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-feed" viewBox="0 0 24 24"><path d="M6 3.5h12l-1.4 4.2H7.4z"/><circle cx="8.5" cy="13" r="1.4" fill="currentColor" stroke="none"/><circle cx="14.6" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="11.6" cy="17" r="1.5" fill="currentColor" stroke="none"/><circle cx="16.2" cy="19.6" r="1" fill="currentColor" stroke="none"/><circle cx="7.4" cy="20.2" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.6A8.2 8.2 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M3.5 8.5h3.2l1.9-2.8h6.8l1.9 2.8h3.2v10.8h-17z"/><circle cx="12" cy="13.6" r="3.4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4.5 5.5c2.8-1.3 5.3-1.3 7.5 0v14c-2.2-1.3-4.7-1.3-7.5 0z"/><path d="M19.5 5.5c-2.8-1.3-5.3-1.3-7.5 0v14c2.2-1.3 4.7-1.3 7.5 0z"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.4v.6"/><circle cx="12" cy="16.8" r=".9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+</svg>
+
+<div id="app"></div>
+<div id="vignette"></div>
+
+<header id="hud">
+  <svg class="brand-mark icon" aria-hidden="true"><use href="#i-fish"/></svg>
+  <div>
+    <div id="title">AQUARIUM</div>
+    <div class="brand-sub">治愈系桌面水族箱</div>
+  </div>
+</header>
+
+<div id="care" class="glass" title="全缸饱食度：吃饱的鱼不再抢食，约 3 分钟后重新饿">
+  <svg class="care-ring" viewBox="0 0 36 36" aria-hidden="true">
+    <circle class="track" cx="18" cy="18" r="15" pathLength="100"/>
+    <circle id="careFill" cx="18" cy="18" r="15" pathLength="100"/>
+  </svg>
+  <div class="care-txt"><small>饱食度</small><span id="careText">…</span></div>
+</div>
+
+<nav id="dock" class="glass" aria-label="水族箱操作">
+  <button id="bFeed" class="dock-btn primary" title="在随机位置投喂"><svg class="icon"><use href="#i-feed"/></svg><span>喂食</span></button>
+  <button id="bLight" class="dock-btn" title="切换到月光"><svg class="icon i-moon"><use href="#i-moon"/></svg><svg class="icon i-sun"><use href="#i-sun"/></svg><span>夜间</span></button>
+  <button id="bCam" class="dock-btn" title="切换预设机位"><svg class="icon"><use href="#i-cam"/></svg><span>视角</span></button>
+  <button id="bGuide" class="dock-btn" title="鱼类图鉴"><svg class="icon"><use href="#i-book"/></svg><span>图鉴</span></button>
+  <i class="dock-sep" aria-hidden="true"></i>
+  <button id="bSettings" class="dock-btn compact" title="设置" aria-expanded="false"><svg class="icon"><use href="#i-sliders"/></svg></button>
+  <button id="bHelp" class="dock-btn compact" title="操作说明"><svg class="icon"><use href="#i-help"/></svg></button>
+</nav>
+
+<div id="stats">…</div>
+<div id="hint">拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击敲玻璃</div>
+
+<div id="settingsPop" class="glass-strong" hidden>
+  <p class="pop-title">设置</p>
+  <label class="switch-row"><span>环境音效</span><input type="checkbox" id="setSound" role="switch"/><i class="switch"></i></label>
+  <label class="switch-row"><span>自动昼夜循环</span><input type="checkbox" id="setCycle" role="switch"/><i class="switch"></i></label>
+  <p class="pop-title">画面</p>
+  <label class="switch-row"><span>光柱</span><input type="checkbox" id="setRays" role="switch"/><i class="switch"></i></label>
+  <label class="switch-row"><span>气泡</span><input type="checkbox" id="setBubbles" role="switch"/><i class="switch"></i></label>
+  <label class="switch-row"><span>悬浮颗粒</span><input type="checkbox" id="setSnow" role="switch"/><i class="switch"></i></label>
+  <label class="switch-row"><span>水面焦散</span><input type="checkbox" id="setCaustics" role="switch"/><i class="switch"></i></label>
+</div>
+
+<div id="fishCard" class="glass-strong" hidden>
+  <div class="fc-head">
+    <div>
+      <div class="fc-name"><span id="fcTitle"></span><span id="fcNo"></span></div>
+      <p class="fc-latin" id="fcLatin"></p>
+    </div>
+    <button id="fcClose" class="icon-btn" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+  </div>
+  <dl class="fc-meta">
+    <div><dt>活动水层</dt><dd id="fcZone"></dd></div>
+    <div><dt>成鱼体长</dt><dd id="fcSize"></dd></div>
+    <div><dt>性格</dt><dd id="fcBehavior"></dd></div>
+    <div><dt>食性</dt><dd id="fcDiet"></dd></div>
+  </dl>
+  <div class="fc-foot">
+    <span class="fc-chip" id="fcMood"></span>
+    <div class="fc-grow"><span>成长</span><i><b id="fcGrowBar"></b></i><em id="fcGrowth"></em></div>
+  </div>
+</div>
+
+<div id="help" class="modal" hidden>
+  <div id="helpCard" class="glass-strong" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">怎么玩</h2>
+    <ul class="help-list">
+      <li><kbd>点击水面</kbd><span>撒饲料，鱼群会争抢前来；吃饱了就懒得理，约 3 分钟后又会饿</span></li>
+      <li><kbd>点击鱼</kbd><span>查看它的资料卡与成长进度——常吃到饲料的鱼会慢慢长大</span></li>
+      <li><kbd>快速双击</kbd><span>敲玻璃，鱼群受惊四散，片刻后重新聚拢</span></li>
+      <li><kbd>拖拽 / 滚轮</kbd><span>旋转、缩放视角；右键拖拽平移</span></li>
+      <li><kbd>H</kbd><span>拍照模式：隐藏界面，再按一次 H 保存高清截图，Esc 退出</span></li>
+      <li><kbd>夜间</kbd><span>切到月光，鱼群放慢游动、沉到下层休息</span></li>
+    </ul>
+    <p class="help-cast">缸中居民：脂鲤群 · 蝴蝶鱼 · 金鱼 · 鼠鱼 · 小丑鱼 · 狮子鱼 · 麒麟鱼 · 鹦鹉鱼 · 锦鲤</p>
+    <button id="helpClose" class="btn-primary">知道了</button>
+  </div>
+</div>
+
+<div id="encyclopedia" hidden aria-hidden="true">
+  <section class="encyclopedia-shell glass-strong" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+    <header class="encyclopedia-head">
+      <div>
+        <p class="encyclopedia-kicker">AQUARIUM FIELD GUIDE</p>
+        <h2 id="guideTitle">鱼类图鉴</h2>
+        <p>认识水族箱里的居民，了解它们的活动水层、体型与性格。</p>
+      </div>
+      <button id="guideClose" class="icon-btn" type="button" aria-label="关闭鱼类图鉴"><svg class="icon"><use href="#i-close"/></svg></button>
+    </header>
+    <div id="speciesGrid" class="species-grid"></div>
+    <footer class="encyclopedia-foot">
+      <span>当前水族箱已收录 <strong id="speciesCount">4</strong> 个鱼种</span>
+      <span class="guide-tip">提示：点击“喂食”观察不同鱼类的觅食反应</span>
+    </footer>
+  </section>
+</div>
+
+<div id="loading">
+  <svg class="loading-mark icon" aria-hidden="true"><use href="#i-fish"/></svg>
+  <p id="loadingText">正在注水 …</p>
+  <div id="err">加载失败：请检查网络后刷新。<br/>本地开发请运行 <code>npm run dev</code></div>
+</div>
+
+<script>
+  // 加载动画气泡 + 运行错误收集 + 加载失败兜底提示
+  (function(){
+    window.__errs=[];
+    window.addEventListener('error',e=>window.__errs.push(String(e.message||e.error)));
+    window.addEventListener('unhandledrejection',e=>window.__errs.push('rejection:'+String(e.reason)));
+    var l=document.getElementById('loading');
+    for(var i=0;i<9;i++){var b=document.createElement('div');b.className='bub';
+      b.style.left=(6+Math.random()*88)+'%';b.style.animationDuration=(4+Math.random()*5)+'s';
+      b.style.animationDelay=(-Math.random()*8)+'s';b.style.transform='scale('+(0.4+Math.random())+')';
+      l.appendChild(b);}
+    function fail(){
+      l=document.getElementById('loading'); if(!l) return;
+      l.classList.remove('done');
+      var t=document.getElementById('loadingText'); if(t) t.style.display='none';
+      var e=document.getElementById('err'); if(e) e.style.display='block';
+    }
+    // 8 秒未就绪：有报错直接提示失败，否则先提示"仍在加载"，25 秒后再判失败
+    setTimeout(function(){
+      if(window.__aqReady) return;
+      if(window.__errs.length) return fail();
+      var t=document.getElementById('loadingText'); if(t) t.textContent='模型较多，仍在加载 …';
+      setTimeout(function(){ if(!window.__aqReady) fail(); },17000);
+    },8000);
+  })();
+</script>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+import * as THREE from 'three';
+import { vnoise } from '../utils.js';
+import { U } from '../uniforms.js';
+import { injectCaustics, causticsTex } from './caustics.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* ================================================================
+ * 水族箱尺寸
+ * ================================================================ */
+export const TANK = {
+  W: 4.6, H: 2.2, D: 1.8,          // 玻璃外尺寸
+  glass: 0.035,                    // 玻璃厚
+  waterY: 1.84,                    // 水面高度
+};
+const INNER = { x: TANK.W/2 - TANK.glass, z: TANK.D/2 - TANK.glass };
+
+// 沙面高度场（沙地网格与查询共用同一函数）
+export function sandHeight(x,z){
+  return 0.20 + vnoise(x*1.5+3.7, z*1.5+7.2)*0.10 + (z*0.5+0.5)*0.10;
+}
+
+export function createTank(scene){
+/* ================================================================
+ * 水族箱本体：玻璃 / 边框 / 灯罩 / 水面 / 沙底
+ * ================================================================ */
+const tankGroup=new THREE.Group();
+scene.add(tankGroup);
+let stripMat;   // 灯条材质（夜间调暗用）
+
+// 经典透明玻璃（非 transmission）：透射材质会把透明物体（气泡/光柱/悬浮物）
+// 从缸外视角剔除，改为普通透明后全部可见，且省掉透射 pass 提升性能
+const glassHigh=new THREE.MeshPhysicalMaterial({
+  color:0xcfeef0, roughness:0.04, metalness:0, transparent:true, opacity:0.018,
+  envMapIntensity:0.8, clearcoat:1, clearcoatRoughness:0.06,
+  specularIntensity:1 });
+const glassLow=new THREE.MeshPhysicalMaterial({
+  color:0xdff2f4, transparent:true, opacity:0.035, roughness:0.08, metalness:0, envMapIntensity:0.9 });
+const glassMat=glassHigh;
+{
+  const W=TANK.W, H=TANK.H, D=TANK.D, t=TANK.glass;
+  const front=new THREE.Mesh(new THREE.BoxGeometry(W,H,t), glassMat);
+  front.position.set(0,H/2, D/2-t/2);
+  const back=front.clone(); back.position.z=-(D/2-t/2);
+  const left=new THREE.Mesh(new THREE.BoxGeometry(t,H,D-2*t), glassMat);
+  left.position.set(-(W/2-t/2),H/2,0);
+  const right=left.clone(); right.position.x=W/2-t/2;
+  const bottom=new THREE.Mesh(new THREE.BoxGeometry(W-2*t,t,D-2*t),
+    new THREE.MeshStandardMaterial({color:0x0c1013, roughness:0.9}));
+  bottom.position.y=t/2;
+  tankGroup.add(front,back,left,right,bottom);
+
+  const trimMat=new THREE.MeshStandardMaterial({color:0x15181c, roughness:0.35, metalness:0.55});
+  const mk=(w,h,d,x,y,z)=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),trimMat);
+    m.position.set(x,y,z); tankGroup.add(m);
+  };
+  // 顶框已移除：无边缸造型
+  mk(W+0.06,0.07,D+0.06, 0,0.02,0);                // 底框
+  for(const sx of [-1,1]) for(const sz of [-1,1])
+    mk(0.06,H,0.06, sx*(W/2+0.005), H/2, sz*(D/2+0.005));
+
+  const hood=new THREE.Mesh(new THREE.BoxGeometry(W+0.08,0.12,0.6), trimMat);
+  hood.position.set(0,H+0.1,-(D/2-0.28));
+  tankGroup.add(hood);
+  stripMat=new THREE.MeshStandardMaterial({color:0x111111, emissive:0xfff2dd, emissiveIntensity:2.8});
+  const strip=new THREE.Mesh(new THREE.PlaneGeometry(W*0.92,0.42), stripMat);
+  strip.rotation.x=Math.PI/2;
+  strip.position.set(0,H+0.045,-(D/2-0.28));
+  tankGroup.add(strip);
+}
+
+/* ---------- 水面 ---------- */
+const waterUniforms={
+  uTime:U.time,
+  uSky:{value:new THREE.Color(0.45,0.62,0.72)},
+  uDeep:{value:new THREE.Color(0.02,0.09,0.13)},
+  uLightColor:{value:new THREE.Color(1.0,0.95,0.85)},
+  uCMap:{value:causticsTex},
+};
+const waterMesh=new THREE.Mesh(
+  new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.01, TANK.D-2*TANK.glass-0.01, 48, 24).rotateX(-Math.PI/2),
+  new THREE.ShaderMaterial({
+    uniforms:waterUniforms, transparent:true, opacity:0.55, side:THREE.DoubleSide,
+    vertexShader:`
+      uniform float uTime;
+      varying vec3 vW; varying vec2 vXZ;
+      void main(){
+        vec3 p=position;
+        float t=uTime;
+        p.y += ( sin(p.x*7.0+t*1.3) + sin(p.z*9.0+t*1.7) + sin((p.x+p.z)*5.0+t*0.9) )*0.006;
+        vec4 wp=modelMatrix*vec4(p,1.0); vW=wp.xyz; vXZ=p.xz;
+        gl_Position=projectionMatrix*viewMatrix*wp;
+      }`,
+    fragmentShader:`
+      uniform float uTime; uniform vec3 uSky, uDeep, uLightColor; uniform sampler2D uCMap;
+      varying vec3 vW; varying vec2 vXZ;
+      void main(){
+        float t=uTime;
+        vec2 g=vec2(
+          7.0*cos(vXZ.x*7.0+t*1.3)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006,
+          9.0*cos(vXZ.y*9.0+t*1.7)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006);
+        vec3 n=normalize(vec3(-g.x,0.02,-g.y));
+        if(!gl_FrontFacing) n=-n;
+        vec3 v=normalize(cameraPosition-vW);
+        float fres=pow(1.0-max(dot(n,v),0.0),3.0);
+        // 正面（俯视）：天光渐变；背面（仰视）：掠射角全内反射变亮 + 灯光透过波面的流动亮纹
+        vec3 col;
+        float alpha=0.93;
+        if(gl_FrontFacing) col = mix(uDeep, uSky, fres*0.95);
+        else {
+          float graze = pow(1.0-abs(dot(n,v)), 2.2);
+          float s1 = texture2D(uCMap, vXZ*0.8 + vec2(t*0.031, t*0.022)).r;
+          float s2 = texture2D(uCMap, vXZ*1.3 - vec2(t*0.024,-t*0.017)).r;
+          col = mix(uDeep*1.5, uSky*0.62, graze) + uLightColor*pow(s1*s2,0.7)*0.32*(1.0-graze*0.6);
+          alpha = 0.82 + 0.15*graze;
+        }
+        vec3 r=reflect(normalize(vec3(-0.05,-1.0,-0.22)),n);
+        col+=uLightColor*pow(max(dot(r,v),0.0),90.0)*2.2;
+        gl_FragColor=vec4(col,alpha);
+      }`,
+  }));
+waterMesh.position.y=TANK.waterY;
+tankGroup.add(waterMesh);
+
+/* ---------- 沙底（颗粒纹理） ---------- */
+const sandTex=(()=>{
+  const s=512, cv=document.createElement('canvas'); cv.width=cv.height=s;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#cdbb9e'; ctx.fillRect(0,0,s,s);
+  const img=ctx.getImageData(0,0,s,s), d=img.data;
+  for(let i=0;i<d.length;i+=4){
+    const n=(Math.random()-0.5)*26;
+    d[i]+=n; d[i+1]+=n*0.9; d[i+2]+=n*0.8;
+  }
+  ctx.putImageData(img,0,0);
+  for(let i=0;i<1400;i++){                      // 深浅砂粒
+    ctx.fillStyle=Math.random()<0.5?'rgba(90,75,55,.5)':'rgba(255,248,230,.45)';
+    const r=Math.random()*1.4+0.4;
+    ctx.beginPath(); ctx.arc(Math.random()*s,Math.random()*s,r,0,7); ctx.fill();
+  }
+  const tex=new THREE.CanvasTexture(cv);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping; tex.repeat.set(3,1.6);
+  tex.anisotropy=8; tex.colorSpace=THREE.SRGBColorSpace;
+  return tex;
+})();
+const sandMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95, metalness:0, map:sandTex, bumpMap:sandTex, bumpScale:0.12});
+injectCaustics(sandMat, 0.7, 'sand');
+const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.glass-0.02, 72, 32).rotateX(-Math.PI/2);
+{
+  const p=sandGeo.attributes.position, col=new Float32Array(p.count*3);
+  const c1=new THREE.Color(0xc9b79b), c2=new THREE.Color(0x9d8b72), tmp=new THREE.Color();
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i), z=p.getZ(i);
+    p.setY(i, sandHeight(x,z));
+    tmp.copy(c1).lerp(c2, vnoise(x*2.3+11,z*2.3+5)*0.8);
+    col[i*3]=tmp.r; col[i*3+1]=tmp.g; col[i*3+2]=tmp.b;
+  }
+  sandGeo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  sandGeo.computeVertexNormals();
+}
+const sand=new THREE.Mesh(sandGeo, sandMat);
+sand.receiveShadow=true;
+tankGroup.add(sand);
+
+/* ---------- 背景幕（渐变，增加纵深） ---------- */
+// 水景缸常见的"背光幕"：缸体正后方柔和青色辉光，四周压暗，鱼与水草在其上形成剪影层次
+const bgTex=(()=>{
+  const cv=document.createElement('canvas'); cv.width=512; cv.height=256;
+  const ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,0,256);
+  g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
+  ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
+  const r=ctx.createRadialGradient(256,150,10,256,150,250);
+  r.addColorStop(0,'rgba(58,138,160,0.55)'); r.addColorStop(0.45,'rgba(26,74,96,0.28)'); r.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
+  const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
+  return tex;
+})();
+const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(8.6,4.6),
+  new THREE.MeshBasicMaterial({map:bgTex, fog:false}));
+backdrop.position.set(0,1.5,-2.5);
+scene.add(backdrop);
+
+/* ---------- 底柜与房间地面 ---------- */
+let floorGlowMat;
+{
+  const CW=TANK.W+0.3, CD=TANK.D+0.3;
+  const cab=new THREE.Mesh(new RoundedBoxGeometry(CW,0.72,CD,4,0.035),   // 圆角柜体：边缘接住高光
+    new THREE.MeshPhysicalMaterial({color:0x1a1c21, roughness:0.4, metalness:0.1,
+      clearcoat:0.45, clearcoatRoughness:0.35}));
+  cab.position.y=-0.38;
+  cab.receiveShadow=true;
+  tankGroup.add(cab);
+  const seamMat=new THREE.MeshBasicMaterial({color:0x060708});            // 三扇柜门的细缝
+  for(const x of [-CW/6, CW/6]){
+    const seam=new THREE.Mesh(new THREE.PlaneGeometry(0.005,0.6), seamMat);
+    seam.position.set(x,-0.39,CD/2+0.001);
+    tankGroup.add(seam);
+  }
+  const floor=new THREE.Mesh(new THREE.CircleGeometry(14,48).rotateX(-Math.PI/2),
+    new THREE.MeshStandardMaterial({color:0x0e0f12, roughness:0.62, metalness:0.2}));
+  floor.position.y=-0.75;
+  floor.receiveShadow=true;
+  scene.add(floor);
+  // 地面光晕：缸体透出的水色漏光，把柜子"落"在地上
+  const glowTex=(()=>{
+    const cv=document.createElement('canvas'); cv.width=cv.height=256;
+    const ctx=cv.getContext('2d');
+    const r=ctx.createRadialGradient(128,128,0,128,128,128);
+    r.addColorStop(0,'rgba(70,170,200,0.32)'); r.addColorStop(0.5,'rgba(40,110,140,0.12)'); r.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=r; ctx.fillRect(0,0,256,256);
+    const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
+    return tex;
+  })();
+  floorGlowMat=new THREE.MeshBasicMaterial({map:glowTex, transparent:true, depthWrite:false,
+    blending:THREE.AdditiveBlending, fog:false});
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(9,5).rotateX(-Math.PI/2), floorGlowMat);
+  glow.position.y=-0.748;
+  scene.add(glow);
+}
+  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, stripMat, floorGlowMat };
+}

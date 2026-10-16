@@ -12,7 +12,6 @@ export const TANK = {
   glass: 0.035,                    // 玻璃厚
   waterY: 1.84,                    // 水面高度
 };
-const INNER = { x: TANK.W/2 - TANK.glass, z: TANK.D/2 - TANK.glass };
 
 // 沙面高度场（沙地网格与查询共用同一函数）
 export function sandHeight(x,z){

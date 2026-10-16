@@ -240,7 +240,7 @@ export class School {
       if(sleep>0) _acc.y+=(sleepY-p.y)*0.8*sleep;  // 夜间沉向水层带下部休息
       if(regroup>0) _acc.addScaledVector(_v1.subVectors(_center,p), regroup);
       if(spec.territory && !hunting){                // 领地盘旋（觅食时让位）
-        const tx=spec.territory[0], ty=spec.territory[1], tz=spec.territory[2], tr=spec.territory[3];
+        const [tx, , tz, tr]=spec.territory;            // [x, y(未用), z, 半径]
         const dx=p.x-tx, dz=p.z-tz;
         const d=Math.hypot(dx,dz)||1e-4;
         if(d>tr){ const s=(d-tr)*3; _acc.x-=dx/d*s; _acc.z-=dz/d*s; }   // 越界弹簧拉回

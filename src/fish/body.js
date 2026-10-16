@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { clamp, lerp, sstep } from '../utils.js';
+import { clamp, sstep } from '../utils.js';
 import { U } from '../uniforms.js';
 
 /* ================================================================

@@ -13,9 +13,18 @@ npm run dev       # Vite dev server
 npm run build     # production build → dist/ (base './', target es2022, fully offline)
 npm run preview   # serve dist/
 npm run serve     # node _serve.cjs → http://127.0.0.1:8791/, serves raw source with no-cache headers
+npm run lint      # ESLint (correctness rules only; eslint.config.js)
+npm run typecheck # tsc -p jsconfig.json — only files with `// @ts-check` are checked
+npm test          # Vitest, tests/**/*.test.js, Node environment
+npx vitest run tests/care.test.js -t "离线"   # single file / single test by name
+npm run check     # lint + typecheck + test + build (what CI runs, .github/workflows/ci.yml)
 ```
 
-There is no test runner, linter, or formatter configured. Verification is done by running the app in a browser and using the `window.__aqDebug` hooks (see below). `requestAnimationFrame` does not fire in a hidden/background browser page, so the sim only advances while the page is visible (for headless checks, replacing `window.requestAnimationFrame` with a `setTimeout` shim at runtime keeps the loop going; this also trips the 6 s auto low-quality fallback).
+- No formatter on purpose: the code uses a dense, shader-like style; don't mass-reformat files. ESLint enforces no unused vars, no empty `catch`, `prefer-const`, `eqeqeq` (smart).
+- Type checking is opt-in per file (`// @ts-check` + JSDoc); `src/utils.js` and `src/systems/care.js` are opted in. Opt more pure modules in as they're touched rather than enabling `checkJs` globally.
+- Unit tests cover pure logic only (`utils`, `care`, `Feeder`). Browser globals are stubbed per test with `vi.stubGlobal` (`localStorage`, `addEventListener`); Three.js geometry/material construction works in Node, but anything needing WebGL, `document`/canvas (e.g. `fish/textures.js`, `caustics.js` texture generation) does not — keep such modules out of unit tests.
+
+Visual and behavioral verification is done by running the app in a browser and using the `window.__aqDebug` hooks (see below). `requestAnimationFrame` does not fire in a hidden/background browser page, so the sim only advances while the page is visible (for headless checks, replacing `window.requestAnimationFrame` with a `setTimeout` shim at runtime keeps the loop going; this also trips the 6 s auto low-quality fallback).
 
 `npm run serve` serves `index.html` and `src/` unbundled; bare `three` imports resolve through the `<script type="importmap">` in `index.html`, which points at the jsDelivr CDN (needs network). Vite ignores that importmap path and bundles the local `three` dependency. If you change the Three.js version, update both `package.json` and the importmap.
 
@@ -30,7 +39,7 @@ There is no test runner, linter, or formatter configured. Verification is done b
 - `ui/fish-card.js` — fish picking (raycast; GLB hits walk up to the clone root for `userData.fishIndex`) and the info card. `ui/settings-panel.js` — settings switches (synced from saved settings) anchored above the dock button.
 - `scene/setup.js` post chain: RenderPass → UnrealBloom → OutputPass → `scene/grading.js` (display-space grade + grain). **Any NaN/Inf pixel gets smeared by bloom into large black rectangles** — guard `Math.pow` on values that can be a hair below 0 (e.g. `t` from a translated `PlaneGeometry`) and shader math the same way. `__aqDebug.bloom(false)` is the quick check.
 - `uniforms.js` `U` — global shader uniforms (`time`, `excite`) shared across materials; `main.js` advances them each frame.
-- `scene/caustics.js` — `injectCaustics(mat, …)` patches materials via `onBeforeCompile`; `setCausticsEnabled` toggles globally. Fish shading in `fish/body.js` (`injectSwim`, `injectTailSway`) uses the same shader-injection pattern.
+- `scene/caustics.js` — `injectCaustics(mat, …)` patches materials via `onBeforeCompile`; `setCausticsEnabled` toggles globally. Procedural fish shading (`fish/body.js` `injectSwim`) and GLB fish shading (`fish/glb-style.js` `decorateFishMaterial`) use the same shader-injection pattern.
 
 ### Fish pipeline (dual mode)
 

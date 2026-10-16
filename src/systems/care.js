@@ -1,4 +1,8 @@
+// @ts-check
 import { clamp, sstep } from '../utils.js';
+
+/** @typedef {{ id:string, count:number }} SpeciesLike */
+/** @typedef {{ satiety?:unknown, t?:unknown, fed?:Record<string, unknown> }} CareSave */
 
 /* ================================================================
  * 饲养状态：全缸饱食度 + 个体成长（localStorage 持久化）
@@ -13,26 +17,33 @@ const GROW_PELLETS=30;           // 个体累计吃 30 颗长到上限（约 20 
 const GROW_MAX=0.25;             // 成长上限：体长 +25%
 const SAVE_INTERVAL=2;           // 有改动时最多每 2 秒落盘一次
 
+/** @type {[number, string][]} */
 const STATUS=[ [0.75,'饥肠辘辘'], [0.45,'觅食中'], [0.15,'半饱'], [-1,'酒足饭饱'] ];
 
+/** @returns {CareSave} */
 function loadState(){
   try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'{}')||{}; }
   catch(err){ console.warn('[care] 读取饲养存档失败，使用初始状态', err); return {}; }
 }
 
+/** @param {SpeciesLike[]} species */
 export function createCare(species){
   const saved=loadState();
-  const elapsed=Number.isFinite(saved.t) ? Math.max(0,(Date.now()-saved.t)/1000) : 0;
+  const elapsed=typeof saved.t==='number' && Number.isFinite(saved.t) ? Math.max(0,(Date.now()-saved.t)/1000) : 0;
   const savedSatiety=Number(saved.satiety);
   let satiety=clamp((Number.isFinite(savedSatiety)?savedSatiety:0.3)-elapsed*DECAY_PER_SEC, 0, 1);
+  /** @type {Record<string, number[]>} */
   const fed={};
   for(const s of species){
-    const arr=Array.isArray(saved.fed?.[s.id]) ? saved.fed[s.id] : [];
+    const raw=saved.fed?.[s.id];
+    const arr=Array.isArray(raw) ? raw : [];
     fed[s.id]=Array.from({length:s.count},(_,i)=>Math.max(0,Number(arr[i])||0));
   }
   let dirty=false, saveTimer=SAVE_INTERVAL;
 
+  /** @type {(id:string, i:number)=>number} */
   const growthProgress=(id,i)=>Math.min(1,(fed[id]?.[i]??0)/GROW_PELLETS);
+  /** @type {(id:string, i:number)=>number} */
   const growthOf=(id,i)=>1+GROW_MAX*growthProgress(id,i);
 
   function save(){
@@ -43,20 +54,23 @@ export function createCare(species){
 
   return {
     get satiety(){ return satiety; },
-    set satiety(v){ satiety=clamp(v,0,1); dirty=true; },
+    set satiety(/** @type {number} */ v){ satiety=clamp(v,0,1); dirty=true; },
     // 食欲 0..1：饱食度 ≥0.96 时几乎为 0（饲料沉底无人理）
     appetite:()=>sstep(0.04,0.6,1-satiety),
-    status:()=>STATUS.find(([k])=>1-satiety>k)[1],
+    /** @returns {string} */
+    status:()=>(STATUS.find(([k])=>1-satiety>k) ?? STATUS[STATUS.length-1])[1],
     growthOf,
     growthProgress,
-    growthArray:id=>fed[id].map((_,i)=>growthOf(id,i)),
+    growthArray:(/** @type {string} */ id)=>fed[id].map((_,i)=>growthOf(id,i)),
     // 一颗饲料被吃：饱食度↑、个体成长；返回该鱼新的体型系数
+    /** @param {string} id @param {number} i */
     eat(id,i){
       satiety=Math.min(1,satiety+PELLET_SATIETY);
       if(fed[id] && i<fed[id].length) fed[id][i]+=1;
       dirty=true;
       return growthOf(id,i);
     },
+    /** @param {number} dt 秒 */
     update(dt){
       satiety=Math.max(0,satiety-dt*DECAY_PER_SEC);
       saveTimer-=dt;

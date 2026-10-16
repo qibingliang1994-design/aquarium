@@ -1,0 +1,16 @@
+{
+  // 渐进式类型检查：全局 checkJs 关闭，文件顶部写 `// @ts-check` 的模块才参与检查
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src/**/*.js", "tests/**/*.js"]
+}

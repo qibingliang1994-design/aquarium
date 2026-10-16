@@ -58,8 +58,8 @@ const FISH_TOTAL=schools.reduce((a,s)=>a+s.spec.count,0);
  * 设置与持久化（localStorage：音效 / 自动昼夜 / 昼晚状态）
  * ================================================================ */
 const settings={ sound:true, cycle:false, night:0, rays:true, bubbles:true, snow:true, caustics:true };
-try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch{}
-const saveSettings=()=>{ try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch{} };
+try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
+const saveSettings=()=>{ try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
 // 特效可见性按已存设置应用
 bubbles.mesh.visible=settings.bubbles; rays.group.visible=settings.rays;

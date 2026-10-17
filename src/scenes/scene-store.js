@@ -5,14 +5,16 @@ import { PRESETS, findPreset } from './presets.js';
 /* ================================================================
  * 场景存档：localStorage['aquarium.scenes'] = { version, activeId, scenes:[文档] }
  * 缩略图单独存 'aquarium.thumbs'（体积大，避免每次保存场景都重写）
- * 首次运行用预设播种；旧版全局饲养存档 'aquarium.care' 迁移给经典场景
+ * 首次运行用预设播种；之后新版本加入的预设按 seeded 记录补发给老玩家（删掉的预设不会复活）；旧版全局饲养存档 'aquarium.care' 迁移给经典场景
  * ================================================================ */
 
 /** @typedef {import('./scene-doc.js').SceneDoc} SceneDoc */
 
 const KEY = 'aquarium.scenes', THUMBS = 'aquarium.thumbs', VERSION = 1;
 const LEGACY_CARE = 'aquarium.care';
-export const MAX_SCENES = 12;
+export const MAX_SCENES = 16;
+/** v2.0 之前的存档没有 seeded 字段，当时只有这三个预设 */
+const LEGACY_SEEDED = ['classic','reef','pond'];
 
 /** 每个场景独立的饲养存档键 @param {string} sceneId */
 export const careKey = sceneId => `aquarium.care.${sceneId}`;
@@ -33,8 +35,18 @@ export function createSceneStore(){
   /** @type {SceneDoc[]} */
   let scenes = (Array.isArray(raw?.scenes) ? raw.scenes : []).map(sanitizeDoc)
     .filter(/** @param {SceneDoc|null} d @returns {d is SceneDoc} */ d => d!==null).slice(0, MAX_SCENES);
-  if(!scenes.length){
+  /** @type {string[]} */
+  let seeded = Array.isArray(raw?.seeded) ? raw.seeded.filter(/** @param {unknown} x */ x=>typeof x==='string') : [];
+  if(scenes.length){
+    if(!Array.isArray(raw?.seeded)) seeded = [...new Set([...LEGACY_SEEDED, ...scenes.map(s=>s.presetId).filter(/** @returns {x is string} */ x=>!!x)])];
+    for(const p of PRESETS){
+      if(seeded.includes(p.id) || scenes.length>=MAX_SCENES) continue;
+      if(!scenes.some(s=>s.id===p.id)) scenes.push(cloneDoc(p));
+      seeded.push(p.id);
+    }
+  }else{
     scenes = PRESETS.map(cloneDoc);
+    seeded = PRESETS.map(p=>p.id);
     const legacy = localStorage.getItem(LEGACY_CARE);           // 老存档迁移：鱼的饱食度与成长不丢
     if(legacy && !localStorage.getItem(careKey('classic'))){
       localStorage.setItem(careKey('classic'), legacy);
@@ -45,7 +57,7 @@ export function createSceneStore(){
   /** @type {Record<string,string>} */
   const thumbs = readJSON(THUMBS) ?? {};
 
-  const persist = () => writeJSON(KEY, { version:VERSION, activeId, scenes });
+  const persist = () => writeJSON(KEY, { version:VERSION, activeId, scenes, seeded });
   persist();
 
   /** @param {string} id */

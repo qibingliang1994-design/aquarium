@@ -92,10 +92,10 @@ export function createEditorPanel(h){
     themeBtns[id]=b;
     themeEl.appendChild(b);
   }
-  // 缸体款式：只换外壳（框/灯/柜），不影响造景与鱼
+  // 缸体 / 自然水域：只换外壳（框/灯/柜 或 岸地/天空），不影响造景与鱼
   const tankBtns={};
-  themeEl.insertAdjacentHTML('beforeend','<p class="ed-group">缸体</p>');
-  for(const id of TANK_IDS){
+  for(const [kind, title] of [['tank','玻璃缸'],['natural','自然水域']]) for(const id of TANK_IDS.filter(i=>TANK_STYLES[i].kind===kind)){
+    if(!themeEl.querySelector(`[data-kind-head="${kind}"]`)) themeEl.insertAdjacentHTML('beforeend',`<p class="ed-group" data-kind-head="${kind}">${title}</p>`);
     const t=TANK_STYLES[id], b=document.createElement('button');
     b.className='theme-opt tank-opt'; b.dataset.tank=id;
     b.innerHTML='<i></i><div><b></b><small></small></div>';

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { vnoise } from '../utils.js';
+import { isNatural } from '../scenes/tank-styles.js';
+import { buildNaturalShell } from './natural-shells.js';
 
 /* ================================================================
  * 缸体外壳（随场景切换）：框 / 玻璃边 / 灯具 / 底柜
@@ -181,16 +183,27 @@ const BUILDERS={
   },
 };
 
-/** 构建外壳；未知款式回退经典 @param {string} id @param {{W:number,H:number,D:number,glass:number}} dims */
-export function buildShell(id, dims){
+/** 构建外壳；未知款式回退经典。自然水域没有灯具发光面（lightMat=null），natural=true 时 tank.js 隐藏玻璃与房间
+ * @param {string} id @param {{W:number,H:number,D:number,glass:number}} dims @param {{waterY:number, sandHeight:(x:number,z:number)=>number}} world */
+export function buildShell(id, dims, world){
   ({ W, H, D, glass:T }=dims);
+  if(isNatural(id)){
+    const group=buildNaturalShell(id, dims, world);
+    group.name=`tank-shell-${id}`;
+    return { group, lightMat:null, natural:true };
+  }
   const group=new THREE.Group();
   group.name=`tank-shell-${id}`;
   const lightMat=(BUILDERS[id] ?? BUILDERS.classic)(group);
-  return { group, lightMat };
+  return { group, lightMat, natural:false };
 }
 
 /** 释放外壳（木纹贴图按 key 缓存，不释放） */
 export function disposeShell(group){
-  group.traverse(o=>{ if(o.isMesh){ o.geometry.dispose(); o.material.dispose(); } });
+  group.traverse(o=>{
+    if(!o.isMesh) return;
+    o.geometry.dispose();
+    if(!o.userData.sharedMat) o.material.dispose();     // 水草材质是跨物件共享的
+    if(o.isInstancedMesh) o.dispose();
+  });
 }

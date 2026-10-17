@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeRng, rrange } from '../utils.js';
-import { sandHeight } from '../scene/tank.js';
+import { sandHeight, TANK } from '../scene/tank.js';
 import { SPECIES } from '../entities/fish/species.js';
 import { School } from '../entities/fish/school.js';
 import { createCare } from '../systems/care.js';
@@ -57,9 +57,11 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   /* ---------- 物件 ---------- */
   function place(e){
     const it=e.item;
-    e.root.position.set(it.x, sandHeight(it.x,it.z), it.z);
+    const y=sandHeight(it.x,it.z);
+    e.root.position.set(it.x, y, it.z);
     e.root.rotation.set(0, it.rot, 0);
     e.root.scale.setScalar(it.s);
+    e.root.children[0]?.userData.onPlace?.((TANK.waterY-y)/it.s);   // 睡莲/香蒲按到水面的局部高度伸展
     e.root.updateMatrix();
     e.root.updateMatrixWorld(true);
   }

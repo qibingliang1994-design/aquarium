@@ -27,6 +27,18 @@ export const THEMES = {
     sand:[0x8d8f86,0x6a6c66], backdrop:'86,140,118',
     gravel:[0x9a9c95,0x7e807a,0xb6b7b0,0x6c6e69,0xa59a88],
   },
+  stream: {
+    label:'溪流清水', hint:'青灰卵石 · 清冽见底',
+    fog:0x0d3038, glow:0x58b8c8, sky:[0.55,0.74,0.8], deep:[0.03,0.14,0.17],
+    sand:[0x8f8a80,0x6c6860], backdrop:'90,160,175',
+    gravel:[0xa8a49a,0x8a8478,0xc4bfb2,0x7b7468,0x9a9284],
+  },
+  river: {
+    label:'河湾茶水', hint:'黄褐泥沙 · 微茶色河水',
+    fog:0x1d2a1c, glow:0x8a9a5a, sky:[0.58,0.6,0.46], deep:[0.07,0.08,0.04],
+    sand:[0x9c8461,0x76603f], backdrop:'130,140,90',
+    gravel:[0xa08a6a,0x86704f,0xb8a585,0x6f5c40,0x958165],
+  },
 };
 
 export const THEME_IDS = Object.keys(THEMES);

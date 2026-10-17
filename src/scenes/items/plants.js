@@ -35,13 +35,13 @@ const VARIANTS=3;
 
 // 植株模板：每种 3 个变体，按固定种子生成后缓存（物件之间共享，不释放）
 const unitGeo=(type, v)=>shared(`geo:${type}:${v}`, ()=>PLANTS[type].unit(makeRng(9173+v*131+type.length*17)));
-const bladeMat = () => shared('mat:blade', ()=>{
+export const bladeMat = () => shared('mat:blade', ()=>{
   const m=new THREE.MeshPhysicalMaterial({vertexColors:true, roughness:0.5, metalness:0, side:THREE.DoubleSide,
     sheen:0.5, sheenRoughness:0.45, sheenColor:new THREE.Color(0xb8f08a), specularIntensity:0.45});
   injectSway(m, 0.1, 2.1, 'blade', true);
   return m;
 });
-const bladeDepth = () => shared('mat:blade_d', ()=>{
+export const bladeDepth = () => shared('mat:blade_d', ()=>{
   const m=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide});
   injectSway(m, 0.1, 2.1, 'blade_d');
   return m;

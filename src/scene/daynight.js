@@ -17,18 +17,20 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     glow:new THREE.Color(0x3a6fa8), glowI:0.45, strip:0.5, bg:new THREE.Color(0x030509),
     fog:new THREE.Color(0x061420), sky:new THREE.Color(0.1,0.16,0.28), deep:new THREE.Color(0.005,0.03,0.06) };
   let k=0, target=0;
+  // 自然水域的户外环境：天空色/雾色/环境光覆盖日间表（夜间仍是统一的月光表）
+  let ENV=null; const envBg=new THREE.Color(), envFog=new THREE.Color();
 
   function apply(v){
     k=v;
     hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k);
     hoodSpot.color.lerpColors(DAY.spotCol,NIGHT.spotCol,k);
-    hemi.intensity=lerp(DAY.hemi,NIGHT.hemi,k);
-    fillLight.intensity=lerp(DAY.fill,NIGHT.fill,k);
-    scene.environmentIntensity=lerp(DAY.env,NIGHT.env,k);
+    hemi.intensity=lerp(ENV?.hemi ?? DAY.hemi,NIGHT.hemi,k);
+    fillLight.intensity=lerp(ENV?.fill ?? DAY.fill,NIGHT.fill,k);
+    scene.environmentIntensity=lerp(ENV?.env ?? DAY.env,NIGHT.env,k);
     waterGlow.color.lerpColors(DAY.glow,NIGHT.glow,k);
     waterGlow.intensity=lerp(DAY.glowI,NIGHT.glowI,k);
-    scene.background.lerpColors(DAY.bg,NIGHT.bg,k);
-    scene.fog.color.lerpColors(DAY.fog,NIGHT.fog,k);
+    scene.background.lerpColors(ENV ? envBg : DAY.bg,NIGHT.bg,k);
+    scene.fog.color.lerpColors(ENV ? envFog : DAY.fog,NIGHT.fog,k);
     waterUniforms.uSky.value.lerpColors(DAY.sky,NIGHT.sky,k);
     waterUniforms.uDeep.value.lerpColors(DAY.deep,NIGHT.deep,k);
     rays.setNight(k);
@@ -56,6 +58,9 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     setTank(t){
       DAY.spotCol.setHex(t.light.spotCol); DAY.spot=16*t.light.spotK;
       hoodSpot.position.y=t.light.spotY;
+      ENV=t.env ?? null;
+      if(ENV){ envBg.setHex(ENV.bg); envFog.setHex(ENV.fog); }
+      scene.fog.density=ENV?.fogD ?? 0.052;
       apply(k);
     },
     /** 鱼群重建后补一次（新鱼的焦散强度跟上当前昼夜） */

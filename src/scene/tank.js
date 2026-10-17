@@ -34,6 +34,7 @@ const glassHigh=new THREE.MeshPhysicalMaterial({
 const glassLow=new THREE.MeshPhysicalMaterial({
   color:0xdff2f4, transparent:true, opacity:0.035, roughness:0.08, metalness:0, envMapIntensity:0.9 });
 const glassMat=glassHigh;
+const glassPanes=[];      // 自然水域时隐藏
 {
   const W=TANK.W, H=TANK.H, D=TANK.D, t=TANK.glass;
   const front=new THREE.Mesh(new THREE.BoxGeometry(W,H,t), glassMat);
@@ -46,6 +47,7 @@ const glassMat=glassHigh;
     new THREE.MeshStandardMaterial({color:0x0c1013, roughness:0.9}));
   bottom.position.y=t/2;
   tankGroup.add(front,back,left,right,bottom);
+  glassPanes.push(front,back,left,right,bottom);
 
 }
 
@@ -56,37 +58,43 @@ const waterUniforms={
   uDeep:{value:new THREE.Color(0.02,0.09,0.13)},
   uLightColor:{value:new THREE.Color(1.0,0.95,0.85)},
   uCMap:{value:causticsTex},
+  uClear:{value:0},          // 0 = 缸（水面近乎不透明，主要从侧面看）；1 = 自然水域（俯视时清澈见底，掠射角才反光）
+  uFlow:{value:0},           // 水流速度：波纹沿 +x 漂移
 };
 const waterMesh=new THREE.Mesh(
   new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.01, TANK.D-2*TANK.glass-0.01, 48, 24).rotateX(-Math.PI/2),
   new THREE.ShaderMaterial({
     uniforms:waterUniforms, transparent:true, opacity:0.55, side:THREE.DoubleSide,
     vertexShader:`
-      uniform float uTime;
+      uniform float uTime, uFlow;
       varying vec3 vW; varying vec2 vXZ;
       void main(){
-        vec3 p=position;
         float t=uTime;
-        p.y += ( sin(p.x*7.0+t*1.3) + sin(p.z*9.0+t*1.7) + sin((p.x+p.z)*5.0+t*0.9) )*0.006;
-        vec4 wp=modelMatrix*vec4(p,1.0); vW=wp.xyz; vXZ=p.xz;
+        vec4 wp=modelMatrix*vec4(position,1.0);          // 波形按世界坐标算：自然水域放大水面时波长不变
+        vec2 q=vec2(wp.x-uFlow*t*0.9, wp.z);              // 顺流平移的波形坐标
+        wp.y += ( sin(q.x*7.0+t*1.3) + sin(q.y*9.0+t*1.7) + sin((q.x+q.y)*5.0+t*0.9) )*0.006;
+        vW=wp.xyz; vXZ=q;
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,
     fragmentShader:`
-      uniform float uTime; uniform vec3 uSky, uDeep, uLightColor; uniform sampler2D uCMap;
+      uniform float uTime, uClear; uniform vec3 uSky, uDeep, uLightColor; uniform sampler2D uCMap;
       varying vec3 vW; varying vec2 vXZ;
       void main(){
         float t=uTime;
         vec2 g=vec2(
           7.0*cos(vXZ.x*7.0+t*1.3)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006,
           9.0*cos(vXZ.y*9.0+t*1.7)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006);
-        vec3 n=normalize(vec3(-g.x,0.02,-g.y));
+        vec3 n=normalize(vec3(-g.x,mix(0.02,0.4,uClear),-g.y));   // 自然水域多为俯视：法线放缓，否则菲涅尔出现条纹
         if(!gl_FrontFacing) n=-n;
         vec3 v=normalize(cameraPosition-vW);
         float fres=pow(1.0-max(dot(n,v),0.0),3.0);
         // 正面（俯视）：天光渐变；背面（仰视）：掠射角全内反射变亮 + 灯光透过波面的流动亮纹
         vec3 col;
         float alpha=0.93;
-        if(gl_FrontFacing) col = mix(uDeep, uSky, fres*0.95);
+        if(gl_FrontFacing){
+          col = mix(uDeep, uSky, fres*0.95);
+          alpha = mix(0.93, mix(0.2, 0.92, pow(fres,0.8)), uClear);   // 自然水域：近看清澈，远处/掠射反光
+        }
         else {
           float graze = pow(1.0-abs(dot(n,v)), 2.2);
           float s1 = texture2D(uCMap, vXZ*0.8 + vec2(t*0.031, t*0.022)).r;
@@ -148,7 +156,8 @@ const skirtGeo=(()=>{
   side(-iw,id, iw,id); side(iw,-id, -iw,-id); side(-iw,-id, -iw,id); side(iw,id, iw,-id);
   return parts;
 })();
-for(const g of skirtGeo){ const m=new THREE.Mesh(g, sandMat); m.receiveShadow=true; tankGroup.add(m); }
+const sandParts=[];        // 沙床 + 侧裙：自然水域时由地形接管
+for(const g of skirtGeo){ const m=new THREE.Mesh(g, sandMat); m.receiveShadow=true; tankGroup.add(m); sandParts.push(m); }
 // 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合；侧壁越深越暗（湿砂 + 光线衰减）
 function setSandColors(a, b){
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
@@ -170,6 +179,7 @@ setSandColors(0xa28862, 0x7e6647);
 const sand=new THREE.Mesh(sandGeo, sandMat);
 sand.receiveShadow=true;
 tankGroup.add(sand);
+sandParts.push(sand);
 
 /* ---------- 背景幕（渐变，增加纵深） ---------- */
 // 水景缸常见的"背光幕"：缸体正后方柔和青色辉光，四周压暗，鱼与水草在其上形成剪影层次
@@ -195,14 +205,21 @@ scene.add(backdrop);
 
 /* ---------- 缸体外壳（框 / 灯具 / 底柜，随场景款式切换，见 tank-shells.js） ---------- */
 const shell={ id:'', group:null, lightMat:null };
+const room=[];             // 房间地面 / 漏光 / 背光幕：自然水域时隐藏（换成户外地形与天空）
 function setShell(id){
   if(shell.id===id) return;
   if(shell.group){ tankGroup.remove(shell.group); disposeShell(shell.group); }
-  const built=buildShell(id, TANK);
+  const built=buildShell(id, TANK, { waterY:TANK.waterY, sandHeight });
   Object.assign(shell, { id, ...built });
   tankGroup.add(built.group);
+  const nat=built.natural;
+  for(const m of glassPanes) m.visible=!nat;
+  for(const m of room) m.visible=!nat;
+  for(const m of sandParts) m.visible=!nat;
+  const wx=built.group.userData.water;          // 自然水域：水面铺到浅滩上（河道铺满），岸线由地形自然遮挡
+  waterMesh.scale.set(nat ? wx.x*2/TANK.W : 1, 1, nat ? wx.z*2/TANK.D : 1);
+  waterUniforms.uClear.value=nat ? 1 : 0;
 }
-setShell('classic');
 
 /* ---------- 房间地面 ---------- */
 let floorGlowMat;
@@ -211,7 +228,7 @@ let floorGlowMat;
     new THREE.MeshStandardMaterial({color:0x0e0f12, roughness:0.62, metalness:0.2}));
   floor.position.y=-0.75;
   floor.receiveShadow=true;
-  scene.add(floor);
+  scene.add(floor); room.push(floor);
   // 地面光晕：缸体透出的水色漏光，把柜子"落"在地上
   const glowTex=(()=>{
     const cv=document.createElement('canvas'); cv.width=cv.height=256;
@@ -226,7 +243,9 @@ let floorGlowMat;
     blending:THREE.AdditiveBlending, fog:false});
   const glow=new THREE.Mesh(new THREE.PlaneGeometry(9,5).rotateX(-Math.PI/2), floorGlowMat);
   glow.position.y=-0.748;
-  scene.add(glow);
+  scene.add(glow); room.push(glow);
 }
+room.push(backdrop);
+setShell('classic');
   return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat, setSandColors, setBackdrop, shell, setShell };
 }

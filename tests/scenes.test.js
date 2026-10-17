@@ -6,7 +6,7 @@ import { sanitizeDoc, sanitizeItem, sanitizeFish, FISH_IDS, FISH_MAX, FISH_TOTAL
 import { PRESETS } from '../src/scenes/presets.js';
 import { createSceneStore, careKey, MAX_SCENES } from '../src/scenes/scene-store.js';
 import { createHistory } from '../src/editor/history.js';
-import { TANK_STYLES, resolveTank } from '../src/scenes/tank-styles.js';
+import { TANK_STYLES, resolveTank, isNatural } from '../src/scenes/tank-styles.js';
 import { SPECIES } from '../src/entities/fish/species.js';
 
 function stubStorage(initial = {}) {
@@ -96,10 +96,19 @@ describe('缸体款式', () => {
     expect(resolveTank('rimless', 'reef')).toBe('rimless');
   });
 
-  it('三个预设各配一种不同的缸，且都是已知款式', () => {
+  it('每个预设各配一种不同的缸 / 水域，且都是已知款式', () => {
     const tanks = PRESETS.map(p => sanitizeDoc(p).tank);
     for (const t of tanks) expect(TANK_STYLES[t]).toBeTruthy();
     expect(new Set(tanks).size).toBe(PRESETS.length);
+  });
+
+  it('池塘 / 溪流 / 小河是自然水域，溪流有水流而池塘是静水', () => {
+    expect(['pond', 'stream', 'river'].every(isNatural)).toBe(true);
+    expect(['classic', 'rimless', 'reef', 'zen', 'nope'].some(isNatural)).toBe(false);
+    expect(TANK_STYLES.stream.env.current).toBeGreaterThan(0);
+    expect(TANK_STYLES.pond.env.current).toBe(0);
+    const natural = PRESETS.filter(p => isNatural(p.tank)).map(p => p.id);
+    expect(natural).toEqual(['lotus', 'stream', 'river']);
   });
 });
 
@@ -148,6 +157,22 @@ describe('createSceneStore', () => {
     while (store.canAdd()) store.create('x', 'fresh');
     expect(store.list()).toHaveLength(MAX_SCENES);
     expect(store.duplicate(store.activeId)).toBeNull();
+  });
+
+  it('老存档：补发新版本加入的预设，且只补一次', () => {
+    const old = PRESETS.filter(p => ['classic', 'reef', 'pond'].includes(p.id));
+    mem.set('aquarium.scenes', JSON.stringify({ version: 1, activeId: 'reef', scenes: old }));
+    const s1 = createSceneStore();
+    expect(s1.list().map(s => s.id)).toEqual(PRESETS.map(p => p.id));
+    expect(s1.activeId).toBe('reef');
+    s1.remove('stream');                                         // 玩家删掉的预设不会再冒出来
+    expect(createSceneStore().list().map(s => s.id)).not.toContain('stream');
+  });
+
+  it('补发预设不超过场景上限', () => {
+    const many = Array.from({ length: MAX_SCENES }, (_, i) => ({ ...PRESETS[0], id: `s${i}`, presetId: undefined }));
+    mem.set('aquarium.scenes', JSON.stringify({ version: 1, activeId: 's0', scenes: many }));
+    expect(createSceneStore().list()).toHaveLength(MAX_SCENES);
   });
 
   it('损坏的存档不会让程序崩溃', () => {

@@ -64,12 +64,12 @@ export function rosette(rng, { n, len:[l0,l1], width, petiole, tilt:[t0,t1], ben
 }
 
 /** 带状叶丛：细长扭转的缎带叶（苦草 / 海草） */
-export function ribbons(rng, { n, len:[l0,l1], width, twist, colors, spread=0.03 }){
+export function ribbons(rng, { n, len:[l0,l1], width, twist, colors, spread=0.03, segs=18, cols=4 }){   // segs/cols 调低用于成片的岸草
   const parts=[];
   for(let i=0;i<n;i++){
     const [cb,ct]=colors[Math.floor(rng()*colors.length)];
     const leaf=makeLeaf({ len:rrange(rng,l0,l1), width:width*rrange(rng,0.8,1.2), tilt:rrange(rng,0.02,0.18),
-      bend:rrange(rng,0.15,0.55), twist:twist*rrange(rng,0.6,1.3), fold:0.08, cBase:cb, cTip:ct, segs:18 });
+      bend:rrange(rng,0.15,0.55), twist:twist*rrange(rng,0.6,1.3), fold:0.08, cBase:cb, cTip:ct, segs, cols });
     leaf.rotateY(rng()*Math.PI*2);
     leaf.translate(rrange(rng,-spread,spread), 0, rrange(rng,-spread,spread));
     parts.push(leaf);

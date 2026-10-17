@@ -95,6 +95,19 @@
   - 物件写实化：岩石改为"断裂面 + 分形起伏 + 层理/石英脉 + 凹处积暗"（`items/natural-geo.js`），新增活石；
     沉木改为渐细树皮管 + 根须 + 随机细枝；水草改为真实叶形组合（莲座/缎带/茎生对叶/地毯簇，`items/leaf-shapes.js`）；
     海葵触手改为弯曲渐细带圆头；岩石/沉木/珊瑚叠加世界坐标 3D 噪声法线细节（`injectSurfaceDetail`）。
+
+- 自然水域 + 更多默认场景（v2.0）：
+  - `tank-styles.js` 的款式分两类：`kind:'tank'`（四种玻璃缸）与 `kind:'natural'`（山野池塘 / 山间溪流 / 林间小河）。
+    自然水域没有玻璃和柜子，外壳换成 `scene/natural-shells.js` 生成的地形：鱼的活动矩形不变，矩形内就是河床
+    （缸的沙床隐藏，地形按同一个 `sandHeight` 铺），矩形外是水下浅滩 → 岸 → 起伏地面，近岸一侧是宽缓浅滩，俯视时视线不被岸挡住。
+    溪流/小河的河道沿 x 延伸出画面并缓缓拐弯；地形边缘压平后接一圈远景地面。水面按外壳给出的范围放大，`uClear` 让俯视清澈见底。
+  - 款式可带 `env`（天空/雾/环境光覆盖 + `current` 水流）：`dayNight.setTank` 接管背景与雾；`main` 每帧把 `current`
+    交给 `ctx.current`（鱼逆流保持位置并被轻推）、饲料、悬浮颗粒与水面波纹。
+  - 新物件 `lily` / `reeds` / `pebbles`（`items/wetland.js`）。睡莲和香蒲要够到水面：构建结果可在 `object.userData.onPlace(H)`
+    里按"到水面的局部高度"伸展，`scene-runtime` 每次摆放（含拖动/缩放）后调用。
+  - 新预设：荷兰草缸（超白开缸）、睡莲池塘、山间溪流、林间小河。存档记录 `seeded`（已发放过的预设 id），
+    老玩家升级时只补发没发过的预设，删掉的不会复活；场景上限 16。
+  - 岸上植被用低面数叶片（`ribbons` 的 `segs/cols`），自然水域整场约 33–39 万三角形（玻璃缸约 24 万）。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

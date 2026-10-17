@@ -48,4 +48,15 @@ describe('Feeder', () => {
     for (const p of feeder.pellets) expect(p.p.y).toBeCloseTo(0.2 + 0.018, 5);
     vi.useRealTimers();
   });
+
+  it('有水流时下沉的饲料顺流漂向 +x', () => {
+    const { feeder } = makeFeeder();
+    feeder.flow = 0.16;
+    feeder.spawn(new THREE.Vector3(0, WATER_Y, 0));
+    const x0 = feeder.pellets.reduce((a, p) => a + p.p.x, 0);
+    for (let i = 0; i < 30; i++) feeder.update(1 / 30, i / 30);
+    const x1 = feeder.pellets.reduce((a, p) => a + p.p.x, 0);
+    expect(x1 - x0).toBeGreaterThan(feeder.pellets.length * 0.08);
+    vi.useRealTimers();
+  });
 });

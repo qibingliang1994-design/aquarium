@@ -121,6 +121,7 @@ class LightRays {
 }
 
 class MarineSnow {
+  flow=0;                        // 水流速度（+x）
   constructor({ tankGroup }){
     this.N=300;
     const pos=new Float32Array(this.N*3), size=new Float32Array(this.N), seed=new Float32Array(this.N);
@@ -164,7 +165,8 @@ class MarineSnow {
     const p=this.geo.attributes.position.array;
     for(let i=0;i<this.N;i++){
       p[i*3+1]-=this.sp[i]*dt*8;
-      p[i*3]+=Math.sin(t*0.4+i)*0.00012;
+      p[i*3]+=Math.sin(t*0.4+i)*0.00012+this.flow*dt;
+      if(p[i*3]>1.8) p[i*3]-=3.6; else if(p[i*3]<-1.8) p[i*3]+=3.6;   // 顺流漂出一侧后从另一侧回来
       if(p[i*3+1]<0.42) p[i*3+1]=1.62;
     }
     this.geo.attributes.position.needsUpdate=true;

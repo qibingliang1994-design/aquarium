@@ -12,6 +12,7 @@ import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
 import { fishRim } from './fish/glb-style.js';
 import { createSceneStore } from './scenes/scene-store.js';
+import { TANK_STYLES, NATURAL_CAMS, isNatural } from './scenes/tank-styles.js';
 import { createSceneRuntime } from './scenes/scene-runtime.js';
 import { createSceneEditor } from './editor/scene-editor.js';
 import { renderEncyclopediaPreviews, modelPreviewStats } from './ui/encyclopedia.js';
@@ -26,7 +27,7 @@ import { installDebug } from './debug.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v1.9';
+const VERSION='v2.0';
 const $=id=>document.getElementById(id);
 
 const world=createWorld();
@@ -55,7 +56,7 @@ const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, water
   waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
 const store=createSceneStore();
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
-  onTheme:t=>dayNight.setTheme(t), onTank:t=>dayNight.setTank(t), onSchools:()=>dayNight.refresh() });
+  onTheme:t=>dayNight.setTheme(t), onTank:t=>{ dayNight.setTank(t); setHint(t.kind==='natural'); }, onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
 
@@ -87,8 +88,10 @@ function tweenCam(preset, dur=1.4){
     to:new THREE.Vector3(...preset.pos), toT:new THREE.Vector3(...preset.tgt), t:0, dur };
 }
 controls.addEventListener('start',()=>{ camTween=null; });
-$('bCam').addEventListener('click',()=>{ camIdx=(camIdx+1)%CAM_PRESETS.length; tweenCam(CAM_PRESETS[camIdx]); });
-tweenCam(CAM_PRESETS[0], 2.6);   // 开场运镜
+// 自然水域没有前玻璃，机位改为俯视水面
+const camPresets=()=>isNatural(runtime.doc.tank) ? NATURAL_CAMS : CAM_PRESETS;
+$('bCam').addEventListener('click',()=>{ const cams=camPresets(); camIdx=(camIdx+1)%cams.length; tweenCam(cams[camIdx]); });
+tweenCam(camPresets()[0], 2.6);   // 开场运镜
 
 /* ---------- 昼夜按钮 ---------- */
 const bLight=$('bLight');
@@ -106,15 +109,22 @@ bLight.addEventListener('click',()=>{
   syncLightButton();
 });
 
+/* ---------- 底部操作提示：自然水域没有玻璃，双击改叫"拍水面" ---------- */
+function setHint(natural){
+  const el=document.getElementById('hint');
+  if(el) el.textContent=`拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击${natural ? '拍水面' : '敲玻璃'}`;
+}
+
 /* ---------- 缩略图：固定正面机位渲染一帧，裁成 16:9 小图（与玩家当前视角无关） ---------- */
 function captureThumb(){
   const keepP=camera.position.clone(), keepQ=camera.quaternion.clone();
   const halfTan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(camera.aspect, 16/9);
-  camera.position.set(0, 1.2, 2.45/halfTan);     // 让缸宽刚好填满裁切框
-  camera.lookAt(0, 0.98, 0);
+  if(isNatural(runtime.doc.tank)){ camera.position.set(0, 3.4, 4.4); camera.lookAt(0, 1.3, 0); }   // 自然水域：俯拍水面
+  else { camera.position.set(0, 1.2, 2.45/halfTan); camera.lookAt(0, 0.98, 0); }           // 缸：缸宽刚好填满裁切框
   composer.render();
   camera.position.copy(keepP); camera.quaternion.copy(keepQ);
   const src=renderer.domElement, w=320, h=180, c=document.createElement('canvas');
+  if(!src.width || !src.height) return null;   // 画布尺寸为 0（窗口被最小化/隐藏）时不拍
   c.width=w; c.height=h;
   let sw=src.width, sh=src.height, sx=0, sy=0;
   if(sw/sh>w/h){ sw=sh*w/h; sx=(src.width-sw)/2; } else { sh=sw*h/w; sy=(src.height-sh)/2; }
@@ -130,7 +140,8 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
     if(store.activeId!==id || store.thumb(id)) return;
     // 页面不可见时主循环不跑，粒子等实例矩阵还没初始化，晚点再拍
     if(!window.__aqReady || document.hidden || editor.active || photo.on){ scheduleThumb(); return; }
-    store.setThumb(id, captureThumb());
+    const shot=captureThumb();
+    if(shot) store.setThumb(id, shot); else scheduleThumb();
   }, 3200);
 }
 
@@ -148,7 +159,7 @@ function switchScene(id, { force=false, then=null }={}){
     feeder.clear(); bubbles.reset(); fishCard.hide();
     runtime.apply(store.active(), { fresh:true });
     syncHud(); updateCareHud();
-    camIdx=0; tweenCam(CAM_PRESETS[0], 1.8);
+    camIdx=0; tweenCam(camPresets()[0], 1.8);
     fadeEl.classList.remove('on');
     switching=false;
     if(then) then(); else { toast(`欢迎来到「${runtime.doc.name}」`); scheduleThumb(); }
@@ -244,7 +255,9 @@ renderer.setAnimationLoop(()=>{
   // 夜间睡眠：喂食与惊吓都会把鱼叫醒
   const sleep=sstep(0.55,0.9,dayNight.k)*(1-U.excite.value)*(1-input.fear);
 
-  const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools,
+  const flow=TANK_STYLES[runtime.doc.tank]?.env?.current ?? 0;   // 溪流/小河的水流
+  feeder.flow=flow; snow.flow=flow; waterUniforms.uFlow.value=flow;
+  const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools, current:flow,
     appetite, fear:input.fear, sleep, onEat };
   for(const s of schools) s.update(dt,ctx);
 

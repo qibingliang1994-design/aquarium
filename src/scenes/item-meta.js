@@ -9,6 +9,7 @@
 export const ITEM_GROUPS = [
   { id:'stone', label:'岩石沉木' },
   { id:'plant', label:'水草' },
+  { id:'wet',   label:'池塘湿地' },
   { id:'coral', label:'珊瑚' },
   { id:'gear',  label:'设备' },
 ];
@@ -20,12 +21,15 @@ export const ITEM_META = {
   liveRock:    { label:'活石',     group:'stone', radius:0.3,  scale:[0.4,2.0], hint:'海水缸礁岩，可叠放成礁' },
   wood:        { label:'沉木拱',   group:'stone', radius:0.75, scale:[0.5,1.3] },
   mossBall:    { label:'苔球',     group:'stone', radius:0.09, scale:[0.6,2.0] },
+  pebbles:     { label:'卵石滩',   group:'stone', radius:0.32, scale:[0.6,2.0], hint:'溪流河床常见的圆润卵石' },
   kelp:        { label:'长叶草',   group:'plant', radius:0.24, scale:[0.35,1.25] },
   bush:        { label:'灌丛草',   group:'plant', radius:0.24, scale:[0.5,1.4] },
   crown:       { label:'皇冠草',   group:'plant', radius:0.16, scale:[0.5,1.4] },
   red:         { label:'红宫廷',   group:'plant', radius:0.12, scale:[0.6,1.6] },
   carpet:      { label:'前景矮草', group:'plant', radius:0.32, scale:[0.6,1.6] },
   seagrass:    { label:'细叶草',   group:'plant', radius:0.2,  scale:[0.5,1.5] },
+  lily:        { label:'睡莲',     group:'wet',   radius:0.26, scale:[0.7,1.5], hint:'叶片与花浮在水面' },
+  reeds:       { label:'香蒲',     group:'wet',   radius:0.14, scale:[0.7,1.4], hint:'挺水植物，长出水面' },
   coralBranch: { label:'鹿角珊瑚', group:'coral', radius:0.28, scale:[0.5,1.8] },
   coralBrain:  { label:'脑珊瑚',   group:'coral', radius:0.19, scale:[0.5,1.8] },
   coralFan:    { label:'海扇',     group:'coral', radius:0.26, scale:[0.5,1.6] },

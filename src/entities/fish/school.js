@@ -187,7 +187,7 @@ export class School {
 
   update(dt, ctx){
     const spec=this.spec, N=spec.count;
-    const fear=ctx.fear??0, sleep=ctx.sleep??0, appetite=ctx.appetite??1;
+    const fear=ctx.fear??0, sleep=ctx.sleep??0, appetite=ctx.appetite??1, flow=ctx.current??0;
     // 摆频耦合游速（Strouhal 关系）：速度快 → 摆尾快；睡眠减缓、惊吓加快
     this.phaseU.value += dt*spec.beat
       *(0.55+0.95*this.avgSpeed/spec.maxSpeed)*(1+0.7*ctx.excite)*(1-0.5*sleep)*(1+fear);
@@ -253,6 +253,9 @@ export class School {
         _acc.y+=Math.sin(wT*0.5+i*1.7)*wander*0.1;
         _acc.z+=Math.cos(wT*0.9+i*3.3)*wander*0.4;
       }
+      if(flow && !resting){                       // 顶流（趋流性）：在溪流里转头迎着水流缓游，几乎原地"悬停"
+        _acc.x+=(-Math.sign(flow)*minS*2.2-v.x)*Math.min(1.2,Math.abs(flow)*5)*social;
+      }
       if(sleep>0) _acc.y+=(sleepY-p.y)*0.8*sleep;  // 夜间沉向水层带下部休息
       if(regroup>0) _acc.addScaledVector(_v1.subVectors(_center,p), regroup);
       if(spec.territory && !hunting){                // 领地盘旋（觅食时让位）
@@ -301,6 +304,7 @@ export class School {
       else if(!resting && s<minS) v.multiplyScalar(minS/s);
       v.y*=1-Math.min(0.5, dt*0.8);               // 保持水平姿态
       p.addScaledVector(v, dt);
+      if(flow && !resting) p.x+=flow*dt*0.55;     // 水流推送（鱼要一直逆游才能保持位置）
       if(resting) v.multiplyScalar(1-Math.min(1,dt*3));   // 趴底阻尼
       p.x=clamp(p.x,-2.0,2.0); p.y=clamp(p.y,(resting?0.25:0.4),1.66); p.z=clamp(p.z,-0.68,0.68);
       speedSum+=v.length();

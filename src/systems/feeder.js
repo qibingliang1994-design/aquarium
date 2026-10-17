@@ -4,6 +4,7 @@ import { clamp, rand } from '../utils.js';
 export class Feeder {
   constructor({ tankGroup, sandHeight, waterY, ripples }){
     this.ripples=ripples; this.sandHeight=sandHeight; this.waterY=waterY;
+    this.flow=0;                 // 水流速度（+x），溪流/小河场景由 main 每帧设置
     this.N=90;
     this.mesh=new THREE.InstancedMesh(
       new THREE.DodecahedronGeometry(0.021),
@@ -85,7 +86,8 @@ export class Feeder {
       if(it && !it.eaten){
         if(it.p.y>this.sandHeight(it.p.x,it.p.z)+0.018){        // 下沉
           it.v.y+=(-0.1-it.v.y)*dt*2.2;
-          it.p.x+=Math.sin(t*1.7+it.ph)*dt*0.02;
+          it.p.x+=Math.sin(t*1.7+it.ph)*dt*0.02+this.flow*dt*0.8;   // 下沉途中顺流漂走
+          if(Math.abs(it.p.x)>2.2) it.age=Math.max(it.age,26);     // 漂出水域：淡出
           it.p.addScaledVector(it.v,dt);
         } else it.p.y=this.sandHeight(it.p.x,it.p.z)+0.018;      // 落底
       }

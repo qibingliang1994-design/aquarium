@@ -256,7 +256,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     document.body.classList.remove('is-editing');
     onExit?.(saved);                             // 先恢复观赏状态（水面等），缩略图才是正常样子
     if(saved){
-      store.setThumb(saved.id, captureThumb());
+      const shot=captureThumb(); if(shot) store.setThumb(saved.id, shot);
       toast(`已保存「${saved.name}」`);
     }
     if(prevCam) tweenCam(prevCam, 1.1);

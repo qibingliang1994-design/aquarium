@@ -1,0 +1,70 @@
+/* ================================================================
+ * 我的水景（场景选择器）+ 切换淡入淡出 + 轻提示
+ * ================================================================ */
+#scenesCard{width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;border-radius:24px;
+  animation:popIn .26s var(--ease);scrollbar-width:thin;scrollbar-color:rgba(150,220,235,.25) transparent}
+.scenes-head{position:sticky;top:0;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+  padding:24px 28px 18px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(10,26,36,.96),rgba(10,26,36,.82));backdrop-filter:blur(12px)}
+.scenes-head h2{margin:0;color:var(--ink);font-size:22px;letter-spacing:.14em;font-weight:600}
+.scenes-head p{margin:8px 0 0;color:var(--ink-3);font-size:12px;line-height:1.6}
+#scenesClose{width:36px;height:36px}
+
+.scene-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:20px 28px 26px}
+.scene-card{--th:58,138,160;position:relative;display:flex;flex-direction:column;min-width:0;border-radius:18px;overflow:hidden;
+  border:1px solid var(--line);background:linear-gradient(170deg,rgba(18,46,58,.6),rgba(6,20,28,.85));
+  transition:transform .25s var(--ease),border-color .25s,box-shadow .25s}
+.scene-card:hover{transform:translateY(-3px);border-color:rgba(var(--th),.55);
+  box-shadow:0 16px 36px rgba(0,0,0,.35),0 0 26px rgba(var(--th),.16)}
+.scene-card.active{border-color:rgba(var(--th),.8);box-shadow:0 0 0 1px rgba(var(--th),.5),0 0 30px rgba(var(--th),.2)}
+.scene-thumb{appearance:none;position:relative;display:block;width:100%;aspect-ratio:16/9;padding:0;border:0;cursor:pointer;
+  background:radial-gradient(ellipse at 50% 70%,rgba(var(--th),.55),rgba(4,12,18,.95) 75%);overflow:hidden}
+.scene-thumb img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .5s var(--ease)}
+.scene-card:hover .scene-thumb img{transform:scale(1.04)}
+.scene-thumb .ph{position:absolute;inset:0;display:grid;place-items:center;color:rgba(var(--th),.9)}
+.scene-thumb .ph .icon{width:42px;height:42px;stroke-width:1.2;opacity:.8}
+.scene-thumb .go{position:absolute;inset:auto 10px 10px auto;padding:5px 12px;border-radius:999px;font-size:11px;letter-spacing:.12em;
+  color:var(--accent-ink);background:linear-gradient(180deg,#72def0,var(--accent-2));opacity:0;transform:translateY(4px);
+  transition:opacity .2s,transform .2s var(--ease)}
+.scene-card:hover .go{opacity:1;transform:none}
+.scene-card.active .go{display:none}
+.scene-badge{position:absolute;top:10px;left:10px;padding:3px 9px;border-radius:999px;font-size:10.5px;letter-spacing:.12em;
+  color:var(--ink);background:rgba(4,14,20,.62);border:1px solid rgba(var(--th),.5);backdrop-filter:blur(6px)}
+.scene-badge.now{color:var(--accent-ink);background:var(--accent);border-color:transparent}
+.scene-body{display:flex;flex-direction:column;gap:6px;padding:12px 14px 12px}
+.scene-name{display:flex;align-items:center;gap:8px;min-height:24px;font-size:15px;font-weight:600;letter-spacing:.06em;color:var(--ink)}
+.scene-name input{flex:1;min-width:0;font:inherit;color:var(--ink);background:rgba(255,255,255,.06);
+  border:1px solid var(--line-2);border-radius:8px;padding:2px 8px;outline:none}
+.scene-meta{font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+.scene-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip-btn{appearance:none;padding:5px 11px;border-radius:999px;font:500 11.5px/1.2 var(--font);letter-spacing:.06em;cursor:pointer;
+  color:var(--ink-2);background:rgba(255,255,255,.04);border:1px solid var(--line);transition:color .15s,border-color .15s,background .15s}
+.chip-btn:hover{color:var(--ink);border-color:var(--line-2);background:rgba(95,212,232,.1)}
+.chip-btn.primary{color:var(--accent);border-color:rgba(95,212,232,.4)}
+.chip-btn.danger:hover{color:#ffb4a6;border-color:rgba(255,140,120,.5);background:rgba(255,110,90,.1)}
+.chip-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+.scene-confirm{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:#ffc8bc}
+
+.scene-new{display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:220px;padding:18px;
+  border:1px dashed var(--line-2);background:rgba(10,30,40,.35)}
+.scene-new h3{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;font-weight:600;letter-spacing:.12em;color:var(--ink)}
+.scene-new p{margin:0;font-size:11.5px;color:var(--ink-3);line-height:1.6}
+.scene-new .opts{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ---------- 场景切换淡入淡出 ---------- */
+#sceneFade{position:fixed;inset:0;z-index:35;pointer-events:none;opacity:0;
+  background:radial-gradient(ellipse at 50% 55%,#0b2230 0%,var(--bg) 70%);transition:opacity .38s ease}
+#sceneFade.on{opacity:1;pointer-events:auto}
+
+/* ---------- 轻提示 ---------- */
+#toast{position:fixed;top:24px;left:50%;z-index:45;transform:translate(-50%,-10px);opacity:0;pointer-events:none;
+  padding:9px 18px;border-radius:999px;font-size:12.5px;letter-spacing:.1em;color:var(--ink);
+  background:var(--glass-strong);border:1px solid var(--line-2);box-shadow:var(--shadow);
+  transition:opacity .25s,transform .25s var(--ease)}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#hudScene{color:var(--ink-2)}
+
+@media (max-width:640px){
+  .scene-grid{padding:16px;grid-template-columns:1fr}
+  .scenes-head{padding:18px 18px 14px}
+}

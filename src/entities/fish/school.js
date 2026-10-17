@@ -146,6 +146,22 @@ export class School {
 
   setGrowth(i,g){ this.growthTarget[i]=g; }
 
+  // 场景切换/改鱼群时释放：GLB 模式只释放克隆出来的材质（几何与模板共享），程序化模式全部释放
+  dispose(){
+    this.group.removeFromParent();
+    if(this.glbMode){
+      for(const m of this.mixers) m.stopAllAction();
+      for(const f of this.fishes) f.traverse(o=>{
+        if(!o.isMesh) return;
+        (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());
+      });
+      return;
+    }
+    for(const mesh of [this.mesh, this.finMesh, this.eyeMesh]){
+      mesh.geometry.dispose(); mesh.material.dispose(); mesh.customDepthMaterial?.dispose(); mesh.dispose();
+    }
+  }
+
   // 敲玻璃惊吓：背离敲击点的冲量（越近越猛），趴底的鱼一并惊醒
   startle(point){
     const spec=this.spec;

@@ -74,10 +74,23 @@
   Feeder，Node 环境 + 按用例 stub 浏览器全局）、渐进式类型检查（`jsconfig.json` + 文件级 `// @ts-check` + JSDoc）、
   `npm run check` 一键串联、本地 pre-commit 钩子（`.githooks/`，提交前跑 lint/typecheck/test；项目仅本地开发，不设远程 CI）、`.editorconfig` / `.nvmrc` / `engines`。
   顺带修掉 lint 发现的空 catch（设置读写失败现在会告警）与几处未用变量。
+- 多场景 + 造景编辑器（v1.8）：
+  - 场景即文档：`src/scenes/` 下 `scene-doc.js`（`{id,name,theme,fish,items[]}` + 清洗校验，存档一律视为不可信）、
+    `item-meta.js` / `themes.js` / `presets.js`（纯数据）、`scene-store.js`（`aquarium.scenes` + 缩略图 `aquarium.thumbs`，
+    首次运行播种 3 个预设，旧版 `aquarium.care` 迁移给"经典混养"）。以上全部 `// @ts-check` 且有单测。
+  - 原 `entities/scenery.js` 拆成按 seed 确定性生成的物件构建器（`scenes/items/`：岩石沉木苔球气石 / 水草丛 / 珊瑚），
+    由 `scenes/catalog.js` 按 type 分发；材质按类型共享、几何每件独有。新增立石、苔球、细叶草、鹿角珊瑚、脑珊瑚、海扇、海葵。
+  - `scenes/scene-runtime.js` 把文档落到场景里并做差量更新：物件挪动只改变换，换 type/seed 才重建；`obstacles`、
+    `schools` 两个数组原地维护（鱼群/识鱼卡持有同一引用）；鱼群按数量变化重建（`School.dispose()`）；
+    饲养存档按场景隔离（`aquarium.care.<场景id>`，`createCare(species, { key })`）；气泡从第一个气石冒出。
+  - 主题只改日间水色/雾/辉光 + 沙色（沙贴图改近白底，颜色走顶点色）+ 背光幕 + 碎石色；`scene/daynight.js` 从 main 拆出。
+  - `src/editor/`：`scene-editor.js`（拾取/沙面拖拽/快捷键/撤销重做，所有改动走 commit → runtime.apply）、
+    `editor-panel.js`（DOM）、`history.js`（JSON 快照栈）。`ui/scene-picker.js` 为"我的水景"弹层。
+  - `main.js` 继续瘦身：画布交互 → `ui/tank-input.js`，拍照 → `ui/photo-mode.js`，调试钩子 → `src/debug.js`。
 
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。
-2. 将鱼、水草、石头、沉木都统一为可创建/销毁的场景实体，并由资源注册表提供模型和材质。
+2. ~~将鱼、水草、石头、沉木都统一为可创建/销毁的场景实体~~（v1.8 已完成造景部分：`scenes/catalog.js`）；鱼的资源注册表待做。
 3. ~~引入 Vite 开发/构建脚本，保留现有静态服务作为兼容入口~~（已完成）；后续视需要补 TypeScript。
 4. 只有当图鉴、编辑器或配置面板变成复杂应用时，才评估 React/Vue。

@@ -22,6 +22,8 @@ export class Feeder {
     this.crumbs=new Array(this.CN).fill(null);
     this.crumbHead=0;
   }
+  // 切换场景时清空水中饲料与碎屑
+  clear(){ this.items.fill(null); this.crumbs.fill(null); }
   get pellets(){ return this.items.filter(it=>it && !it.eaten && it.age<28); }
   spawn(center){
     this.ripples.spawn(center.x, center.z);

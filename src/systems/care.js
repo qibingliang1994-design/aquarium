@@ -10,7 +10,7 @@ import { clamp, sstep } from '../utils.js';
  * 食欲 = f(饥饿度)，决定鱼群是否抢食与兴奋度上限。
  * 成长：每条鱼累计吃到的饲料数 → 体型 1.0 ~ 1+GROW_MAX。
  * ================================================================ */
-const STORE_KEY='aquarium.care';
+const DEFAULT_KEY='aquarium.care';
 const DECAY_PER_SEC=1/180;       // 吃饱后约 3 分钟饿回来
 const PELLET_SATIETY=0.025;      // 一轮 10 颗全吃完 = +0.25
 const GROW_PELLETS=30;           // 个体累计吃 30 颗长到上限（约 20 轮喂食可见变化）
@@ -20,24 +20,29 @@ const SAVE_INTERVAL=2;           // 有改动时最多每 2 秒落盘一次
 /** @type {[number, string][]} */
 const STATUS=[ [0.75,'饥肠辘辘'], [0.45,'觅食中'], [0.15,'半饱'], [-1,'酒足饭饱'] ];
 
-/** @returns {CareSave} */
-function loadState(){
-  try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'{}')||{}; }
+/** @param {string} key @returns {CareSave} */
+function loadState(key){
+  try{ return JSON.parse(localStorage.getItem(key)||'{}')||{}; }
   catch(err){ console.warn('[care] 读取饲养存档失败，使用初始状态', err); return {}; }
 }
 
-/** @param {SpeciesLike[]} species */
-export function createCare(species){
-  const saved=loadState();
+/** 每个场景一份存档：key 由场景系统传入（scenes/scene-store.js careKey）
+ * @param {SpeciesLike[]} species @param {{ key?:string }} [opts] */
+export function createCare(species, { key=DEFAULT_KEY }={}){
+  const saved=loadState(key);
   const elapsed=typeof saved.t==='number' && Number.isFinite(saved.t) ? Math.max(0,(Date.now()-saved.t)/1000) : 0;
   const savedSatiety=Number(saved.satiety);
   let satiety=clamp((Number.isFinite(savedSatiety)?savedSatiety:0.3)-elapsed*DECAY_PER_SEC, 0, 1);
   /** @type {Record<string, number[]>} */
   const fed={};
+  /** @type {Record<string, number>} */
+  const counts={};
   for(const s of species){
+    counts[s.id]=s.count;
     const raw=saved.fed?.[s.id];
     const arr=Array.isArray(raw) ? raw : [];
-    fed[s.id]=Array.from({length:s.count},(_,i)=>Math.max(0,Number(arr[i])||0));
+    // 保留存档里多出来的个体：编辑器里临时减鱼再取消，不丢成长
+    fed[s.id]=Array.from({length:Math.min(64,Math.max(s.count,arr.length))},(_,i)=>Math.max(0,Number(arr[i])||0));
   }
   let dirty=false, saveTimer=SAVE_INTERVAL;
 
@@ -47,7 +52,7 @@ export function createCare(species){
   const growthOf=(id,i)=>1+GROW_MAX*growthProgress(id,i);
 
   function save(){
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify({ satiety, t:Date.now(), fed })); dirty=false; }
+    try{ localStorage.setItem(key, JSON.stringify({ satiety, t:Date.now(), fed })); dirty=false; }
     catch(err){ console.warn('[care] 保存饲养存档失败', err); }
   }
   addEventListener('pagehide', save);
@@ -61,7 +66,7 @@ export function createCare(species){
     status:()=>(STATUS.find(([k])=>1-satiety>k) ?? STATUS[STATUS.length-1])[1],
     growthOf,
     growthProgress,
-    growthArray:(/** @type {string} */ id)=>fed[id].map((_,i)=>growthOf(id,i)),
+    growthArray:(/** @type {string} */ id)=>Array.from({length:counts[id]??0},(_,i)=>growthOf(id,i)),
     // 一颗饲料被吃：饱食度↑、个体成长；返回该鱼新的体型系数
     /** @param {string} id @param {number} i */
     eat(id,i){
@@ -77,5 +82,7 @@ export function createCare(species){
       if(saveTimer<=0){ saveTimer=SAVE_INTERVAL; if(dirty) save(); }
     },
     save,
+    // 切换场景/改鱼群前调用：落盘并解除页面关闭监听
+    dispose(){ save(); removeEventListener('pagehide', save); },
   };
 }

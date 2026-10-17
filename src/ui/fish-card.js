@@ -6,7 +6,7 @@ import { SPECIES_META } from './encyclopedia.js';
  * ================================================================ */
 const CARD_W=284, CARD_H=236, CARD_MS=6000;
 
-export function createFishCard({ camera, schools, care }){
+export function createFishCard({ camera, schools, getCare }){   // getCare：饲养存档随场景切换
   const raycaster=new THREE.Raycaster(), ndc=new THREE.Vector2();
   const $=id=>document.getElementById(id);
   const cardEl=$('fishCard');
@@ -34,7 +34,7 @@ export function createFishCard({ camera, schools, care }){
 
   function show(hit,cx,cy){
     const s=hit.school, m=SPECIES_META[s.spec.id];
-    const grow=care.growthProgress(s.spec.id,hit.fid);
+    const care=getCare(), grow=care.growthProgress(s.spec.id,hit.fid);
     cardEl.dataset.species=s.spec.id;           // 物种强调色（CSS）
     $('fcTitle').textContent=m.name;
     $('fcNo').textContent=`#${hit.fid+1}`;

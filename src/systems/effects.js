@@ -34,6 +34,14 @@ class Bubbles {
     this.head=0;
     this.timer=0;
     this._m=new THREE.Matrix4();
+    this.reset();
+  }
+  // 清空气泡（实例缩放置零：首帧前就截图也不会出现单位球）；切换场景时调用
+  reset(){
+    this.items.fill(null);
+    this._m.makeScale(0,0,0);
+    for(let i=0;i<this.N;i++) this.mesh.setMatrixAt(i,this._m);
+    this.mesh.instanceMatrix.needsUpdate=true;
   }
   update(dt, t){
     this.timer+=dt;

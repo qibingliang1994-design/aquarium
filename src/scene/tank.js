@@ -125,7 +125,7 @@ tankGroup.add(waterMesh);
 const sandTex=(()=>{
   const s=512, cv=document.createElement('canvas'); cv.width=cv.height=s;
   const ctx=cv.getContext('2d');
-  ctx.fillStyle='#cdbb9e'; ctx.fillRect(0,0,s,s);
+  ctx.fillStyle='#f4f1ea'; ctx.fillRect(0,0,s,s);          // 近白底：沙色交给顶点色（随主题切换）
   const img=ctx.getImageData(0,0,s,s), d=img.data;
   for(let i=0;i<d.length;i+=4){
     const n=(Math.random()-0.5)*26;
@@ -146,35 +146,43 @@ const sandMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95,
 injectCaustics(sandMat, 0.7, 'sand');
 const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.glass-0.02, 72, 32).rotateX(-Math.PI/2);
 {
-  const p=sandGeo.attributes.position, col=new Float32Array(p.count*3);
-  const c1=new THREE.Color(0xc9b79b), c2=new THREE.Color(0x9d8b72), tmp=new THREE.Color();
-  for(let i=0;i<p.count;i++){
-    const x=p.getX(i), z=p.getZ(i);
-    p.setY(i, sandHeight(x,z));
-    tmp.copy(c1).lerp(c2, vnoise(x*2.3+11,z*2.3+5)*0.8);
-    col[i*3]=tmp.r; col[i*3+1]=tmp.g; col[i*3+2]=tmp.b;
-  }
-  sandGeo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  const p=sandGeo.attributes.position;
+  for(let i=0;i<p.count;i++) p.setY(i, sandHeight(p.getX(i),p.getZ(i)));
+  sandGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(p.count*3),3));
   sandGeo.computeVertexNormals();
 }
+// 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合
+function setSandColors(a, b){
+  const p=sandGeo.attributes.position, col=sandGeo.attributes.color;
+  const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
+  for(let i=0;i<p.count;i++){
+    tmp.copy(c1).lerp(c2, vnoise(p.getX(i)*2.3+11,p.getZ(i)*2.3+5)*0.8);
+    col.setXYZ(i, tmp.r, tmp.g, tmp.b);
+  }
+  col.needsUpdate=true;
+}
+setSandColors(0xa28862, 0x7e6647);
 const sand=new THREE.Mesh(sandGeo, sandMat);
 sand.receiveShadow=true;
 tankGroup.add(sand);
 
 /* ---------- 背景幕（渐变，增加纵深） ---------- */
 // 水景缸常见的"背光幕"：缸体正后方柔和青色辉光，四周压暗，鱼与水草在其上形成剪影层次
-const bgTex=(()=>{
-  const cv=document.createElement('canvas'); cv.width=512; cv.height=256;
-  const ctx=cv.getContext('2d');
+const bgCanvas=document.createElement('canvas'); bgCanvas.width=512; bgCanvas.height=256;
+const bgTex=new THREE.CanvasTexture(bgCanvas); bgTex.colorSpace=THREE.SRGBColorSpace;
+// 背光幕重绘（主题色 'r,g,b'）：外圈辉光取主题色的 45% 亮度
+function setBackdrop(rgb){
+  const ctx=bgCanvas.getContext('2d');
   const g=ctx.createLinearGradient(0,0,0,256);
   g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
   ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
+  const dim=rgb.split(',').map(v=>Math.round(+v*0.45)).join(',');
   const r=ctx.createRadialGradient(256,150,10,256,150,250);
-  r.addColorStop(0,'rgba(58,138,160,0.55)'); r.addColorStop(0.45,'rgba(26,74,96,0.28)'); r.addColorStop(1,'rgba(0,0,0,0)');
+  r.addColorStop(0,`rgba(${rgb},0.55)`); r.addColorStop(0.45,`rgba(${dim},0.28)`); r.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
-  const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
-  return tex;
-})();
+  bgTex.needsUpdate=true;
+}
+setBackdrop('58,138,160');
 const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(8.6,4.6),
   new THREE.MeshBasicMaterial({map:bgTex, fog:false}));
 backdrop.position.set(0,1.5,-2.5);
@@ -217,5 +225,5 @@ let floorGlowMat;
   glow.position.y=-0.748;
   scene.add(glow);
 }
-  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, stripMat, floorGlowMat };
+  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, stripMat, floorGlowMat, setSandColors, setBackdrop };
 }

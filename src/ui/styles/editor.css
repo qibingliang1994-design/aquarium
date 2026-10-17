@@ -100,3 +100,12 @@ body.is-editing #hud{opacity:0;pointer-events:none;transition:opacity .25s}
   #edTip{display:none}
   #edName{width:100px}
 }
+
+/* 缸体款式缩略：用 CSS 画出框色与柜色 */
+.tank-opt{--th:150,170,180}
+.tank-opt i{background:linear-gradient(180deg,transparent 8%,var(--frame) 8% 14%,rgba(95,180,210,.35) 14% 62%,var(--frame) 62% 68%,var(--cab) 68%);
+  border:1px solid var(--line)}
+.tank-opt[data-tank=classic]{--frame:#17191d;--cab:#1d2026}
+.tank-opt[data-tank=rimless]{--frame:rgba(160,230,210,.6);--cab:#b88b5a}
+.tank-opt[data-tank=reef]{--frame:#0d0f12;--cab:#e6e8eb}
+.tank-opt[data-tank=zen]{--frame:#6e4a2e;--cab:#4e321e}

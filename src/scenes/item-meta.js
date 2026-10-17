@@ -15,8 +15,9 @@ export const ITEM_GROUPS = [
 
 /** @type {Record<string, ItemMeta>} */
 export const ITEM_META = {
-  rock:        { label:'圆石',     group:'stone', radius:0.22, scale:[0.3,2.2] },
-  rockTall:    { label:'立石',     group:'stone', radius:0.16, scale:[0.5,1.8] },
+  rock:        { label:'河石',     group:'stone', radius:0.22, scale:[0.3,2.2] },
+  rockTall:    { label:'青龙石',   group:'stone', radius:0.16, scale:[0.5,1.8] },
+  liveRock:    { label:'活石',     group:'stone', radius:0.3,  scale:[0.4,2.0], hint:'海水缸礁岩，可叠放成礁' },
   wood:        { label:'沉木拱',   group:'stone', radius:0.75, scale:[0.5,1.3] },
   mossBall:    { label:'苔球',     group:'stone', radius:0.09, scale:[0.6,2.0] },
   kelp:        { label:'长叶草',   group:'plant', radius:0.24, scale:[0.35,1.25] },

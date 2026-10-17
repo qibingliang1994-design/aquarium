@@ -6,6 +6,7 @@ import { School } from '../entities/fish/school.js';
 import { createCare } from '../systems/care.js';
 import { buildItem, disposeItem } from './catalog.js';
 import { THEMES } from './themes.js';
+import { TANK_STYLES } from './tank-styles.js';
 import { careKey } from './scene-store.js';
 import { cloneDoc } from './scene-doc.js';
 
@@ -19,7 +20,7 @@ import { cloneDoc } from './scene-doc.js';
 
 const GRAVEL_N=56;
 
-export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, onTheme, onSchools }){
+export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, onTheme, onTank, onSchools }){
   const itemsGroup=new THREE.Group();
   itemsGroup.name='scene-items';
   tankGroup.add(itemsGroup);
@@ -28,7 +29,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   let doc=null, care=null;
 
   /* ---------- 碎石（主题配色，位置固定） ---------- */
-  const gravel=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1,0),
+  const gravel=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),   // 圆润卵石（十二面体太像碎块）
     new THREE.MeshStandardMaterial({vertexColors:false, roughness:0.9}), GRAVEL_N);
   {
     const rng=makeRng(7), m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), pv=new THREE.Vector3(), ax=new THREE.Vector3();
@@ -130,6 +131,10 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     const prev=doc;
     doc=cloneDoc(nextDoc);
     if(fresh || !prev || prev.theme!==doc.theme) setTheme(doc.theme);
+    if(fresh || !prev || prev.tank!==doc.tank){
+      tank.setShell(doc.tank);
+      onTank?.(TANK_STYLES[doc.tank] ?? TANK_STYLES.classic);
+    }
     syncItems(doc.items);
     const fishChanged=!prev || countsOf(prev.fish).join()!==countsOf(doc.fish).join();
     if(fresh || prev?.id!==doc.id || fishChanged) setFish(doc.fish, { reset:fresh || prev?.id!==doc.id });

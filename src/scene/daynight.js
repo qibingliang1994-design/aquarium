@@ -8,7 +8,7 @@ import { lerp } from '../utils.js';
 
 const CYCLE_SECS=180;
 
-export function createDayNight({ scene, lights, waterUniforms, sandMat, stripMat, floorGlowMat, rays, schools, fishRim }){
+export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, floorGlowMat, rays, schools, fishRim }){
   const { hoodSpot, hemi, fillLight, waterGlow, rim }=lights;
   const DAY={ spot:16, spotCol:new THREE.Color(0xfff2dc), hemi:0.35, fill:0.5, env:0.45,
     glow:new THREE.Color(0x2e8fb0), glowI:0.9, strip:2.8, bg:new THREE.Color(0x070b10),
@@ -36,7 +36,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, stripMat
     for(const s of schools){ if(s.causticK) s.causticK.value=lerp(0.22,0.06,k); }
     fishRim.k.value=lerp(0.42,0.22,k);                          // 鱼体逆光轮廓夜间减弱
     rim.intensity=lerp(0.35,0.15,k);
-    stripMat.emissiveIntensity=lerp(DAY.strip,NIGHT.strip,k);   // 灯条夜间变暗
+    if(shell.lightMat) shell.lightMat.emissiveIntensity=lerp(DAY.strip,NIGHT.strip,k);   // 灯具发光面夜间变暗
     floorGlowMat.opacity=lerp(1,0.45,k);                        // 地面漏光随缸内亮度变化
   }
 
@@ -50,6 +50,12 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, stripMat
     setTheme(t){
       DAY.fog.setHex(t.fog); DAY.glow.setHex(t.glow);
       DAY.sky.setRGB(...t.sky); DAY.deep.setRGB(...t.deep);
+      apply(k);
+    },
+    /** 缸体款式：主灯色/强度/高度跟随灯具（夜间月光表不变） */
+    setTank(t){
+      DAY.spotCol.setHex(t.light.spotCol); DAY.spot=16*t.light.spotK;
+      hoodSpot.position.y=t.light.spotY;
       apply(k);
     },
     /** 鱼群重建后补一次（新鱼的焦散强度跟上当前昼夜） */

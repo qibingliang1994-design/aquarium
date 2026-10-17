@@ -2,14 +2,15 @@
 import { clamp } from '../utils.js';
 import { ITEM_META, PLACE_BOUNDS, MAX_ITEMS } from './item-meta.js';
 import { THEMES } from './themes.js';
+import { resolveTank } from './tank-styles.js';
 
 /* ================================================================
- * 场景文档：{ id, name, presetId?, theme, fish:{物种:数量}, items:[物件] }
+ * 场景文档：{ id, name, presetId?, theme, tank, fish:{物种:数量}, items:[物件] }
  * 存档来自 localStorage（不可信），一律经 sanitizeDoc 清洗后才进入运行时
  * ================================================================ */
 
 /** @typedef {{ id:string, type:string, x:number, z:number, rot:number, s:number, seed:number }} SceneItem */
-/** @typedef {{ id:string, name:string, presetId?:string, theme:string, fish:Record<string,number>,
+/** @typedef {{ id:string, name:string, presetId?:string, theme:string, tank:string, fish:Record<string,number>,
  *   items:SceneItem[], updatedAt?:number }} SceneDoc */
 
 // 与 entities/fish/species.js 的 SPECIES 顺序一致（单测校验）
@@ -69,11 +70,13 @@ export function sanitizeDoc(raw){
     .filter(/** @returns {it is SceneItem} */ it => it!==null).slice(0, MAX_ITEMS);
   const seen = new Set();                       // 物件 id 去重（复制粘贴的坏存档）
   for(const it of items){ if(seen.has(it.id)) it.id = newId('it'); seen.add(it.id); }
+  const theme = typeof r.theme==='string' && THEMES[r.theme] ? r.theme : 'fresh';
   /** @type {SceneDoc} */
   const doc = {
     id: r.id.slice(0,40),
     name: (typeof r.name==='string' && r.name.trim() ? r.name.trim() : '未命名水景').slice(0, NAME_MAX),
-    theme: typeof r.theme==='string' && THEMES[r.theme] ? r.theme : 'fresh',
+    theme,
+    tank: resolveTank(r.tank, theme, typeof r.presetId==='string' ? r.presetId : undefined),
     fish: sanitizeFish(r.fish),
     items,
   };
@@ -92,7 +95,7 @@ export const fishTotal = doc => Object.values(doc.fish).reduce((a,n)=>a+n, 0);
  * @param {string} name @param {string} theme @returns {SceneDoc} */
 export function emptyDoc(name, theme='fresh'){
   return {
-    id: newId('sc'), name, theme,
+    id: newId('sc'), name, theme, tank: resolveTank(null, theme),
     fish: sanitizeFish({}),
     items: [{ id:newId('it'), type:'airstone', x:1.6, z:0.5, rot:0, s:1, seed:1 }],
   };

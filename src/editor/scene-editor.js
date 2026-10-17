@@ -143,6 +143,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     onSave:()=>exit(true), onCancel:()=>exit(false),
     onFish:setFish,
     onTheme:id=>commit(d=>{ d.theme=id; }),
+    onTank:id=>commit(d=>{ d.tank=id; }),
     onTransform:liveChange, onTransformEnd:liveEnd,
     onSeed:reseed, onDup:duplicate, onDel:remove,
   });

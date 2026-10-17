@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange, vnoise } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
-import { shared, injectSway, setPhase, paintGradient, castAll, UP } from './common.js';
+import { shared, injectSway, setPhase, castAll, injectSurfaceDetail, UP } from './common.js';
 
 /* ================================================================
  * 珊瑚：鹿角珊瑚（立体分叉）/ 海扇（平面分叉 + 摆动）/ 脑珊瑚（沟回半球）/ 海葵（触手摆动）
@@ -68,6 +68,7 @@ function branchGeometry(segs, cBase, cTip, radial){
 const coralMat = () => shared('mat:coral', ()=>{
   const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.62, metalness:0, emissive:0x000000});
   injectCaustics(m, 0.5, 'coral');
+  injectSurfaceDetail(m, { freq:70, k:0.55, ao:0.4, key:'coraldet' });   // 珊瑚虫孔（corallite）般的细密颗粒
   return m;
 });
 
@@ -118,38 +119,79 @@ export function buildCoralBrain(rng, seed){
   return { object:mesh, obstacles:[{ c:new THREE.Vector3(0,0.04,0), r:0.15 }] };
 }
 
-/** 海葵：短柱 + 一圈向外弯的发光触手（实例化，各自摆动），小丑鱼最爱 */
+/** 渐细管（按长度给半径），尾端加圆头；颜色按 t 从 cb 渐变到 ct */
+function taperTube(curve, rFn, cb, ct, { segs=10, radial=6, tipK=0.9 }={}){
+  const g=new THREE.TubeGeometry(curve, segs, 1, radial, false);
+  const p=g.attributes.position, col=new Float32Array(p.count*3), a=new THREE.Color(cb), b=new THREE.Color(ct), c=new THREE.Color();
+  for(let i=0;i<=segs;i++){
+    const t=i/segs, ctr=curve.getPointAt(t), r=rFn(t);
+    c.copy(a).lerp(b, Math.pow(t,1.6));
+    for(let j=0;j<=radial;j++){
+      const k=i*(radial+1)+j;
+      _d.fromBufferAttribute(p,k).sub(ctr);
+      p.setXYZ(k, ctr.x+_d.x*r, ctr.y+_d.y*r, ctr.z+_d.z*r);
+      col[k*3]=c.r; col[k*3+1]=c.g; col[k*3+2]=c.b;
+    }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col,3));
+  g.deleteAttribute('uv');
+  const end=curve.getPointAt(1), tip=new THREE.SphereGeometry(rFn(1)*tipK*1.6, radial, 4).translate(end.x,end.y,end.z);
+  const tc=new Float32Array(tip.attributes.position.count*3).map((_,i)=>[b.r,b.g,b.b][i%3]*1.15);
+  tip.setAttribute('color', new THREE.BufferAttribute(tc,3)); tip.deleteAttribute('uv');
+  const out=mergeGeometries([g, tip]);
+  g.dispose(); tip.dispose();
+  out.computeVertexNormals();
+  return out;
+}
+
+/** 海葵：带纵纹的柱体 + 口盘 + 一圈弯曲渐细、末端圆头的触手（实例化，各自摆动），小丑鱼最爱 */
 export function buildAnemone(rng){
-  const [cb,ct]=pick(rng, [[0xa03c78,0xffb4e4],[0x2f8a5c,0xc0ffd6],[0xb85030,0xffd2a6]]);
+  const [cc,cb,ct]=pick(rng, [[0x7a4a3a,0xb04a86,0xffc2ec],[0x4a5a3a,0x3a9a6a,0xd2ffe2],[0x7a4a2e,0xc8643a,0xffe0b4],[0x5a4a5e,0x8a62c8,0xf2dcff]]);
   const tentMat=shared('mat:tentacle', ()=>{
-    const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.45});
-    injectSway(m, 0.03, 7.0, 'tentacle', true, 0.2);
+    const m=new THREE.MeshPhysicalMaterial({vertexColors:true, roughness:0.35, sheen:0.6, sheenColor:new THREE.Color(0xffffff), sheenRoughness:0.3});
+    injectSway(m, 0.035, 6.0, 'tentacle', true, 0.2);
     return m;
   });
-  const colMat=shared('mat:anemoneCol', ()=>new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.7}));
+  const colMat=shared('mat:anemoneCol', ()=>new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.55}));
   const group=new THREE.Group();
-  const column=paintGradient(new THREE.CylinderGeometry(0.07,0.09,0.09,16).translate(0,0.025,0), cb, ct, -0.02, 0.16);
+  // 柱体：底部略外扩，竖向条纹
+  const column=new THREE.CylinderGeometry(0.062,0.085,0.1,28,4).translate(0,0.03,0);
+  { const p=column.attributes.position, col=new Float32Array(p.count*3), a=new THREE.Color(cc), b=new THREE.Color(cb), c=new THREE.Color();
+    for(let i=0;i<p.count;i++){
+      const ang=Math.atan2(p.getZ(i),p.getX(i)), stripe=Math.pow(Math.abs(Math.sin(ang*9)),4);
+      c.copy(a).lerp(b, Math.min(1,(p.getY(i)+0.02)/0.1)*0.7).multiplyScalar(0.85+stripe*0.3);
+      col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    }
+    column.setAttribute('color', new THREE.BufferAttribute(col,3)); }
   group.add(new THREE.Mesh(column, colMat));
-  const n=60;
-  const geo=paintGradient(new THREE.CylinderGeometry(0.005,0.012,0.2,5,6).translate(0,0.1,0), cb, ct, 0, 0.2);
-  const mesh=new THREE.InstancedMesh(geo, tentMat, n);
-  mesh.frustumCulled=false;
-  const phases=new Float32Array(n);
-  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), pv=new THREE.Vector3(), c=new THREE.Color();
-  for(let i=0;i<n;i++){
-    const ring=Math.sqrt((i+0.5)/n), ang=i*2.39996+rng()*0.3;   // 黄金角铺满顶盘
-    pv.set(Math.cos(ang)*ring*0.07, 0.07, Math.sin(ang)*ring*0.07);
-    _axis.set(-Math.sin(ang), 0, Math.cos(ang));
-    q.setFromAxisAngle(_axis, -(0.15+ring*0.9));                   // 外圈触手更外翻
-    s.setScalar(rrange(rng,0.75,1.15));
-    mesh.setMatrixAt(i, m.compose(pv,q,s));
-    phases[i]=ang*1.7+rng();
-    c.setScalar(rrange(rng,0.85,1.1));
-    mesh.setColorAt(i, c);
+  // 触手模板：同一海葵用 3 种弯度的触手混合
+  const n=96, variants=[0,1,2].map(v=>{
+    const lean=0.03+v*0.025, len=0.17+v*0.03;
+    const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(0,len*0.4,lean*0.2),
+      new THREE.Vector3(0,len*0.75,lean*0.6), new THREE.Vector3(0,len,lean)]);
+    return taperTube(curve, t=>0.0068*(1-t*0.5), cb, ct);
+  });
+  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), q2=new THREE.Quaternion(), s=new THREE.Vector3(), pv=new THREE.Vector3(), c=new THREE.Color();
+  for(let v=0;v<3;v++){
+    const cnt=n/3, geo=variants[v], mesh=new THREE.InstancedMesh(geo, tentMat, cnt);
+    mesh.frustumCulled=false;
+    const phases=new Float32Array(cnt);
+    for(let i=0;i<cnt;i++){
+      const idx=i*3+v, ring=Math.sqrt((idx+0.5)/n), ang=idx*2.39996+rng()*0.3;   // 黄金角铺满口盘
+      pv.set(Math.cos(ang)*ring*0.06, 0.075, Math.sin(ang)*ring*0.06);
+      q2.setFromAxisAngle(UP, -ang+Math.PI/2);                       // 弯曲方向朝外
+      _axis.set(-Math.sin(ang), 0, Math.cos(ang));
+      q.setFromAxisAngle(_axis, -(0.1+ring*0.85)).multiply(q2);        // 外圈触手更外翻
+      s.setScalar(rrange(rng,0.8,1.15));
+      mesh.setMatrixAt(i, m.compose(pv,q,s));
+      phases[i]=ang*1.7+rng();
+      c.setScalar(rrange(rng,0.88,1.08));
+      mesh.setColorAt(i, c);
+    }
+    geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phases,1));
+    if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+    group.add(mesh);
   }
-  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phases,1));
-  if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
-  group.add(mesh);
   castAll(group);
   return { object:group, obstacles:[{ c:new THREE.Vector3(0,0.08,0), r:0.13 }] };
 }

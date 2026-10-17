@@ -88,6 +88,13 @@
     `editor-panel.js`（DOM）、`history.js`（JSON 快照栈）。`ui/scene-picker.js` 为"我的水景"弹层。
   - `main.js` 继续瘦身：画布交互 → `ui/tank-input.js`，拍照 → `ui/photo-mode.js`，调试钩子 → `src/debug.js`。
 
+- 写实化 + 多缸体（v1.9）：
+  - 缸体外壳拆到 `src/scene/tank-shells.js`，四种款式（经典黑框 / 超白开缸 / 海水礁缸 / 和风木框）随场景切换，
+    内部尺寸不变；场景文档新增 `tank` 字段（`scenes/tank-styles.js`，旧存档按预设/主题兜底），灯色与主灯高度跟随灯具。
+    沙床四周加底砂侧壁，透过前玻璃看到的是砂层截面。
+  - 物件写实化：岩石改为"断裂面 + 分形起伏 + 层理/石英脉 + 凹处积暗"（`items/natural-geo.js`），新增活石；
+    沉木改为渐细树皮管 + 根须 + 随机细枝；水草改为真实叶形组合（莲座/缎带/茎生对叶/地毯簇，`items/leaf-shapes.js`）；
+    海葵触手改为弯曲渐细带圆头；岩石/沉木/珊瑚叠加世界坐标 3D 噪声法线细节（`injectSurfaceDetail`）。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

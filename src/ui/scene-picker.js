@@ -1,5 +1,6 @@
 import { THEMES, THEME_IDS } from '../scenes/themes.js';
 import { fishTotal } from '../scenes/scene-doc.js';
+import { TANK_STYLES } from '../scenes/tank-styles.js';
 
 /* ================================================================
  * "我的水景"弹层：场景卡片（缩略图 / 名称 / 统计）+ 切换、造景、复制、改名、恢复预设、删除、新建
@@ -58,7 +59,7 @@ export function createScenePicker({ store, onSwitch, onEdit, toast }){
     } else name.textContent=doc.name;
     const meta=document.createElement('div');
     meta.className='scene-meta';
-    meta.textContent=`${theme.label} · ${fishTotal(doc)} 条鱼 · ${doc.items.length} 件造景${doc.presetId?' · 预设':''}`;
+    meta.textContent=`${TANK_STYLES[doc.tank]?.label ?? ''} · ${fishTotal(doc)} 条鱼 · ${doc.items.length} 件造景${doc.presetId?' · 预设':''}`;
     body.append(name, meta);
 
     const acts=document.createElement('div');

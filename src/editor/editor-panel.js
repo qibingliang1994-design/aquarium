@@ -1,5 +1,6 @@
 import { ITEM_GROUPS, ITEM_META, ITEM_TYPES, MAX_ITEMS } from '../scenes/item-meta.js';
 import { THEMES, THEME_IDS } from '../scenes/themes.js';
+import { TANK_STYLES, TANK_IDS } from '../scenes/tank-styles.js';
 import { FISH_IDS, FISH_MAX, FISH_TOTAL_MAX, fishTotal } from '../scenes/scene-doc.js';
 import { SPECIES_META } from '../ui/encyclopedia.js';
 
@@ -91,6 +92,19 @@ export function createEditorPanel(h){
     themeBtns[id]=b;
     themeEl.appendChild(b);
   }
+  // 缸体款式：只换外壳（框/灯/柜），不影响造景与鱼
+  const tankBtns={};
+  themeEl.insertAdjacentHTML('beforeend','<p class="ed-group">缸体</p>');
+  for(const id of TANK_IDS){
+    const t=TANK_STYLES[id], b=document.createElement('button');
+    b.className='theme-opt tank-opt'; b.dataset.tank=id;
+    b.innerHTML='<i></i><div><b></b><small></small></div>';
+    b.querySelector('b').textContent=t.label;
+    b.querySelector('small').textContent=t.hint;
+    b.addEventListener('click',()=>h.onTank(id));
+    tankBtns[id]=b;
+    themeEl.appendChild(b);
+  }
 
   /* ---------- 检视器 ---------- */
   rotEl.addEventListener('input',()=>h.onTransform({ rot:+rotEl.value/DEG }));
@@ -128,6 +142,7 @@ export function createEditorPanel(h){
       inc.disabled=n>=FISH_MAX[id] || total>=FISH_TOTAL_MAX;
     }
     for(const id of THEME_IDS) themeBtns[id].classList.toggle('on', doc.theme===id);
+    for(const id of TANK_IDS) tankBtns[id].classList.toggle('on', doc.tank===id);
     const full=doc.items.length>=MAX_ITEMS;
     for(const b of itemsEl.querySelectorAll('.pal-item')) b.disabled=full;
     countEl.textContent=`造景 ${doc.items.length}/${MAX_ITEMS} 件 · 鱼 ${total}/${FISH_TOTAL_MAX} 条`;

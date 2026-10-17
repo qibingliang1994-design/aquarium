@@ -12,7 +12,7 @@ const it = (type, x, z, s=1, rot=0, seed) => ({ type, x, z, s, rot, seed: seed ?
 /** @type {SceneDoc[]} */
 const RAW = [
   {
-    id:'classic', presetId:'classic', name:'经典混养', theme:'fresh',
+    id:'classic', presetId:'classic', name:'经典混养', theme:'fresh', tank:'classic',
     fish:{ tetra:24, gold:4, angel:3, cory:5, koi:2, clown:4, lion:2, mandarin:2, parrot:3 },
     items:[
       // 岩石：原 [x,z,r]，圆石基准半径 0.2 → s=r/0.2
@@ -31,15 +31,15 @@ const RAW = [
     ].map((o,i)=>({ id:`classic-${i}`, ...o })),
   },
   {
-    id:'reef', presetId:'reef', name:'珊瑚礁', theme:'reef',
+    id:'reef', presetId:'reef', name:'珊瑚礁', theme:'reef', tank:'reef',
     fish:{ clown:6, angel:4, lion:2, mandarin:3, parrot:4 },
     items:[
       // 礁岩骨架：左右两座礁台 + 中后方矮礁，前景留白沙给鱼活动
-      it('rock',-1.3,-0.48,2.0,0.3), it('rock',-0.92,-0.6,1.5,1.9), it('rock',-1.65,-0.2,1.2,3.1),
+      it('liveRock',-1.3,-0.48,2.0,0.3), it('liveRock',-0.92,-0.6,1.5,1.9), it('liveRock',-1.65,-0.2,1.2,3.1),
       it('rockTall',-1.15,-0.62,1.3,0.7),
-      it('rock',1.25,-0.5,1.9,4.4), it('rock',0.86,-0.62,1.3,2.2), it('rock',1.62,-0.22,1.1,5.3),
+      it('liveRock',1.25,-0.5,1.9,4.4), it('liveRock',0.86,-0.62,1.3,2.2), it('liveRock',1.62,-0.22,1.1,5.3),
       it('rockTall',1.45,-0.6,1.1,2.0),
-      it('rock',0.0,-0.66,1.4,0.8), it('rock',-0.32,-0.7,0.9,2.6),
+      it('liveRock',0.0,-0.66,1.4,0.8), it('liveRock',-0.32,-0.7,0.9,2.6),
       // 珊瑚：礁台上鹿角与脑珊瑚，后排海扇，前中景海葵
       it('coralBranch',-1.25,-0.36,1.3,0.5), it('coralBranch',-0.7,-0.5,0.9,2.9), it('coralBranch',1.18,-0.38,1.2,2.4),
       it('coralBranch',0.15,-0.5,1.0,1.3), it('coralBranch',1.75,0.05,0.7,4.1),
@@ -53,17 +53,19 @@ const RAW = [
     ].map((o,i)=>({ id:`reef-${i}`, ...o })),
   },
   {
-    id:'pond', presetId:'pond', name:'锦鲤石庭', theme:'pond',
+    id:'pond', presetId:'pond', name:'锦鲤石庭', theme:'pond', tank:'zen',
     fish:{ koi:4, gold:6, cory:4 },
     items:[
-      it('rockTall',-1.15,-0.5,1.5,0.3), it('rockTall',-0.85,-0.6,1.0,1.4), it('rockTall',1.35,-0.45,1.3,2.6),
-      it('rock',-1.45,-0.3,1.3,1.1), it('rock',0.95,-0.55,1.5,4.2), it('rock',0.2,0.35,0.5,2.0),
-      it('rock',-0.5,0.4,0.4,5.0), it('rock',1.7,0.2,0.6,0.6),
-      it('mossBall',-0.2,0.15,1.2), it('mossBall',0.1,0.3,0.9), it('mossBall',-1.6,0.35,1.1),
-      it('mossBall',1.3,0.4,1.0), it('mossBall',0.55,-0.1,1.4),
-      it('seagrass',-1.75,-0.6,1.3), it('seagrass',1.8,-0.6,1.2), it('seagrass',0.3,-0.65,1.0),
-      it('carpet',-0.9,0.1,1.2), it('carpet',0.7,0.15,1.1),
-      it('wood',0.15,-0.6,0.8),
+      // 岩组（石组造景）：主石偏左三分线，副石、从石依次递减，彼此朝向主石
+      it('rockTall',-0.72,-0.3,1.8,0.4), it('rockTall',-0.36,-0.46,1.3,1.2), it('rockTall',-1.12,-0.5,1.1,2.2),
+      it('rockTall',0.92,-0.42,1.4,3.0), it('rockTall',1.28,-0.56,1.0,4.1), it('rockTall',0.56,-0.6,0.8,0.7),
+      it('rock',-0.05,0.22,0.5,1.0), it('rock',0.32,0.36,0.4,2.4), it('rock',1.62,0.3,0.5,5.2), it('rock',-1.58,0.26,0.6,3.6),
+      // 前景草坪 + 后景细叶草
+      it('carpet',-1.75,0.3,1.2), it('carpet',-1.3,0.05,1.3), it('carpet',-0.85,0.3,1.2), it('carpet',-0.4,0.05,1.3),
+      it('carpet',0.05,0.38,1.1), it('carpet',0.5,0.08,1.3), it('carpet',0.95,0.3,1.2), it('carpet',1.4,0.05,1.3),
+      it('carpet',1.8,0.35,1.1), it('carpet',-0.15,-0.2,1.0), it('carpet',0.3,-0.25,1.0),
+      it('seagrass',-1.8,-0.66,1.3), it('seagrass',1.78,-0.66,1.25), it('seagrass',0.15,-0.72,1.0), it('seagrass',-0.3,-0.72,0.9),
+      it('mossBall',-0.95,0.12,1.1), it('mossBall',1.12,0.15,1.0), it('mossBall',0.7,-0.12,0.9),
       it('airstone',-1.85,0.55),
     ].map((o,i)=>({ id:`pond-${i}`, ...o })),
   },

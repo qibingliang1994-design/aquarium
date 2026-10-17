@@ -37,3 +37,23 @@ export function makeRng(seed){
 }
 /** 区间随机 @param {()=>number} rng @param {number} a @param {number} b */
 export const rrange=(rng,a,b)=> a+rng()*(b-a);
+
+/** 3D 值噪声（0..1）：岩石/木纹等需要无接缝的立体噪声 @param {number} x @param {number} y @param {number} z */
+export function vnoise3(x,y,z){
+  const xi=Math.floor(x),yi=Math.floor(y),zi=Math.floor(z),xf=x-xi,yf=y-yi,zf=z-zi;
+  const u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf),w=zf*zf*(3-2*zf);
+  /** @param {number} i @param {number} j @param {number} k */
+  const h=(i,j,k)=>{ const s=Math.sin(i*127.1+j*311.7+k*74.7)*43758.5453; return s-Math.floor(s); };
+  const l=(/** @type {number} */ a,/** @type {number} */ b,/** @type {number} */ t)=>a+(b-a)*t;
+  const x00=l(h(xi,yi,zi),h(xi+1,yi,zi),u), x10=l(h(xi,yi+1,zi),h(xi+1,yi+1,zi),u);
+  const x01=l(h(xi,yi,zi+1),h(xi+1,yi,zi+1),u), x11=l(h(xi,yi+1,zi+1),h(xi+1,yi+1,zi+1),u);
+  return l(l(x00,x10,v), l(x01,x11,v), w);
+}
+
+/** 分形叠加（octaves 层，每层频率 ×2、幅度 ×0.5），结果约 0..1
+ * @param {number} x @param {number} y @param {number} z @param {number} [octaves] */
+export function fbm3(x,y,z,octaves=4){
+  let sum=0, amp=0.5, norm=0, f=1;
+  for(let i=0;i<octaves;i++){ sum+=vnoise3(x*f,y*f,z*f)*amp; norm+=amp; amp*=0.5; f*=2.03; }
+  return sum/norm;
+}

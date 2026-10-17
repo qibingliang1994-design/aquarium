@@ -40,6 +40,7 @@ export function installDebug(d){
       controls.target.copy(p); stopCamTween(); },
     projectFish:(si,ii)=>{ const p=schools[si].pos[ii].clone(); p.project(camera);
       return { x:Math.round((p.x+1)/2*innerWidth), y:Math.round((1-p.y)/2*innerHeight) }; },
+    look:(pos,tgt)=>{ camera.position.set(...pos); controls.target.set(...tgt); stopCamTween(); },
     // —— 场景系统 ——
     schoolIds:()=>schools.map(s=>`${s.spec.id}:${s.spec.count}`),
     sceneId:()=>store.activeId,

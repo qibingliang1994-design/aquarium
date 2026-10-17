@@ -6,6 +6,7 @@ import { sanitizeDoc, sanitizeItem, sanitizeFish, FISH_IDS, FISH_MAX, FISH_TOTAL
 import { PRESETS } from '../src/scenes/presets.js';
 import { createSceneStore, careKey, MAX_SCENES } from '../src/scenes/scene-store.js';
 import { createHistory } from '../src/editor/history.js';
+import { TANK_STYLES, resolveTank } from '../src/scenes/tank-styles.js';
 import { SPECIES } from '../src/entities/fish/species.js';
 
 function stubStorage(initial = {}) {
@@ -84,6 +85,21 @@ describe('预设', () => {
   it('经典混养保留旧版鱼群数量', () => {
     const classic = PRESETS.find(p => p.id === 'classic');
     for (const s of SPECIES) expect(classic.fish[s.id]).toBe(s.count);
+  });
+});
+
+describe('缸体款式', () => {
+  it('旧存档缺 tank：预设按预设、其余按主题兜底；非法值同样兜底', () => {
+    expect(sanitizeDoc({ id: 'classic', presetId: 'classic', theme: 'fresh' }).tank).toBe('classic');
+    expect(sanitizeDoc({ id: 'x', theme: 'reef' }).tank).toBe('reef');
+    expect(sanitizeDoc({ id: 'x', theme: 'pond', tank: 'glassbowl' }).tank).toBe('zen');
+    expect(resolveTank('rimless', 'reef')).toBe('rimless');
+  });
+
+  it('三个预设各配一种不同的缸，且都是已知款式', () => {
+    const tanks = PRESETS.map(p => sanitizeDoc(p).tank);
+    for (const t of tanks) expect(TANK_STYLES[t]).toBeTruthy();
+    expect(new Set(tanks).size).toBe(PRESETS.length);
   });
 });
 

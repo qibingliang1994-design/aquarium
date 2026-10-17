@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { vnoise } from '../utils.js';
 import { U } from '../uniforms.js';
 import { injectCaustics, causticsTex } from './caustics.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { buildShell, disposeShell } from './tank-shells.js';
 
 /* ================================================================
  * 水族箱尺寸
@@ -24,7 +24,6 @@ export function createTank(scene){
  * ================================================================ */
 const tankGroup=new THREE.Group();
 scene.add(tankGroup);
-let stripMat;   // 灯条材质（夜间调暗用）
 
 // 经典透明玻璃（非 transmission）：透射材质会把透明物体（气泡/光柱/悬浮物）
 // 从缸外视角剔除，改为普通透明后全部可见，且省掉透射 pass 提升性能
@@ -48,24 +47,6 @@ const glassMat=glassHigh;
   bottom.position.y=t/2;
   tankGroup.add(front,back,left,right,bottom);
 
-  const trimMat=new THREE.MeshStandardMaterial({color:0x15181c, roughness:0.35, metalness:0.55});
-  const mk=(w,h,d,x,y,z)=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),trimMat);
-    m.position.set(x,y,z); tankGroup.add(m);
-  };
-  // 顶框已移除：无边缸造型
-  mk(W+0.06,0.07,D+0.06, 0,0.02,0);                // 底框
-  for(const sx of [-1,1]) for(const sz of [-1,1])
-    mk(0.06,H,0.06, sx*(W/2+0.005), H/2, sz*(D/2+0.005));
-
-  const hood=new THREE.Mesh(new THREE.BoxGeometry(W+0.08,0.12,0.6), trimMat);
-  hood.position.set(0,H+0.1,-(D/2-0.28));
-  tankGroup.add(hood);
-  stripMat=new THREE.MeshStandardMaterial({color:0x111111, emissive:0xfff2dd, emissiveIntensity:2.8});
-  const strip=new THREE.Mesh(new THREE.PlaneGeometry(W*0.92,0.42), stripMat);
-  strip.rotation.x=Math.PI/2;
-  strip.position.set(0,H+0.045,-(D/2-0.28));
-  tankGroup.add(strip);
 }
 
 /* ---------- 水面 ---------- */
@@ -151,15 +132,39 @@ const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.gl
   sandGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(p.count*3),3));
   sandGeo.computeVertexNormals();
 }
-// 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合
+// 底砂侧壁：贴着四面玻璃、从缸底到沙面的竖直截面——透过前玻璃看到的是一层层底砂，而不是缸底
+const skirtGeo=(()=>{
+  const iw=TANK.W/2-TANK.glass-0.004, id=TANK.D/2-TANK.glass-0.004, parts=[];
+  const side=(x0,z0,x1,z1)=>{
+    const n=48, g=new THREE.PlaneGeometry(1,1,n,3), p=g.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const u=p.getX(i)+0.5, v=p.getY(i)+0.5, x=x0+(x1-x0)*u, z=z0+(z1-z0)*u;
+      p.setXYZ(i, x, TANK.glass+(sandHeight(x,z)-TANK.glass)*v, z);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(p.count*3),3));
+    g.computeVertexNormals();
+    parts.push(g);
+  };
+  side(-iw,id, iw,id); side(iw,-id, -iw,-id); side(-iw,-id, -iw,id); side(iw,id, iw,-id);
+  return parts;
+})();
+for(const g of skirtGeo){ const m=new THREE.Mesh(g, sandMat); m.receiveShadow=true; tankGroup.add(m); }
+// 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合；侧壁越深越暗（湿砂 + 光线衰减）
 function setSandColors(a, b){
-  const p=sandGeo.attributes.position, col=sandGeo.attributes.color;
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
-  for(let i=0;i<p.count;i++){
-    tmp.copy(c1).lerp(c2, vnoise(p.getX(i)*2.3+11,p.getZ(i)*2.3+5)*0.8);
-    col.setXYZ(i, tmp.r, tmp.g, tmp.b);
+  for(const g of [sandGeo, ...skirtGeo]){
+    const p=g.attributes.position, col=g.attributes.color, skirt=g!==sandGeo;
+    for(let i=0;i<p.count;i++){
+      const x=p.getX(i), z=p.getZ(i);
+      tmp.copy(c1).lerp(c2, vnoise(x*2.3+11,z*2.3+5)*0.8);
+      if(skirt){
+        const depth=1-(p.getY(i)-TANK.glass)/Math.max(0.01,sandHeight(x,z)-TANK.glass);
+        tmp.multiplyScalar(0.92-depth*0.45+ (vnoise(x*40,p.getY(i)*60)-0.5)*0.12);   // 越深越暗 + 砂层颗粒感
+      }
+      col.setXYZ(i, tmp.r, tmp.g, tmp.b);
+    }
+    col.needsUpdate=true;
   }
-  col.needsUpdate=true;
 }
 setSandColors(0xa28862, 0x7e6647);
 const sand=new THREE.Mesh(sandGeo, sandMat);
@@ -188,22 +193,20 @@ const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(8.6,4.6),
 backdrop.position.set(0,1.5,-2.5);
 scene.add(backdrop);
 
-/* ---------- 底柜与房间地面 ---------- */
+/* ---------- 缸体外壳（框 / 灯具 / 底柜，随场景款式切换，见 tank-shells.js） ---------- */
+const shell={ id:'', group:null, lightMat:null };
+function setShell(id){
+  if(shell.id===id) return;
+  if(shell.group){ tankGroup.remove(shell.group); disposeShell(shell.group); }
+  const built=buildShell(id, TANK);
+  Object.assign(shell, { id, ...built });
+  tankGroup.add(built.group);
+}
+setShell('classic');
+
+/* ---------- 房间地面 ---------- */
 let floorGlowMat;
 {
-  const CW=TANK.W+0.3, CD=TANK.D+0.3;
-  const cab=new THREE.Mesh(new RoundedBoxGeometry(CW,0.72,CD,4,0.035),   // 圆角柜体：边缘接住高光
-    new THREE.MeshPhysicalMaterial({color:0x1a1c21, roughness:0.4, metalness:0.1,
-      clearcoat:0.45, clearcoatRoughness:0.35}));
-  cab.position.y=-0.38;
-  cab.receiveShadow=true;
-  tankGroup.add(cab);
-  const seamMat=new THREE.MeshBasicMaterial({color:0x060708});            // 三扇柜门的细缝
-  for(const x of [-CW/6, CW/6]){
-    const seam=new THREE.Mesh(new THREE.PlaneGeometry(0.005,0.6), seamMat);
-    seam.position.set(x,-0.39,CD/2+0.001);
-    tankGroup.add(seam);
-  }
   const floor=new THREE.Mesh(new THREE.CircleGeometry(14,48).rotateX(-Math.PI/2),
     new THREE.MeshStandardMaterial({color:0x0e0f12, roughness:0.62, metalness:0.2}));
   floor.position.y=-0.75;
@@ -225,5 +228,5 @@ let floorGlowMat;
   glow.position.y=-0.748;
   scene.add(glow);
 }
-  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, stripMat, floorGlowMat, setSandColors, setBackdrop };
+  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat, setSandColors, setBackdrop, shell, setShell };
 }

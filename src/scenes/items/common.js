@@ -1,11 +1,9 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { vnoise } from '../../utils.js';
 import { U } from '../../uniforms.js';
 import { causticsTex, causticsOn } from '../../scene/caustics.js';
 
 /* ================================================================
- * 造景物件公共件：共享材质缓存、摆动着色、叶片/岩石几何
+ * 造景物件公共件：共享材质缓存、摆动着色、渐变顶点色
  * 约定：材质按类型共享、永不释放；几何每个物件独有，物件移除时释放
  * ================================================================ */
 
@@ -60,55 +58,6 @@ export function setPhase(geo, phase){
   geo.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(phase),1));
 }
 
-// 叶片：两端收尖的柳叶轮廓 + 中脉 V 折（宽 2 段，中线顶点前凸），中脉颜色稍亮
-export function makeBlade(width, height, cBase, cTip, bend){
-  const g=new THREE.PlaneGeometry(width,height,2,12).translate(0,height/2,0);
-  const p=g.attributes.position, col=new Float32Array(p.count*3);
-  const cb=new THREE.Color(cBase), ct=new THREE.Color(cTip), tmp=new THREE.Color();
-  for(let i=0;i<p.count;i++){
-    // 夹紧：translate 后底边 y 可能是 -1e-17，负数开小数次幂会得到 NaN（NaN 像素经泛光扩散成大片黑块）
-    const t=Math.min(1,Math.max(0,p.getY(i)/height));
-    const side=p.getX(i)/(width/2);                       // -1 / 0 / 1
-    const w=Math.pow(Math.max(0,Math.sin(Math.PI*Math.min(1,0.14+0.86*t))),0.7); // 叶基略窄、中部最宽、叶尖收尖
-    p.setX(i, side*width/2*w);
-    p.setZ(i, t*t*bend + (1-Math.abs(side))*width*0.18*w); // 弯曲 + 中脉前凸
-    tmp.copy(cb).lerp(ct,Math.pow(t,0.8));
-    if(side===0) tmp.multiplyScalar(1.18);
-    col[i*3]=tmp.r; col[i*3+1]=tmp.g; col[i*3+2]=tmp.b;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col,3));
-  g.computeVertexNormals();
-  return g;
-}
-export function makeBladeX(width, height, cBase, cTip, bend){
-  const a=makeBlade(width,height,cBase,cTip,bend);
-  const b=makeBlade(width,height,cBase,cTip,bend); b.rotateY(Math.PI/2);
-  return mergeGeometries([a,b]);
-}
-
-// 岩石：噪声起伏的二十面体 + 顶面苔藓色（法线朝上处）
-export function makeRockGeo(r, seed){
-  const g=new THREE.IcosahedronGeometry(r,3);
-  const p=g.attributes.position, v=new THREE.Vector3(), o=(seed%997)*0.37;
-  for(let i=0;i<p.count;i++){
-    v.set(p.getX(i),p.getY(i),p.getZ(i));
-    const n=vnoise(v.x*2.2/r*0.2+o, (v.y*2.2+v.z*1.7)/r*0.2+o*2.1);
-    v.multiplyScalar(1+(n-0.5)*0.5);
-    v.y*=0.8;
-    p.setXYZ(i,v.x,v.y,v.z);
-  }
-  g.computeVertexNormals();
-  const nrm=g.attributes.normal, col=new Float32Array(p.count*3);
-  const c1=new THREE.Color(0x71695c), c2=new THREE.Color(0x45413a), cm=new THREE.Color(0x51633c), tmp=new THREE.Color();
-  for(let i=0;i<p.count;i++){
-    tmp.copy(c1).lerp(c2, vnoise(p.getX(i)*3+o, p.getZ(i)*3));
-    if(nrm.getY(i)>0.45) tmp.lerp(cm, Math.min(1,(nrm.getY(i)-0.45)*1.6)*(0.4+0.6*vnoise(p.getX(i)*5+o*3, p.getZ(i)*5)));
-    col[i*3]=tmp.r; col[i*3+1]=tmp.g; col[i*3+2]=tmp.b;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col,3));
-  return g;
-}
-
 /** 给几何体整体刷一层"自下而上"的渐变顶点色 */
 export function paintGradient(geo, cBase, cTip, y0, y1){
   const p=geo.attributes.position, col=new Float32Array(p.count*3);
@@ -124,4 +73,30 @@ export function paintGradient(geo, cBase, cTip, y0, y1){
 export function castAll(obj){
   obj.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
   return obj;
+}
+
+/** 表面细节（在已注入焦散的材质上叠加）：按世界坐标的 3D 分形噪声扰动法线并压暗凹处，
+ *  无需 UV —— 岩石/沉木近看不再像塑料。freq：每单位长度的噪声频率；k：起伏强度 */
+export function injectSurfaceDetail(mat, { freq=16, k=0.35, ao=0.3, stretch=[1,1,1], key='detail' }={}){
+  const prev=mat.onBeforeCompile, prevKey=mat.customProgramCacheKey?.() ?? '';
+  mat.customProgramCacheKey=()=>`${prevKey}_${key}`;
+  mat.onBeforeCompile=(sh)=>{
+    prev?.(sh);
+    sh.uniforms.uDetF={ value:freq }; sh.uniforms.uDetK={ value:k }; sh.uniforms.uDetAO={ value:ao };
+    sh.uniforms.uDetS={ value:new THREE.Vector3(...stretch) };
+    sh.fragmentShader='uniform float uDetF, uDetK, uDetAO; uniform vec3 uDetS;\n'
+      +`float dH3(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float dN3(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(dH3(i),dH3(i+vec3(1,0,0)),f.x), mix(dH3(i+vec3(0,1,0)),dH3(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(dH3(i+vec3(0,0,1)),dH3(i+vec3(1,0,1)),f.x), mix(dH3(i+vec3(0,1,1)),dH3(i+vec3(1,1,1)),f.x),f.y), f.z); }
+float dF3(vec3 p){ return dN3(p)*0.5+dN3(p*2.13)*0.3+dN3(p*4.37)*0.2; }\n`
+      +sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      {
+        vec3 P=vWPos*uDetF*uDetS; float e=0.05, h0=dF3(P);
+        vec3 g=vec3(dF3(P+vec3(e,0,0))-h0, dF3(P+vec3(0,e,0))-h0, dF3(P+vec3(0,0,e))-h0)/e;
+        vec3 gv=(viewMatrix*vec4(g*uDetS,0.0)).xyz;
+        normal=normalize(normal-(gv-dot(gv,normal)*normal)*uDetK);
+        diffuseColor.rgb*=1.0-uDetAO+uDetAO*1.6*smoothstep(0.2,0.75,h0);
+      }`);
+  };
 }

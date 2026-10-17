@@ -1,6 +1,6 @@
 import { makeRng } from '../utils.js';
 import { buildPlant, PLANT_TYPES } from './items/plants.js';
-import { buildRock, buildRockTall, buildWood, buildMossBall, buildAirstone } from './items/decor.js';
+import { buildRock, buildRockTall, buildLiveRock, buildWood, buildMossBall, buildAirstone } from './items/decor.js';
 import { buildCoralBranch, buildCoralFan, buildCoralBrain, buildAnemone } from './items/corals.js';
 import { ITEM_TYPES } from './item-meta.js';
 
@@ -9,7 +9,7 @@ import { ITEM_TYPES } from './item-meta.js';
  * ================================================================ */
 
 const BUILDERS = {
-  rock: buildRock, rockTall: buildRockTall, wood: buildWood, mossBall: buildMossBall, airstone: buildAirstone,
+  rock: buildRock, rockTall: buildRockTall, liveRock: buildLiveRock, wood: buildWood, mossBall: buildMossBall, airstone: buildAirstone,
   coralBranch: buildCoralBranch, coralFan: buildCoralFan, coralBrain: buildCoralBrain, anemone: buildAnemone,
 };
 for(const t of PLANT_TYPES) BUILDERS[t] = rng => buildPlant(t, rng);

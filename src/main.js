@@ -26,13 +26,13 @@ import { installDebug } from './debug.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v1.8';
+const VERSION='v1.9';
 const $=id=>document.getElementById(id);
 
 const world=createWorld();
 const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim }=world;
 const tank=createTank(scene);
-const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, stripMat, floorGlowMat }=tank;
+const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
 const { bubbles, rays, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
@@ -52,10 +52,10 @@ rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEna
 /* ---------- 场景：存档 → 运行时（造景 / 鱼群 / 主题） ---------- */
 const schools=[], obstacles=[];               // 两个数组都由 runtime 原地维护
 const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
-  waterUniforms, sandMat, stripMat, floorGlowMat, rays, schools, fishRim });
+  waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
 const store=createSceneStore();
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
-  onTheme:t=>dayNight.setTheme(t), onSchools:()=>dayNight.refresh() });
+  onTheme:t=>dayNight.setTheme(t), onTank:t=>dayNight.setTank(t), onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
 

@@ -166,6 +166,7 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
 const hudScene=$('hudScene'), fadeEl=$('sceneFade');
 const syncHud=()=>{ hudScene.textContent=`「${runtime.doc.name}」`; };
 /** @type {boolean} */ let switching=false;
+const MAX_PRECOMPILE_MS=1500;               // 切场景黑场里等着色器预编译的上限
 function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then?:(()=>void)|null }} */ { force=false, then=null }={}){
   if(switching || !store.get(id)) return;
   if(id===store.activeId && !force){ then?.(); return; }
@@ -177,9 +178,16 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
     runtime.apply(store.active(), { fresh:true });
     syncHud(); updateCareHud();
     camIdx=0; tweenCam(camPresets()[0], 1.8);
-    fadeEl.classList.remove('on');
-    switching=false;
-    if(then) then(); else { toast(`欢迎来到「${runtime.doc.name}」`); scheduleThumb(); }
+    const reveal=()=>{
+      fadeEl.classList.remove('on');
+      switching=false;
+      if(then) then(); else { toast(`欢迎来到「${runtime.doc.name}」`); scheduleThumb(); }
+    };
+    // 黑场期间预编译新场景用到的着色器（并行编译扩展可用时不阻塞主线程），揭幕后第一帧不再卡顿；
+    // 最多等 MAX_PRECOMPILE_MS，超时照常揭幕（剩下的由首帧同步编译兜底）
+    Promise.race([renderer.compileAsync(scene, camera), new Promise(r=>setTimeout(r, MAX_PRECOMPILE_MS))])
+      .catch(err=>console.warn('[scene] 预编译着色器失败', err))
+      .finally(reveal);
   }, 420);
 }
 
@@ -295,6 +303,8 @@ function grantArrival(){
 syncHud();
 scheduleThumb();
 
+const SHADOW_DT=1/30;                          // 阴影贴图更新间隔（renderer.shadowMap.autoUpdate=false）
+let shadowAcc=SHADOW_DT;                       // 首帧就画一次
 function frame(){
   const rawDt=clock.getDelta();
   const dt=Math.min(rawDt,0.05);
@@ -339,6 +349,10 @@ function frame(){
   snow.update(dt,t);
   ripples.update(dt);
   editor.update(t);
+
+  // 阴影贴图限频：鱼游得慢，30 Hz 更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）
+  shadowAcc+=rawDt;
+  if(shadowAcc>=SHADOW_DT){ renderer.shadowMap.needsUpdate=true; shadowAcc%=SHADOW_DT; }
 
   if(shake){                                    // 敲玻璃：镜头轻震（只影响本帧渲染）
     camera.position.x+=shake.x; camera.position.y+=shake.y;

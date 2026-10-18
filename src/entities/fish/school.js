@@ -25,6 +25,23 @@ const FLOW_PUSH=0.55;               // 水流把鱼往下游推的比例（相�
 const REGROUP_SECS=6;               // 惊散后向鱼群中心回聚的时长
 const _center=new THREE.Vector3();
 
+/** 同一条鱼的多个 SkinnedMesh（按材质拆开的子网格）共用一份骨架：SkeletonUtils.clone 会给每个子网格各克隆一份，
+ * 每份都有自己的骨骼纹理、每帧各上传一次（经典缸约 200 次/帧）。骨骼与逆绑定矩阵完全一致时才合并。
+ * @param {THREE.Object3D} obj */
+function shareSkeleton(obj){
+  /** @type {any[]} */ const sk=[];
+  obj.traverse((/** @type {any} */ o)=>{ if(o.isSkinnedMesh) sk.push(o); });
+  if(sk.length<2) return;
+  const s0=sk[0].skeleton;
+  for(let k=1;k<sk.length;k++){
+    const s=sk[k].skeleton;
+    if(s===s0 || s.bones.length!==s0.bones.length) continue;
+    if(!s.bones.every((/** @type {any} */ b,/** @type {number} */ j)=>b===s0.bones[j])) continue;
+    if(!s.boneInverses.every((/** @type {any} */ m,/** @type {number} */ j)=>m.equals(s0.boneInverses[j]))) continue;
+    sk[k].skeleton=s0;
+  }
+}
+
 export class School {
   /** GLB 模式与程序化模式的实例字段在两个分支里分别赋值，统一声明避免模式耦合的类型纠缠 */
   /** @type {any} */ mesh;          // 程序化：体网格 InstancedMesh
@@ -175,6 +192,7 @@ export class School {
       };
       o.material=Array.isArray(o.material)?o.material.map(deco):deco(o.material);
     });
+    shareSkeleton(obj);
     if(sway) this.swimUniforms.push({ u:ph, off:rand(6.283) });
     if(this.swimClip){
       const mixer=new THREE.AnimationMixer(obj);
@@ -257,10 +275,10 @@ export class School {
     this.group.removeFromParent();
     if(this.glbMode){
       for(const m of this.mixers) m.stopAllAction();
+      // 材质克隆不 dispose：它们没有独占的 GPU 资源，dispose 只会让 three 在最后一个用户释放时删掉着色器程序，
+      // 下次切回同一物种又要重新编译（切场景卡顿的主因）。程序按物种 × 变体去重，总数有上限；材质对象随 GC 回收
       for(const f of this.fishes) f.traverse((/** @type {any} */ o)=>{
-        if(!o.isMesh) return;
-        (Array.isArray(o.material)?o.material:[o.material]).forEach((/** @type {any} */ m)=>m.dispose());
-        o.skeleton?.dispose();                   // SkeletonUtils.clone 给每个 SkinnedMesh 一份骨架：骨骼纹理不释放会一直累积
+        if(o.isSkinnedMesh) o.skeleton.dispose();  // 骨骼纹理是独占的 GPU 资源，必须释放（共享骨架重复调用无害）
       });
       return;
     }

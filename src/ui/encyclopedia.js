@@ -6,6 +6,8 @@ import { buildFishBody, buildFishFins, profileSampler, fishEyeLayout } from '../
 import { prepareFishModel, decorateFishMaterial } from '../fish/glb-style.js';
 
 /* ---------- 鱼类图鉴数据与视图 ---------- */
+/** @typedef {{ name:string, latin:string, className:string, desc:string, zone:string, size:string, behavior:string, diet:string }} SpeciesMeta */
+/** @type {Record<string, SpeciesMeta>} */
 export const SPECIES_META={
   tetra:{name:'霓虹脂鲤',latin:'Paracheirodon innesi',className:'tetra',
     desc:'银蓝色的小型群游鱼，成群穿梭在水族箱中层，喂食时反应敏捷。',zone:'中层',size:'3–4 cm',behavior:'群游敏捷',diet:'杂食'},
@@ -45,7 +47,7 @@ function renderEncyclopedia(){
       </div>
     </article>`;
   }).join('');
-  document.getElementById('speciesCount').textContent=SPECIES.length;
+  const sc=document.getElementById('speciesCount'); if(sc) sc.textContent=String(SPECIES.length);
 }
 renderEncyclopedia();
 /* ---------- 图鉴模型预览：优先加载本地鱼种 GLB，失败回退程序化鱼体网格 ---------- */

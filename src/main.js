@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { sstep } from './utils.js';
 import { U } from './uniforms.js';
@@ -33,7 +34,7 @@ import { installDebug } from './debug.js';
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
 const VERSION='v2.1';
-const $=id=>document.getElementById(id);
+const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
 const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim }=world;
@@ -45,7 +46,8 @@ const { bubbles, rays, snow, ripples }=createEffects({ tankGroup, air, sandHeigh
 const feeder=new Feeder({ tankGroup, sandHeight, waterY:TANK.waterY, ripples });
 
 /* ---------- 场景基础：昼夜 / 存档 / 模型预加载 ---------- */
-const schools=[], obstacles=[];               // 两个数组都由 runtime 原地维护
+/** @type {any[]} */ const schools=[];         // 两个数组都由 runtime 原地维护
+/** @type {any[]} */ const obstacles=[];
 const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
   waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
 const store=createSceneStore();
@@ -54,14 +56,14 @@ const store=createSceneStore();
 // 渐进启动：只先等"当前场景用到的物种"，其余后台补载进同一个 map（后续建 School 自然用上）
 const presentIds=Object.entries(store.active().fish).filter(([,n])=>n>0).map(([id])=>id);
 const glbMap=await loadSpeciesModels(SPECIES, { only:presentIds });
-console.info('[fish] GLB loaded:', presentIds.filter(id=>glbMap[id]).join(', ')||'none (procedural fallback)');
+console.info('[fish] GLB loaded:', presentIds.filter(id=>/** @type {any} */ (glbMap)[id]).join(', ')||'none (procedural fallback)');
 loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
   Object.assign(glbMap, rest);
-  console.info('[fish] 其余物种 GLB 已后台就绪:', Object.keys(rest).filter(k=>rest[k]).join(', ')||'none');
+  console.info('[fish] 其余物种 GLB 已后台就绪:', Object.keys(rest).filter(k=>/** @type {any} */ (rest)[k]).join(', ')||'none');
 });
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
-const settings={ sound:true, cycle:false, night:0, rays:true, bubbles:true, snow:true, caustics:true };
+/** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, night:0, rays:true, bubbles:true, snow:true, caustics:true };
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
 const saveSettings=()=>{ try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
@@ -69,21 +71,21 @@ rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEna
 
 /* ---------- 场景：存档 → 运行时（造景 / 鱼群 / 主题） ---------- */
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
-  onTheme:t=>dayNight.setTheme(t), onTank:t=>{ dayNight.setTank(t); setHint(t.kind==='natural'); }, onSchools:()=>dayNight.refresh() });
+  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); }, onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
 
 /* ---------- 轻提示 ---------- */
 const toastEl=$('toast');
-let toastTimer=null;
-function toast(msg){
+/** @type {number|undefined} */ let toastTimer;
+function toast(/** @type {string} */ msg){
   toastEl.textContent=msg; toastEl.classList.add('on');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('on'), 2200);
 }
 
 /* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
 const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care, getSceneId:()=>runtime.doc.id });
-let editor=null;
+/** @type {any} */ let editor=null;
 const input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, feeder, sound,
   isBlocked:()=>editor?.active });
 $('bFeed').addEventListener('click',()=>input.feedAt(randomFeedPoint()));
@@ -95,8 +97,8 @@ const CAM_PRESETS=[
   { pos:[0.0,4.7,3.2], tgt:[0,0.8,0]   },
   { pos:[1.3,1.0,3.0], tgt:[0.3,0.95,0] },
 ];
-let camTween=null, camIdx=0;
-function tweenCam(preset, dur=1.4){
+/** @type {any} */ let camTween=null; let camIdx=0;
+function tweenCam(/** @type {any} */ preset, /** @type {number} */ dur=1.4){
   camTween={ from:camera.position.clone(), fromT:controls.target.clone(),
     to:new THREE.Vector3(...preset.pos), toT:new THREE.Vector3(...preset.tgt), t:0, dur };
 }
@@ -107,11 +109,11 @@ $('bCam').addEventListener('click',()=>{ const cams=camPresets(); camIdx=(camIdx
 tweenCam(camPresets()[0], 2.6);   // 开场运镜
 
 /* ---------- 昼夜按钮 ---------- */
-const bLight=$('bLight');
+const bLight=/** @type {HTMLButtonElement} */ ($('bLight'));
 function syncLightButton(){              // 按钮显示"点击后会切到"的状态
   const night=dayNight.target>0.5;
   bLight.classList.toggle('is-night',night);
-  bLight.querySelector('span').textContent=night?'日间':'夜间';
+  /** @type {HTMLElement} */ (bLight.querySelector('span')).textContent=night?'日间':'夜间';
   bLight.title=night?'切换到日光':'切换到月光';
 }
 syncLightButton();
@@ -123,7 +125,7 @@ bLight.addEventListener('click',()=>{
 });
 
 /* ---------- 底部操作提示：自然水域没有玻璃，双击改叫"拍水面" ---------- */
-function setHint(natural){
+function setHint(/** @type {boolean} */ natural){
   const el=document.getElementById('hint');
   if(el) el.textContent=`拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击${natural ? '拍水面' : '敲玻璃'}`;
 }
@@ -141,10 +143,10 @@ function captureThumb(){
   c.width=w; c.height=h;
   let sw=src.width, sh=src.height, sx=0, sy=0;
   if(sw/sh>w/h){ sw=sh*w/h; sx=(src.width-sw)/2; } else { sh=sw*h/w; sy=(src.height-sh)/2; }
-  c.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+  /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
   return c.toDataURL('image/jpeg', 0.8);
 }
-let thumbTimer=null;
+/** @type {number|undefined} */ let thumbTimer;
 function scheduleThumb(){                  // 没有缩略图的场景：开场运镜结束后自动补拍一张
   clearTimeout(thumbTimer);
   const id=store.activeId;
@@ -152,7 +154,7 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
   thumbTimer=setTimeout(()=>{
     if(store.activeId!==id || store.thumb(id)) return;
     // 页面不可见时主循环不跑，粒子等实例矩阵还没初始化，晚点再拍
-    if(!window.__aqReady || document.hidden || editor.active || photo.on){ scheduleThumb(); return; }
+    if(!(/** @type {any} */ (window)).__aqReady || document.hidden || editor.active || photo.on){ scheduleThumb(); return; }
     const shot=captureThumb();
     if(shot) store.setThumb(id, shot); else scheduleThumb();
   }, 3200);
@@ -161,8 +163,8 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
 /* ---------- 场景切换（淡出 → 重建 → 淡入） ---------- */
 const hudScene=$('hudScene'), fadeEl=$('sceneFade');
 const syncHud=()=>{ hudScene.textContent=`「${runtime.doc.name}」`; };
-let switching=false;
-function switchScene(id, { force=false, then=null }={}){
+/** @type {boolean} */ let switching=false;
+function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then?:(()=>void)|null }} */ { force=false, then=null }={}){
   if(switching || !store.get(id)) return;
   if(id===store.activeId && !force){ then?.(); return; }
   switching=true;
@@ -184,9 +186,9 @@ editor=createSceneEditor({ canvas:renderer.domElement, camera, controls, runtime
   onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); waterMesh.visible=false; },   // 俯视时水面会挡住造景
   onExit:()=>{ waterMesh.visible=true; syncHud(); } });
 const picker=createScenePicker({ store, toast,
-  onSwitch:(id, opts)=>switchScene(id, opts),
-  onEdit:id=>switchScene(id, { then:()=>editor.enter() }) });
-picker.onRenamed=id=>{ if(id===store.activeId){ runtime.doc.name=store.get(id).name; syncHud(); } };
+  onSwitch:(/** @type {string} */ id, /** @type {any} */ opts)=>switchScene(id, opts),
+  onEdit:(/** @type {string} */ id)=>switchScene(id, { then:()=>editor.enter() }) });
+picker.onRenamed=(/** @type {string} */ id)=>{ if(id===store.activeId){ runtime.doc.name=(store.get(id) ?? { name:'' }).name; syncHud(); } };
 $('bScenes').addEventListener('click',()=>{ settingsPanel.close(); fishCard.hide(); picker.open(); });
 $('bEdit').addEventListener('click',()=>editor.enter());
 
@@ -209,7 +211,7 @@ $('guideClose').addEventListener('click',closeGuide);
 guideEl.addEventListener('click',e=>{ if(e.target===guideEl) closeGuide(); });
 
 /* ---------- 设置弹层 ---------- */
-const settingsPanel=createSettingsPanel({ settings, onChange:(key,on)=>{
+const settingsPanel=createSettingsPanel({ settings, onChange:(/** @type {string} */ key,/** @type {boolean} */ on)=>{
   settings[key]=on;
   if(key==='sound'){ sound.setEnabled(on); if(on){ sound.ensure(); sound.blip(); } }
   if(key==='rays') rays.group.visible=on;
@@ -255,13 +257,15 @@ const quality=createQuality({
     renderer.setPixelRatio(q.ratio);
     composer.setPixelRatio(q.ratio);
     composer.setSize(innerWidth,innerHeight);
-    for(const g of tankGroup.children)
-      if(g.material===glassHigh || g.material===glassLow) g.material=q.glass==='low'?glassLow:glassHigh;
+    for(const g of /** @type {any[]} */ (tankGroup.children)){
+      const gm=/** @type {any} */ (g);
+      if(gm.material===glassHigh || gm.material===glassLow) gm.material=q.glass==='low'?glassLow:glassHigh;
+    }
     bloom.enabled=q.bloom;
   },
 });
 
-const onEat=(school,i)=>{ school.setGrowth(i, runtime.care.eat(school.spec.id,i)); sound.crunch(); };
+const onEat=(/** @type {any} */ school, /** @type {number} */ i)=>{ school.setGrowth(i, runtime.care.eat(school.spec.id,i)); sound.crunch(); };
 function updateCareHud(){                // 圆环 pathLength=100：dashoffset = 100 - 百分比
   careFill.style.strokeDashoffset=`${100-Math.round(runtime.care.satiety*100)}`;
   careText.textContent=runtime.care.status();
@@ -315,7 +319,7 @@ function frame(){
   // 夜间睡眠：喂食与惊吓都会把鱼叫醒
   const sleep=sstep(0.55,0.9,dayNight.k)*(1-U.excite.value)*(1-input.fear);
 
-  const flow=TANK_STYLES[runtime.doc.tank]?.env?.current ?? 0;   // 溪流/小河的水流
+  const flow=/** @type {any} */ (TANK_STYLES[runtime.doc.tank])?.env?.current ?? 0;   // 溪流/小河的水流
   feeder.flow=flow; snow.flow=flow; waterUniforms.uFlow.value=flow;
   const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools, current:flow,
     appetite, fear:input.fear, sleep, onEat, grid:fishGrid };
@@ -336,8 +340,9 @@ function frame(){
     camera.position.x-=shake.x; camera.position.y-=shake.y;
   } else composer.render();
 
-  if(!window.__aqReady){                        // 首帧：隐藏加载层
-    window.__aqReady=true;
+  const w=(/** @type {any} */ (window));
+  if(!w.__aqReady){                              // 首帧：隐藏加载层
+    w.__aqReady=true;
     const l=$('loading');
     l.classList.add('done');
     setTimeout(()=>l.remove(),900);
@@ -367,7 +372,7 @@ addEventListener('resize',()=>{
 installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
   bloom, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
-  glbLoaded:()=>Object.keys(glbMap).filter(k=>glbMap[k]),
+  glbLoaded:()=>Object.keys(glbMap).filter(k=>/** @type {any} */ (glbMap)[k]),
   // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；
   // 配合先把 window.requestAnimationFrame 换成 setTimeout 垫片使用
   restartLoop(){ renderer.setAnimationLoop(null); renderer.setAnimationLoop(frame); } });

@@ -4,4 +4,5 @@
 export const U = {
   time:    { value: 0 },   // 全局时间
   excite:  { value: 0 },   // 喂食兴奋度 0..1
+  flow:    { value: 0 },   // 水流速度（+x，溪流/小河），水草顺流倒伏
 };

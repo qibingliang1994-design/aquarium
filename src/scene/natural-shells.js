@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { clamp, makeRng, rrange, fbm3, vnoise3, sstep } from '../utils.js';
 import { injectCaustics } from './caustics.js';
+import { injectFloat } from './water-wave.js';
 import { injectSurfaceDetail } from '../scenes/items/common.js';
 import { ribbons } from '../scenes/items/leaf-shapes.js';
 import { bladeMat, bladeDepth } from '../scenes/items/plants.js';
@@ -186,7 +187,9 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
   if(K.pads){
     const pts=scatter(rng, H, waterY, K.pads, (h,d)=>h<waterY-0.12 && d>0.15, 1.5);
     const pad=new THREE.CircleGeometry(1,22,0.25,Math.PI*2-0.5).rotateX(-Math.PI/2);
-    const mesh=new THREE.InstancedMesh(pad, new THREE.MeshStandardMaterial({ roughness:0.42, side:THREE.DoubleSide }), pts.length);
+    const padMat=new THREE.MeshStandardMaterial({ roughness:0.42, side:THREE.DoubleSide });
+    injectFloat(padMat, 'shorePad');                   // 随水面波动
+    const mesh=new THREE.InstancedMesh(pad, padMat, pts.length);
     const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), v=new THREE.Vector3(), up=new THREE.Vector3(0,1,0), c=new THREE.Color();
     pts.forEach((pt,i)=>{
       const k=rrange(rng,0.07,0.15);

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { vnoise } from '../utils.js';
 import { U } from '../uniforms.js';
+import { WAVE_GLSL } from './water-wave.js';
 import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX } from './natural-shells.js';
@@ -61,7 +62,7 @@ const waterUniforms={
   uLightColor:{value:new THREE.Color(1.0,0.95,0.85)},
   uCMap:{value:causticsTex},
   uClear:{value:0},          // 0 = 缸（水面近乎不透明，主要从侧面看）；1 = 自然水域（俯视时清澈见底，掠射角才反光）
-  uFlow:{value:0},           // 水流速度：波纹沿 +x 漂移
+  uFlow:U.flow,              // 水流速度：波纹沿 +x 漂移（与水草倒伏、浮叶共用）
   uDepthTex:{value:/** @type {THREE.Texture|null} */ (null)},   // 自然水域的水深贴图（natural-shells bakeDepth）
   uDepthBox:{value:new THREE.Vector4(0,0,1,1)},  // 贴图覆盖范围：x0, z0, 1/宽, 1/深
   uDepthOn:{value:0},
@@ -73,11 +74,12 @@ const waterMesh=new THREE.Mesh(
     vertexShader:`
       uniform float uTime, uFlow;
       varying vec3 vW; varying vec2 vXZ;
+      ${WAVE_GLSL}
       void main(){
         float t=uTime;
         vec4 wp=modelMatrix*vec4(position,1.0);          // 波形按世界坐标算：自然水域放大水面时波长不变
         vec2 q=vec2(wp.x-uFlow*t*0.9, wp.z);              // 顺流平移的波形坐标
-        wp.y += ( sin(q.x*7.0+t*1.3) + sin(q.y*9.0+t*1.7) + sin((q.x+q.y)*5.0+t*0.9) )*0.006;
+        wp.y += waterWave(wp.xz, t, uFlow);               // 与浮叶共用（water-wave.js）
         vW=wp.xyz; vXZ=q;
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { U } from '../../uniforms.js';
 import { causticsTex, causticsOn } from '../../scene/caustics.js';
+import { TANK } from '../../scene/tank.js';   // 循环依赖安全：TANK 只在着色器编译时（onBeforeCompile）读取
 
 /* ================================================================
  * 造景物件公共件：共享材质缓存、摆动着色、渐变顶点色
@@ -25,14 +26,26 @@ export function injectSway(/** @type {any} */ mat, /** @type {number} */ amp, /*
     sh.uniforms.uAmp={value:amp};
     sh.uniforms.uFreq={value:freq};
     sh.uniforms.uHN={value:hNorm};
-    sh.vertexShader='uniform float uTimeS, uAmp, uFreq, uHN;\nattribute float aPhase;\nvarying vec3 vSwW;\n'
+    sh.uniforms.uFlowS=U.flow;
+    sh.vertexShader='uniform float uTimeS, uAmp, uFreq, uHN, uFlowS;\nattribute float aPhase;\nvarying vec3 vSwW;\n'
       + sh.vertexShader.replace('#include <begin_vertex>',
       `#include <begin_vertex>
       {
         float hh = clamp( transformed.y / uHN, 0.0, 1.0 );
         float ss = pow( hh, 1.45 );
-        transformed.x += sin( uTimeS*1.15 + aPhase + transformed.y*uFreq ) * ss * uAmp;
+        // 水流：水下的草顺流（世界 +x）倒伏、摆得更急；实例和物件各自随机转过，倒伏方向要换到局部空间
+        mat3 toW = mat3( modelMatrix );
+        vec4 base = modelMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
+        #ifdef USE_INSTANCING
+          toW = toW * mat3( instanceMatrix );
+          base = modelMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
+        #endif
+        float fl = uFlowS * step( base.y, ${TANK.waterY.toFixed(2)} );   // 岸上的草不受水流影响
+        float gust = 1.0 + fl * 3.0 * ( 0.75 + 0.25*sin( uTimeS*0.6 + aPhase ) );
+        transformed.x += sin( uTimeS*1.15*( 1.0 + fl*2.0 ) + aPhase + transformed.y*uFreq ) * ss * uAmp * gust;
         transformed.z += cos( uTimeS*0.93 + aPhase*1.31 + transformed.y*uFreq*0.9 ) * ss * uAmp * 0.6;
+        vec3 lean = inverse( toW ) * vec3( 1.0, 0.0, 0.0 );
+        transformed += normalize( lean ) * ss * uHN * fl * 1.6 * ( 0.85 + 0.15*sin( uTimeS*0.8 + aPhase ) );
       }
       #ifdef USE_INSTANCING
         vSwW = ( modelMatrix * instanceMatrix * vec4( transformed, 1.0 ) ).xyz;

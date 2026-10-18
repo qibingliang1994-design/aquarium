@@ -6,6 +6,7 @@ import { SPECIES } from '../entities/fish/species.js';
 import { School } from '../entities/fish/school.js';
 import { createCare } from '../systems/care.js';
 import { buildItem, disposeItem } from './catalog.js';
+import { createContactShadows } from './contact-shadow.js';
 import { THEMES } from './themes.js';
 import { TANK_STYLES } from './tank-styles.js';
 import { careKey } from './scene-store.js';
@@ -23,6 +24,7 @@ const GRAVEL_N=56;
 
 /** @param {any} opts */
 export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, onTheme, onTank, onSchools }){
+  const contact=createContactShadows(tankGroup, sandHeight);
   const itemsGroup=new THREE.Group();
   itemsGroup.name='scene-items';
   tankGroup.add(itemsGroup);
@@ -67,6 +69,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     e.root.children[0]?.userData.onPlace?.((TANK.waterY-y)/it.s);   // 睡莲/香蒲按到水面的局部高度伸展
     e.root.updateMatrix();
     e.root.updateMatrixWorld(true);
+    e.shadow=contact.fit(it, e.shadow ?? null);   // 接地暗斑跟着位置/缩放重贴沙面
   }
   function build(/** @type {any} */ item){
     const { object, obstacles:local }=buildItem(item.type, item.seed);
@@ -79,7 +82,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     place(e);
     return e;
   }
-  function destroy(/** @type {any} */ e){ e.root.removeFromParent(); disposeItem(e.root); }
+  function destroy(/** @type {any} */ e){ e.root.removeFromParent(); disposeItem(e.root); if(e.shadow) contact.remove(e.shadow); }
 
   // 物件局部障碍 → 世界障碍；同时刷新气泡发射点
   function refreshDerived(){

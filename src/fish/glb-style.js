@@ -1,7 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { causticsTex, causticsOn } from '../scene/caustics.js';
+import { causticsTex, causticsOn, CAUSTIC_FACING } from '../scene/caustics.js';
 import { U } from '../uniforms.js';
 
 /* ================================================================
@@ -191,9 +191,11 @@ export function decorateFishMaterial(mat, opts={}){
         ${paint ? `{ vec3 g = vYN<uGM ? mix(uG0,uG1,smoothstep(0.0,uGM,vYN))
                                  : mix(uG1,uG2,smoothstep(uGM,1.0,vYN));
           diffuseColor.rgb *= g; }` : ''}
+`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         ${causticK ? `{ float c1=texture2D(uCMap,vFxW.xz*0.55+vec2(uCT*0.021,uCT*0.017)).r;
           float c2=texture2D(uCMap,vFxW.xz*0.92-vec2(uCT*0.013,-uCT*0.019)).r;
-          diffuseColor.rgb += vec3(0.62,0.85,0.95)*pow(min(c1,c2),1.4)*smoothstep(1.75,1.0,vFxW.y)*uCK*uCOn; }` : ''}`)
+          diffuseColor.rgb += vec3(0.62,0.85,0.95)*pow(min(c1,c2),1.4)*smoothstep(1.75,1.0,vFxW.y)*${CAUSTIC_FACING}*uCK*uCOn; }` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         ${paint ? 'totalEmissiveRadiance += uG1*uGlow*(1.0-smoothstep(0.0,uGB,abs(vYN-uGM)));' : ''}`)
       .replace('#include <opaque_fragment>', `{

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange, fbm3 } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
+import { injectFloat } from '../../scene/water-wave.js';
 import { shared, castAll, injectSurfaceDetail, UP } from './common.js';
 import { makeLeaf, ribbons } from './leaf-shapes.js';
 import { bladeMat, bladeDepth } from './plants.js';
@@ -71,9 +72,10 @@ function flowerGeo(/** @type {any} */ rng){
 }
 
 export function buildLily(/** @type {any} */ rng){
-  const padMat=shared('mat:lilyPad', ()=>new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.38, side:THREE.DoubleSide }));
+  // 叶片与花随水面波动（与水面同一波形，浪头不会盖过叶片）
+  const padMat=shared('mat:lilyPad', ()=>{ const m=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.38, side:THREE.DoubleSide }); injectFloat(m, 'lilyPad'); return m; });
   const stemMat=shared('mat:lilyStem', ()=>new THREE.MeshStandardMaterial({ color:0x3f5f2c, roughness:0.6 }));
-  const flowerMat=shared('mat:lilyFlower', ()=>new THREE.MeshPhysicalMaterial({ vertexColors:true, roughness:0.45, sheen:0.8, sheenColor:new THREE.Color(0xffffff), side:THREE.DoubleSide }));
+  const flowerMat=shared('mat:lilyFlower', ()=>{ const m=new THREE.MeshPhysicalMaterial({ vertexColors:true, roughness:0.45, sheen:0.8, sheenColor:new THREE.Color(0xffffff), side:THREE.DoubleSide }); injectFloat(m, 'lilyFlower'); return m; });
   const group=new THREE.Group();
   const stemG=new THREE.CylinderGeometry(0.005,0.007,1,5).translate(0,0.5,0);
   const tops=[];

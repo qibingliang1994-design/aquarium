@@ -73,6 +73,7 @@ const waterMesh=new THREE.Mesh(
   new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.01, TANK.D-2*TANK.glass-0.01, 48, 24).rotateX(-Math.PI/2),
   new THREE.ShaderMaterial({
     uniforms:waterUniforms, transparent:true, opacity:0.55, side:THREE.DoubleSide,
+    depthWrite:false,          // 不写深度：镜头 pass（景深/水体纵深）要的是水面下物体的深度，俯视自然水域时尤其如此
     vertexShader:`
       uniform float uTime, uFlow;
       varying vec3 vW; varying vec2 vXZ;

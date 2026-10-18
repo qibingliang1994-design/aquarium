@@ -22,14 +22,14 @@ export const TANK_STYLES = {
   zen:     { label:'和风木框', hint:'胡桃木框与格栅柜 · 木质灯檐 · 暖光', kind:'tank',
     light:{ spotCol:0xffe6c4, spotK:0.95, spotY:2.12, strip:0xffdcae } },
   pond:    { label:'山野池塘', hint:'草岸芦苇 · 水面清澈见底 · 静水', kind:'natural',
-    light:{ spotCol:0xfff0d4, spotK:2.6, spotY:4.4, strip:0 },
-    env:{ bg:0x9dbfcc, fog:0x93b6bf, fogD:0.026, hemi:0.85, fill:0.9, env:0.6, clear:1, current:0 } },
+    light:{ spotCol:0xfff0d4, spotK:3.6, spotY:4.4, strip:0 },
+    env:{ bg:0x9dbfcc, fog:0x93b6bf, fogD:0.026, hemi:0.6, fill:0.4, env:0.55, clear:1, current:0 } },
   stream:  { label:'山间溪流', hint:'卵石滩与岸石 · 清冽流水 · 鱼群顶流', kind:'natural',
-    light:{ spotCol:0xfff6e8, spotK:2.8, spotY:4.4, strip:0 },
-    env:{ bg:0xa7c8d8, fog:0x9cbfcd, fogD:0.024, hemi:0.9, fill:1.0, env:0.65, clear:1, current:0.16 } },
+    light:{ spotCol:0xfff6e8, spotK:3.9, spotY:4.4, strip:0 },
+    env:{ bg:0xa7c8d8, fog:0x9cbfcd, fogD:0.024, hemi:0.62, fill:0.42, env:0.6, clear:1, current:0.16 } },
   river:   { label:'林间小河', hint:'沙滩缓岸 · 茶色河水 · 缓流', kind:'natural',
-    light:{ spotCol:0xffe9c8, spotK:2.5, spotY:4.4, strip:0 },
-    env:{ bg:0xa9bfb0, fog:0x9fb5a6, fogD:0.028, hemi:0.8, fill:0.85, env:0.55, clear:0.85, current:0.06 } },
+    light:{ spotCol:0xffe9c8, spotK:3.5, spotY:4.4, strip:0 },
+    env:{ bg:0xa9bfb0, fog:0x9fb5a6, fogD:0.028, hemi:0.56, fill:0.38, env:0.5, clear:0.85, current:0.06 } },
 };
 export const TANK_IDS = Object.keys(TANK_STYLES);
 

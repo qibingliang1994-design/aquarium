@@ -9,6 +9,9 @@ import { lerp } from '../utils.js';
 
 const CYCLE_SECS=180;
 
+/** 自然水域的太阳位置（指向缸心 spotTarget） */
+const SUN={ x:-3.2, y:7.6, z:-2.6 };
+
 /** @param {any} opts */
 export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, floorGlowMat, rays, schools, fishRim }){
   const { hoodSpot, hemi, fillLight, waterGlow, rim }=lights;
@@ -60,7 +63,20 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     /** 缸体款式：主灯色/强度/高度跟随灯具（夜间月光表不变） */
     setTank(/** @type {any} */ t){
       DAY.spotCol.setHex(t.light.spotCol); DAY.spot=16*t.light.spotK;
-      hoodSpot.position.y=t.light.spotY;
+      const nat=t.kind==='natural', sh=hoodSpot.shadow.camera;
+      if(nat){
+        // 自然水域：太阳斜照（后左上方约 30°），近似平行光、不随距离衰减——鱼影斜落在河床上，
+        // 而不是正下方被鱼身挡住；也没有"舞台追光"那样的一圈亮斑。亮度按原先正上方灯在河床处的照度折算
+        DAY.spot/=(t.light.spotY-0.7)**2;
+        hoodSpot.position.set(SUN.x, SUN.y, SUN.z);
+        hoodSpot.angle=0.62; hoodSpot.penumbra=0.7; hoodSpot.decay=0; hoodSpot.distance=0;
+        sh.near=3; sh.far=16;
+      }else{
+        hoodSpot.position.set(0, t.light.spotY, -0.15);
+        hoodSpot.angle=1.02; hoodSpot.penumbra=0.88; hoodSpot.decay=2; hoodSpot.distance=8;
+        sh.near=0.4; sh.far=6;
+      }
+      sh.updateProjectionMatrix();
       ENV=t.env ?? null;
       if(ENV){ envBg.setHex(ENV.bg); envFog.setHex(ENV.fog); }
       scene.fog.density=ENV?.fogD ?? 0.052;

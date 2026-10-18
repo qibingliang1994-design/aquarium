@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange, vnoise } from '../../utils.js';
@@ -9,13 +10,14 @@ import { shared, injectSway, setPhase, castAll, injectSurfaceDetail, UP } from '
  * 配色按 seed 从调色板里挑，同一预设每次打开都长得一样
  * ================================================================ */
 
-const pick = (rng, arr) => arr[Math.floor(rng()*arr.length)];
+const pick = (/** @type {any} */ rng, /** @type {any[]} */ arr) => arr[Math.floor(rng()*arr.length)];
 const _q=new THREE.Quaternion(), _d=new THREE.Vector3(), _axis=new THREE.Vector3();
 
 /** 递归分叉：返回线段 { a, b, r0, r1, k }（k = 末梢程度 0..1） */
+/** @param {any} rng @param {any} opts */
 function growBranches(rng, { len, rad, depth, kids, spread, planar }){
-  const segs=[];
-  const grow=(a, dir, l, r, d)=>{
+  /** @type {any[]} */ const segs=[];
+  const grow=(/** @type {any} */ a, /** @type {any} */ dir, /** @type {number} */ l, /** @type {number} */ r, /** @type {number} */ d)=>{
     const b=a.clone().addScaledVector(dir, l);
     segs.push({ a, b, r0:r, r1:r*0.72, k0:d/(depth+1), k1:(d+1)/(depth+1) });
     if(d>=depth) return;
@@ -36,10 +38,10 @@ function growBranches(rng, { len, rad, depth, kids, spread, planar }){
 }
 
 /** 线段 → 合并的圆柱 + 末梢圆头，按 k 上渐变色 */
-function branchGeometry(segs, cBase, cTip, radial){
+function branchGeometry(/** @type {any[]} */ segs, /** @type {any} */ cBase, /** @type {any} */ cTip, /** @type {number} */ radial){
   const a=new THREE.Color(cBase), b=new THREE.Color(cTip), tmp=new THREE.Color();
   const parts=[];
-  const paint=(g, k0, k1, y0, y1)=>{
+  const paint=(/** @type {any} */ g, /** @type {number} */ k0, /** @type {number} */ k1, /** @type {number} */ y0, /** @type {number} */ y1)=>{
     const p=g.attributes.position, col=new Float32Array(p.count*3);
     for(let i=0;i<p.count;i++){
       const t=Math.min(1,Math.max(0,(p.getY(i)-y0)/(y1-y0||1)));
@@ -73,7 +75,7 @@ const coralMat = () => shared('mat:coral', ()=>{
 });
 
 /** 鹿角珊瑚 */
-export function buildCoralBranch(rng){
+export function buildCoralBranch(/** @type {any} */ rng){
   const [c0,c1]=pick(rng, [[0xb2486e,0xffb6cc],[0x6a46b0,0xd6bcff],[0xc0702e,0xffd8a0],[0x2e9a86,0xb6f6e2]]);
   const segs=growBranches(rng, { len:0.16, rad:0.034, depth:3, kids:[3,2,0.7], spread:0.7, planar:false });
   const mesh=castAll(new THREE.Mesh(branchGeometry(segs, c0, c1, 6), coralMat()));
@@ -81,7 +83,7 @@ export function buildCoralBranch(rng){
 }
 
 /** 海扇：同一平面内的细密分叉，随水流整体轻摆 */
-export function buildCoralFan(rng){
+export function buildCoralFan(/** @type {any} */ rng){
   const mat=shared('mat:fan', ()=>{
     const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.7, side:THREE.DoubleSide});
     injectSway(m, 0.045, 3.0, 'fan', true, 0.7);
@@ -97,7 +99,7 @@ export function buildCoralFan(rng){
 }
 
 /** 脑珊瑚：半球 + 噪声沟回，沟深色、脊浅色 */
-export function buildCoralBrain(rng, seed){
+export function buildCoralBrain(/** @type {any} */ rng, /** @type {number} */ seed){
   const [cg,cr]=pick(rng, [[0x4f5a26,0xc9d07a],[0x6e3452,0xf0a8c8],[0x6a4a2a,0xe8c890]]);
   const r=0.17, g=new THREE.SphereGeometry(r, 64, 32, 0, Math.PI*2, 0, Math.PI*0.56);
   const p=g.attributes.position, v=new THREE.Vector3(), o=(seed%613)*0.71;
@@ -120,6 +122,7 @@ export function buildCoralBrain(rng, seed){
 }
 
 /** 渐细管（按长度给半径），尾端加圆头；颜色按 t 从 cb 渐变到 ct */
+/** @param {any} curve @param {any} rFn @param {any} cb @param {any} ct @param {any} [opts] */
 function taperTube(curve, rFn, cb, ct, { segs=10, radial=6, tipK=0.9 }={}){
   const g=new THREE.TubeGeometry(curve, segs, 1, radial, false);
   const p=g.attributes.position, col=new Float32Array(p.count*3), a=new THREE.Color(cb), b=new THREE.Color(ct), c=new THREE.Color();
@@ -145,7 +148,7 @@ function taperTube(curve, rFn, cb, ct, { segs=10, radial=6, tipK=0.9 }={}){
 }
 
 /** 海葵：带纵纹的柱体 + 口盘 + 一圈弯曲渐细、末端圆头的触手（实例化，各自摆动），小丑鱼最爱 */
-export function buildAnemone(rng){
+export function buildAnemone(/** @type {any} */ rng){
   const [cc,cb,ct]=pick(rng, [[0x7a4a3a,0xb04a86,0xffc2ec],[0x4a5a3a,0x3a9a6a,0xd2ffe2],[0x7a4a2e,0xc8643a,0xffe0b4],[0x5a4a5e,0x8a62c8,0xf2dcff]]);
   const tentMat=shared('mat:tentacle', ()=>{
     const m=new THREE.MeshPhysicalMaterial({vertexColors:true, roughness:0.35, sheen:0.6, sheenColor:new THREE.Color(0xffffff), sheenRoughness:0.3});
@@ -169,7 +172,7 @@ export function buildAnemone(rng){
     const lean=0.03+v*0.025, len=0.17+v*0.03;
     const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(0,len*0.4,lean*0.2),
       new THREE.Vector3(0,len*0.75,lean*0.6), new THREE.Vector3(0,len,lean)]);
-    return taperTube(curve, t=>0.0068*(1-t*0.5), cb, ct);
+    return taperTube(curve, (/** @type {number} */ t)=>0.0068*(1-t*0.5), cb, ct);
   });
   const m=new THREE.Matrix4(), q=new THREE.Quaternion(), q2=new THREE.Quaternion(), s=new THREE.Vector3(), pv=new THREE.Vector3(), c=new THREE.Color();
   for(let v=0;v<3;v++){

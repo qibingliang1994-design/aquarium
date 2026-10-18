@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange } from '../../utils.js';
@@ -14,6 +15,7 @@ const _c=new THREE.Color(), _a=new THREE.Color(), _b=new THREE.Color(), _v=new T
  * 单片叶：len 长、width 宽；petiole 叶柄占比；tilt 起始外倾角、bend 总弯曲角（弧度）；
  * twist 沿长度扭转圈数（带状叶）；round=true 叶身更圆（矮生草）
  */
+/** @param {any} opts */
 export function makeLeaf({ len, width, petiole=0, tilt=0.2, bend=0.6, twist=0, fold=0.22, round=false,
   cBase, cTip, cVein=null, segs=14, cols=4 }){
   const g=new THREE.PlaneGeometry(1, 1, cols, segs);   // cols=2 用于极小的叶片（省三角形）
@@ -51,6 +53,7 @@ export function makeLeaf({ len, width, petiole=0, tilt=0.2, bend=0.6, twist=0, f
 }
 
 /** 莲座丛：叶片绕中心螺旋排布，外圈更外倾（皇冠草 / 椒草） */
+/** @param {any} rng @param {any} opts */
 export function rosette(rng, { n, len:[l0,l1], width, petiole, tilt:[t0,t1], bend, colors, vein }){
   const parts=[];
   for(let i=0;i<n;i++){
@@ -64,6 +67,7 @@ export function rosette(rng, { n, len:[l0,l1], width, petiole, tilt:[t0,t1], ben
 }
 
 /** 带状叶丛：细长扭转的缎带叶（苦草 / 海草） */
+/** @param {any} rng @param {any} opts */
 export function ribbons(rng, { n, len:[l0,l1], width, twist, colors, spread=0.03, segs=18, cols=4 }){   // segs/cols 调低用于成片的岸草
   const parts=[];
   for(let i=0;i<n;i++){
@@ -78,6 +82,7 @@ export function ribbons(rng, { n, len:[l0,l1], width, twist, colors, spread=0.03
 }
 
 /** 茎生植物：细茎 + 每节一对对生叶，叶色自下而上由绿转红（红宫廷 / 丁香） */
+/** @param {any} rng @param {any} opts */
 export function stemPlant(rng, { height, nodes, leafLen, leafW, cStem, cLow, cHigh }){
   const parts=[];
   const stem=new THREE.CylinderGeometry(0.0035,0.005,height,5,nodes).translate(0,height/2,0);
@@ -102,6 +107,7 @@ export function stemPlant(rng, { height, nodes, leafLen, leafW, cStem, cLow, cHi
 }
 
 /** 矮生地毯：一簇圆叶小草（叶片多、几乎平铺），整体半球形 */
+/** @param {any} rng @param {any} opts */
 export function carpetClump(rng, { n, radius, colors }){
   const parts=[];
   for(let i=0;i<n;i++){

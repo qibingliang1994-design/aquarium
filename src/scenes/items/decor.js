@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { rrange, vnoise } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
@@ -17,7 +18,7 @@ const rockMat = () => shared('mat:rock', ()=>{
 });
 
 /** 圆石（河石 / 龙骨石）：基准半径 0.2，物件缩放决定大小 */
-export function buildRock(rng, seed){
+export function buildRock(/** @type {any} */ rng, /** @type {number} */ seed){
   const r=0.2, g=makeRockGeo(r, seed, 'river');
   g.scale(rrange(rng,0.95,1.25), rrange(rng,0.75,0.95), rrange(rng,0.9,1.15));
   g.translate(0, r*0.24, 0);
@@ -26,7 +27,7 @@ export function buildRock(rng, seed){
 }
 
 /** 立石（青龙石）：竖长、带竖向沟槽与白色石脉，石庭/山景的主石 */
-export function buildRockTall(rng, seed){
+export function buildRockTall(/** @type {any} */ rng, /** @type {number} */ seed){
   const r=0.14, g=makeRockGeo(r, seed+31, 'seiryu');
   g.scale(rrange(rng,0.7,0.9), rrange(rng,2.2,2.7), rrange(rng,0.65,0.85));
   g.rotateZ(rrange(rng,-0.14,0.14));
@@ -38,7 +39,7 @@ export function buildRockTall(rng, seed){
 }
 
 /** 活石：海水缸礁岩，浅色多孔、带紫色珊瑚藻斑，扁平宽大便于叠礁 */
-export function buildLiveRock(rng, seed){
+export function buildLiveRock(/** @type {any} */ rng, /** @type {number} */ seed){
   const r=0.22, g=makeRockGeo(r, seed+77, 'live');
   g.scale(rrange(rng,1.1,1.4), rrange(rng,0.6,0.8), rrange(rng,0.9,1.15));
   g.translate(0, r*0.2, 0);
@@ -47,7 +48,7 @@ export function buildLiveRock(rng, seed){
 }
 
 /** 沉木：渐细的主干拱 + 主侧枝 + 随机细枝 + 根部扎沙；原经典布局中位于 (0,-0.57)，坐标已减去该处沙面 */
-export function buildWood(rng, seed){
+export function buildWood(/** @type {any} */ rng, /** @type {number} */ seed){
   const woodMat=shared('mat:wood', ()=>{
     const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02});
     injectCaustics(m, 0.4, 'wood');
@@ -55,15 +56,15 @@ export function buildWood(rng, seed){
     return m;
   });
   const mossMat=shared('mat:woodMoss', ()=>new THREE.MeshStandardMaterial({color:0x4a6b2f, roughness:1, flatShading:true}));
-  const V=(x,y,z)=>new THREE.Vector3(x, y-0.3, z+0.57);
+  const V=(/** @type {number} */ x,/** @type {number} */ y,/** @type {number} */ z)=>new THREE.Vector3(x, y-0.3, z+0.57);
   const curve=new THREE.CatmullRomCurve3([V(-0.74,0.27,-0.54), V(-0.62,0.52,-0.57), V(-0.38,0.82,-0.6), V(0,1.0,-0.58),
     V(0.42,0.78,-0.6), V(0.66,0.42,-0.55), V(0.76,0.26,-0.53)]);
   const group=new THREE.Group();
-  const add=g=>{ group.add(new THREE.Mesh(g, woodMat)); };
+  const add=(/** @type {any} */ g)=>{ group.add(new THREE.Mesh(g, woodMat)); };
   // 主干：左端是粗根（喇叭口扎进沙里），向右逐渐变细
   add(barkTube(curve, t=>0.034+0.032*(1-t)+0.05*Math.max(0,1-t/0.07)**2+0.02*Math.max(0,(t-0.94)/0.06)**2, { segs:64, radial:14, seed }));
   // 主侧枝 + 2~3 根随机细枝：从主干某点长出，向上外伸，末端收尖
-  const twig=(t0, dir, len, r0, s)=>{
+  const twig=(/** @type {any} */ t0, /** @type {any} */ dir, /** @type {number} */ len, /** @type {number} */ r0, /** @type {number} */ s)=>{
     const a=curve.getPointAt(t0), pts=[a.clone()];
     const d=dir.clone().normalize();
     for(let i=1;i<=3;i++){
@@ -102,7 +103,7 @@ export function buildWood(rng, seed){
 }
 
 /** 苔球：毛茸茸的绿色小球，半埋在沙里 */
-export function buildMossBall(rng, seed){
+export function buildMossBall(/** @type {any} */ rng, /** @type {number} */ seed){
   const mat=shared('mat:moss', ()=>{
     const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:1});
     injectCaustics(m, 0.45, 'moss');

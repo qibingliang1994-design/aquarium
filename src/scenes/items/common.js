@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { U } from '../../uniforms.js';
 import { causticsTex, causticsOn } from '../../scene/caustics.js';
@@ -9,7 +10,7 @@ import { causticsTex, causticsOn } from '../../scene/caustics.js';
 
 const MATS = new Map();
 /** 按 key 懒创建并缓存的共享材质 */
-export function shared(key, make){
+export function shared(/** @type {string} */ key, /** @type {()=>any} */ make){
   if(!MATS.has(key)) MATS.set(key, make());
   return MATS.get(key);
 }
@@ -17,9 +18,9 @@ export function shared(key, make){
 export const UP = new THREE.Vector3(0,1,0);
 
 // 摆动 + 叶片透光 + 焦散；深度材质只做摆动。hNorm = 摆动满幅所在的局部高度
-export function injectSway(mat, amp, freq, key, shade=false, hNorm=1.1){
+export function injectSway(/** @type {any} */ mat, /** @type {number} */ amp, /** @type {number} */ freq, /** @type {string} */ key, /** @type {boolean} */ shade=false, /** @type {number} */ hNorm=1.1){
   mat.customProgramCacheKey=()=> `sway_${key}${shade?'_s':''}`;
-  mat.onBeforeCompile=(sh)=>{
+  mat.onBeforeCompile=(/** @type {any} */ sh)=>{
     sh.uniforms.uTimeS=U.time;
     sh.uniforms.uAmp={value:amp};
     sh.uniforms.uFreq={value:freq};
@@ -54,12 +55,12 @@ export function injectSway(mat, amp, freq, key, shade=false, hNorm=1.1){
 }
 
 /** 非实例网格的 aPhase（整件同相位） */
-export function setPhase(geo, phase){
+export function setPhase(/** @type {any} */ geo, /** @type {number} */ phase){
   geo.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(phase),1));
 }
 
 /** 给几何体整体刷一层"自下而上"的渐变顶点色 */
-export function paintGradient(geo, cBase, cTip, y0, y1){
+export function paintGradient(/** @type {any} */ geo, /** @type {any} */ cBase, /** @type {any} */ cTip, /** @type {number} */ y0, /** @type {number} */ y1){
   const p=geo.attributes.position, col=new Float32Array(p.count*3);
   const a=new THREE.Color(cBase), b=new THREE.Color(cTip), tmp=new THREE.Color();
   for(let i=0;i<p.count;i++){
@@ -70,17 +71,18 @@ export function paintGradient(geo, cBase, cTip, y0, y1){
   return geo;
 }
 
-export function castAll(obj){
-  obj.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+export function castAll(/** @type {any} */ obj){
+  obj.traverse((/** @type {any} */ o)=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
   return obj;
 }
 
 /** 表面细节（在已注入焦散的材质上叠加）：按世界坐标的 3D 分形噪声扰动法线并压暗凹处，
  *  无需 UV —— 岩石/沉木近看不再像塑料。freq：每单位长度的噪声频率；k：起伏强度 */
+/** @param {any} mat @param {any} [opts] */
 export function injectSurfaceDetail(mat, { freq=16, k=0.35, ao=0.3, stretch=[1,1,1], key='detail' }={}){
   const prev=mat.onBeforeCompile, prevKey=mat.customProgramCacheKey?.() ?? '';
   mat.customProgramCacheKey=()=>`${prevKey}_${key}`;
-  mat.onBeforeCompile=(sh)=>{
+  mat.onBeforeCompile=(/** @type {any} */ sh)=>{
     prev?.(sh);
     sh.uniforms.uDetF={ value:freq }; sh.uniforms.uDetK={ value:k }; sh.uniforms.uDetAO={ value:ao };
     sh.uniforms.uDetS={ value:new THREE.Vector3(...stretch) };

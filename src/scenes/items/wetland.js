@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange, fbm3 } from '../../utils.js';
@@ -12,7 +13,7 @@ import { bladeMat, bladeDepth } from './plants.js';
  * 所以在 object.userData.onPlace(H) 里按"到水面的局部高度 H"调整（运行时每次摆放后调用）
  * ================================================================ */
 
-const paint=(g, hex)=>{
+const paint=(/** @type {any} */ g, /** @type {number} */ hex)=>{
   const c=new THREE.Color(hex), a=new Float32Array(g.attributes.position.count*3);
   for(let i=0;i<a.length;i+=3){ a[i]=c.r; a[i+1]=c.g; a[i+2]=c.b; }
   g.setAttribute('color', new THREE.BufferAttribute(a,3));
@@ -20,7 +21,7 @@ const paint=(g, hex)=>{
 };
 
 /** 芦苇/香蒲植株：缎带叶 + 两根蒲棒（自然水域岸边也用这个） */
-export function reedGeo(rng, lowPoly=false){
+export function reedGeo(/** @type {any} */ rng, /** @type {boolean} */ lowPoly=false){
   const parts=[ribbons(rng, { n:8, len:[0.6,1.05], width:0.024, twist:0.15, colors:[[0x34582a,0x7d9c4a],[0x3d602c,0x93a656]], segs:lowPoly ? 7 : 12, cols:2 })];
   for(let i=0;i<2;i++){
     const hgt=rrange(rng,0.82,1.05), x=rrange(rng,-0.03,0.03), z=rrange(rng,-0.03,0.03);
@@ -33,7 +34,7 @@ export function reedGeo(rng, lowPoly=false){
 }
 
 /** 睡莲叶：带缺口的圆叶，边缘微翘，叶脉放射状 */
-function padGeo(rng){
+function padGeo(/** @type {any} */ rng){
   const g=new THREE.CircleGeometry(1, 28, 0.18, Math.PI*2-0.36).rotateX(-Math.PI/2);
   const p=g.attributes.position, col=new Float32Array(p.count*3);
   const a=new THREE.Color(0x2f5e22), b=new THREE.Color(0x5f8f34), c=new THREE.Color(), tint=rrange(rng,0.85,1.1);
@@ -51,7 +52,7 @@ function padGeo(rng){
 }
 
 /** 睡莲花：两轮尖瓣 + 黄色花心 */
-function flowerGeo(rng){
+function flowerGeo(/** @type {any} */ rng){
   const [c0,c1]=[[0xf2c6d8,0xfbe8f0],[0xfaf4ec,0xffffff],[0xe8889e,0xf8c8d6]][Math.floor(rng()*3)];
   const parts=[];
   for(const [n,len,tilt] of [[10,0.075,1.05],[8,0.065,0.55]]){
@@ -69,7 +70,7 @@ function flowerGeo(rng){
   return out;
 }
 
-export function buildLily(rng){
+export function buildLily(/** @type {any} */ rng){
   const padMat=shared('mat:lilyPad', ()=>new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.38, side:THREE.DoubleSide }));
   const stemMat=shared('mat:lilyStem', ()=>new THREE.MeshStandardMaterial({ color:0x3f5f2c, roughness:0.6 }));
   const flowerMat=shared('mat:lilyFlower', ()=>new THREE.MeshPhysicalMaterial({ vertexColors:true, roughness:0.45, sheen:0.8, sheenColor:new THREE.Color(0xffffff), side:THREE.DoubleSide }));
@@ -94,7 +95,7 @@ export function buildLily(rng){
   stemG.dispose();
   const dir=new THREE.Vector3(), q=new THREE.Quaternion();
   // H：物件局部坐标下到水面的高度（叶片浮在水面，茎从根部斜拉上去）
-  group.userData.onPlace=H=>{
+  group.userData.onPlace=(/** @type {number} */ H)=>{
     for(const { m, t, bx, bz } of stems){
       t.obj.position.set(t.x, H+t.lift, t.z);
       dir.set(t.x-bx, H, t.z-bz);
@@ -107,7 +108,7 @@ export function buildLily(rng){
 }
 
 /** 香蒲（挺水植物）：一小丛，茎叶长到露出水面 */
-export function buildReeds(rng){
+export function buildReeds(/** @type {any} */ rng){
   const n=5, geo=reedGeo(rng);
   const mesh=new THREE.InstancedMesh(geo, bladeMat(), n);
   mesh.customDepthMaterial=bladeDepth();
@@ -121,12 +122,12 @@ export function buildReeds(rng){
     ph[i]=rng()*6.283;
   }
   geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph,1));
-  mesh.userData.onPlace=H=>{ mesh.scale.y=Math.max(0.5,(H+0.28)/0.95); };   // 植株模板约 0.95 高：拉伸到出水 0.28
+  mesh.userData.onPlace=(/** @type {number} */ H)=>{ mesh.scale.y=Math.max(0.5,(H+0.28)/0.95); };   // 植株模板约 0.95 高：拉伸到出水 0.28
   return { object:mesh, obstacles:[{ c:new THREE.Vector3(0,0.3,0), r:0.1 }] };
 }
 
 /** 卵石滩：一片大小不一的圆润河卵石 */
-export function buildPebbles(rng){
+export function buildPebbles(/** @type {any} */ rng){
   const mat=shared('mat:pebble', ()=>{
     const m=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.55 });
     injectCaustics(m, 0.6, 'pebble');

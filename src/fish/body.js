@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, sstep } from '../utils.js';
@@ -11,12 +12,12 @@ import { U } from '../uniforms.js';
  *          摆频随游速耦合（Strouhal 数约 0.2~0.4）
  *  - 皮肤：程序化鳞片法线贴图（六边形高度场→有限差分法线）
  * ================================================================ */
-export function profileSampler(points){
-  const curve = new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(p[0],p[1],0)));
-  return u=> curve.getPoint(clamp(u,0,1)).y;
+export function profileSampler(/** @type {[number,number][]} */ points){
+  const curve = new THREE.CatmullRomCurve3(points.map((/** @type {[number,number]} */ p)=>new THREE.Vector3(p[0],p[1],0)));
+  return (/** @type {number} */ u)=> curve.getPoint(clamp(u,0,1)).y;
 }
 /* ---------- 鱼体网格：双轮廓 + 超椭圆截面放样；眼部烘入网格 ---------- */
-export function buildFishBody(spec){
+export function buildFishBody(/** @type {any} */ spec){
   const NL=50, NR=40, L=spec.L, H=spec.H;
   const hAt=profileSampler(spec.profileH), wAt=profileSampler(spec.profileW);
   const pos=[], col=[], uv=[], idx=[];
@@ -25,7 +26,7 @@ export function buildFishBody(spec){
   const IRIS=new THREE.Color(0.30,0.21,0.10), PUPIL=new THREE.Color(0.015,0.015,0.022);
 
   // 沿体长非均匀采样：头/眼区加密，保证眼睛有足够顶点分辨率
-  const uSample=v=>{
+  const uSample=(/** @type {number} */ v)=>{
     const a=0.10, b=0.24, wa=0.16, wb=0.30;
     if(v<wa) return v/wa*a;
     if(v<wa+wb) return a+(v-wa)/wb*(b-a);
@@ -110,11 +111,11 @@ export function buildFishBody(spec){
 }
 
 // 鱼鳍：Shape 曲线轮廓 → 合并；每片鳍独立 UV（u=1 附着边）供辐条透明贴图
-export function buildFishFins(spec, hAt, wAt){
+export function buildFishFins(/** @type {any} */ spec, /** @type {any} */ hAt, /** @type {any} */ wAt){
   const L=spec.L, H=spec.H;
-  const fins=[];
+  /** @type {any[]} */ const fins=[];
   const finColor=new THREE.Color(spec.finColor);
-  function addFin(shape, place){
+  function addFin(/** @type {any} */ shape, /** @type {any} */ place){
     const g=new THREE.ShapeGeometry(shape, 7);
     g.applyMatrix4(place);
     const p=g.attributes.position, n=p.count;
@@ -247,9 +248,9 @@ export function buildFishFins(spec, hAt, wAt){
 /* ---------- 游动形变注入（身体/鱼鳍/深度材质共用） ----------
  * 行波 X(s)=A·env(s)·sin(ωt−ks)，env 向尾部增大；
  * 截面按波面斜率 ψ=atan(A·env·k·cos) 刚性转动（保持体长、法线随动） */
-export function injectSwim(mat, spec, phaseU, key, isFin){
+export function injectSwim(/** @type {any} */ mat, /** @type {any} */ spec, /** @type {any} */ phaseU, /** @type {string} */ key, /** @type {boolean} */ isFin){
   mat.customProgramCacheKey = ()=> 'swim2_'+key+(isFin?'_f':'_b');
-  mat.onBeforeCompile = (sh)=>{
+  mat.onBeforeCompile = (/** @type {any} */ sh)=>{
     sh.uniforms.uPhase  = phaseU;
     sh.uniforms.uExcite = U.excite;
     sh.uniforms.uAmp    = { value: spec.amp };
@@ -288,7 +289,7 @@ export function injectSwim(mat, spec, phaseU, key, isFin){
 }
 
 /* ---------- 图鉴模型预览：复用场景中的真实鱼体网格 ---------- */
-export function fishEyeLayout(spec){
+export function fishEyeLayout(/** @type {any} */ spec){
   const hAt=profileSampler(spec.profileH), wAt=profileSampler(spec.profileW);
   const uE=0.155, hR=Math.max(hAt(uE),0.02)*spec.H/2;
   const wR=hR*wAt(uE), re=spec.H*spec.eyeSize*1.15;

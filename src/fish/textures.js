@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { clamp, sstep } from '../utils.js';
 
@@ -21,8 +22,8 @@ function makeScaleNormalMap(size=256){
     }
   }
   const cv=document.createElement('canvas'); cv.width=cv.height=size;
-  const ctx=cv.getContext('2d'); const img=ctx.createImageData(size,size);
-  const at=(x,y)=>H[((y+size)%size)*size+((x+size)%size)];
+  const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d')); const img=ctx.createImageData(size,size);
+  const at=(/** @type {number} */ x,/** @type {number} */ y)=>H[((y+size)%size)*size+((x+size)%size)];
   const str=2.4;
   for(let y=0;y<size;y++) for(let x=0;x<size;x++){
     const dx=(at(x+1,y)-at(x-1,y))*str, dy=(at(x,y+1)-at(x,y-1))*str;
@@ -42,7 +43,7 @@ function makeScaleNormalMap(size=256){
 /* ---------- 鱼鳍辐条透明贴图 ---------- */
 function makeFinAlphaMap(w=256,h=128){
   const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-  const ctx=cv.getContext('2d'); const img=ctx.createImageData(w,h);
+  const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d')); const img=ctx.createImageData(w,h);
   for(let y=0;y<h;y++) for(let x=0;x<w;x++){
     const u=x/(w-1), v=y/(h-1);   // u=1 附着边，u=0 尾缘
     const ray=Math.pow(0.5+0.5*Math.sin(v*Math.PI*56+Math.sin(v*9)*4+u*1.5),1.6);

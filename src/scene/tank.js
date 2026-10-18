@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { vnoise } from '../utils.js';
 import { U } from '../uniforms.js';
@@ -14,11 +15,11 @@ export const TANK = {
 };
 
 // 沙面高度场（沙地网格与查询共用同一函数）
-export function sandHeight(x,z){
+export function sandHeight(/** @type {number} */ x, /** @type {number} */ z){
   return 0.20 + vnoise(x*1.5+3.7, z*1.5+7.2)*0.10 + (z*0.5+0.5)*0.10;
 }
 
-export function createTank(scene){
+export function createTank(/** @type {any} */ scene){
 /* ================================================================
  * 水族箱本体：玻璃 / 边框 / 灯罩 / 水面 / 沙底
  * ================================================================ */
@@ -34,7 +35,7 @@ const glassHigh=new THREE.MeshPhysicalMaterial({
 const glassLow=new THREE.MeshPhysicalMaterial({
   color:0xdff2f4, transparent:true, opacity:0.035, roughness:0.08, metalness:0, envMapIntensity:0.9 });
 const glassMat=glassHigh;
-const glassPanes=[];      // 自然水域时隐藏
+/** @type {any[]} */ const glassPanes=[];      // 自然水域时隐藏
 {
   const W=TANK.W, H=TANK.H, D=TANK.D, t=TANK.glass;
   const front=new THREE.Mesh(new THREE.BoxGeometry(W,H,t), glassMat);
@@ -113,7 +114,7 @@ tankGroup.add(waterMesh);
 /* ---------- 沙底（颗粒纹理） ---------- */
 const sandTex=(()=>{
   const s=512, cv=document.createElement('canvas'); cv.width=cv.height=s;
-  const ctx=cv.getContext('2d');
+  const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d'));
   ctx.fillStyle='#f4f1ea'; ctx.fillRect(0,0,s,s);          // 近白底：沙色交给顶点色（随主题切换）
   const img=ctx.getImageData(0,0,s,s), d=img.data;
   for(let i=0;i<d.length;i+=4){
@@ -142,8 +143,9 @@ const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.gl
 }
 // 底砂侧壁：贴着四面玻璃、从缸底到沙面的竖直截面——透过前玻璃看到的是一层层底砂，而不是缸底
 const skirtGeo=(()=>{
-  const iw=TANK.W/2-TANK.glass-0.004, id=TANK.D/2-TANK.glass-0.004, parts=[];
-  const side=(x0,z0,x1,z1)=>{
+  const iw=TANK.W/2-TANK.glass-0.004, id=TANK.D/2-TANK.glass-0.004;
+  /** @type {any[]} */ const parts=[];
+  const side=(/** @type {number} */ x0,/** @type {number} */ z0,/** @type {number} */ x1,/** @type {number} */ z1)=>{
     const n=48, g=new THREE.PlaneGeometry(1,1,n,3), p=g.attributes.position;
     for(let i=0;i<p.count;i++){
       const u=p.getX(i)+0.5, v=p.getY(i)+0.5, x=x0+(x1-x0)*u, z=z0+(z1-z0)*u;
@@ -156,10 +158,10 @@ const skirtGeo=(()=>{
   side(-iw,id, iw,id); side(iw,-id, -iw,-id); side(-iw,-id, -iw,id); side(iw,id, iw,-id);
   return parts;
 })();
-const sandParts=[];        // 沙床 + 侧裙：自然水域时由地形接管
+/** @type {any[]} */ const sandParts=[];        // 沙床 + 侧裙：自然水域时由地形接管
 for(const g of skirtGeo){ const m=new THREE.Mesh(g, sandMat); m.receiveShadow=true; tankGroup.add(m); sandParts.push(m); }
 // 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合；侧壁越深越暗（湿砂 + 光线衰减）
-function setSandColors(a, b){
+function setSandColors(/** @type {number} */ a, /** @type {number} */ b){
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
   for(const g of [sandGeo, ...skirtGeo]){
     const p=g.attributes.position, col=g.attributes.color, skirt=g!==sandGeo;
@@ -186,12 +188,12 @@ sandParts.push(sand);
 const bgCanvas=document.createElement('canvas'); bgCanvas.width=512; bgCanvas.height=256;
 const bgTex=new THREE.CanvasTexture(bgCanvas); bgTex.colorSpace=THREE.SRGBColorSpace;
 // 背光幕重绘（主题色 'r,g,b'）：外圈辉光取主题色的 45% 亮度
-function setBackdrop(rgb){
-  const ctx=bgCanvas.getContext('2d');
+function setBackdrop(/** @type {string} */ rgb){
+  const ctx=/** @type {CanvasRenderingContext2D} */ (bgCanvas.getContext('2d'));
   const g=ctx.createLinearGradient(0,0,0,256);
   g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
   ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
-  const dim=rgb.split(',').map(v=>Math.round(+v*0.45)).join(',');
+  const dim=rgb.split(',').map((/** @type {string} */ v)=>Math.round(+v*0.45)).join(',');
   const r=ctx.createRadialGradient(256,150,10,256,150,250);
   r.addColorStop(0,`rgba(${rgb},0.55)`); r.addColorStop(0.45,`rgba(${dim},0.28)`); r.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
@@ -205,8 +207,8 @@ scene.add(backdrop);
 
 /* ---------- 缸体外壳（框 / 灯具 / 底柜，随场景款式切换，见 tank-shells.js） ---------- */
 const shell={ id:'', group:null, lightMat:null };
-const room=[];             // 房间地面 / 漏光 / 背光幕：自然水域时隐藏（换成户外地形与天空）
-function setShell(id){
+/** @type {any[]} */ const room=[];             // 房间地面 / 漏光 / 背光幕：自然水域时隐藏（换成户外地形与天空）
+function setShell(/** @type {string} */ id){
   if(shell.id===id) return;
   if(shell.group){ tankGroup.remove(shell.group); disposeShell(shell.group); }
   const built=buildShell(id, TANK, { waterY:TANK.waterY, sandHeight });
@@ -232,7 +234,7 @@ let floorGlowMat;
   // 地面光晕：缸体透出的水色漏光，把柜子"落"在地上
   const glowTex=(()=>{
     const cv=document.createElement('canvas'); cv.width=cv.height=256;
-    const ctx=cv.getContext('2d');
+    const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d'));
     const r=ctx.createRadialGradient(128,128,0,128,128,128);
     r.addColorStop(0,'rgba(70,170,200,0.32)'); r.addColorStop(0.5,'rgba(40,110,140,0.12)'); r.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=r; ctx.fillRect(0,0,256,256);

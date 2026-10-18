@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { vnoise } from '../utils.js';
@@ -15,10 +16,11 @@ const CAB_H=0.72, CAB_Y=-0.38;          // 柜体高度与中心（顶面 ≈ -0
 
 /* ---------- 程序化木纹（按 key 缓存，跨场景复用） ---------- */
 const TEX=new Map();
+/** @param {string} key @param {number} base @param {number} dark @param {any} [opts] */
 function woodTexture(key, base, dark, { lines=26, warp=2.2 }={}){
   if(TEX.has(key)) return TEX.get(key);
   const w=1024, h=256, cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-  const ctx=cv.getContext('2d'), img=ctx.createImageData(w,h), d=img.data;
+  const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d')), img=ctx.createImageData(w,h), d=img.data;
   const a=new THREE.Color(base), b=new THREE.Color(dark);
   for(let y=0;y<h;y++) for(let x=0;x<w;x++){
     // 顺长方向（贴图 x 方向）的纤维：年轮线被低频噪声轻微扭动，叠加细纤维与色块
@@ -37,16 +39,17 @@ function woodTexture(key, base, dark, { lines=26, warp=2.2 }={}){
 }
 
 /* ---------- 小工具 ---------- */
-function kit(group){
-  const box=(mat,w,h,d,x,y,z,round=0)=>{
+function kit(/** @type {any} */ group){
+  const box=(/** @type {any} */ mat,/** @type {number} */ w,/** @type {number} */ h,/** @type {number} */ d,/** @type {number} */ x,/** @type {number} */ y,/** @type {number} */ z,/** @type {number} */ round=0)=>{
     const g=round ? new RoundedBoxGeometry(w,h,d,3,round) : new THREE.BoxGeometry(w,h,d);
     const m=new THREE.Mesh(g,mat); m.position.set(x,y,z);
     m.castShadow=m.receiveShadow=true; group.add(m); return m;
   };
   return { box };
 }
-const lightPanel=(color)=>new THREE.MeshStandardMaterial({ color:0x111111, emissive:color, emissiveIntensity:2.8 });
+const lightPanel=(/** @type {any} */ color)=>new THREE.MeshStandardMaterial({ color:0x111111, emissive:color, emissiveIntensity:2.8 });
 // 底柜通用：柜体 + 三扇门板（门缝即阴影）+ 内凹踢脚
+/** @param {any} group @param {any} opts */
 function cabinet(group, { body, door, kick=0x050506, doors=3, handle=null, inset=0.04, CW=W+0.3, CD=D+0.3 }){
   const { box }=kit(group);
   box(body, CW, CAB_H-0.06, CD, 0, CAB_Y+0.03, 0, 0.02);
@@ -59,14 +62,14 @@ function cabinet(group, { body, door, kick=0x050506, doors=3, handle=null, inset
   }
 }
 // 超白玻璃的边：迎光处透出淡淡的青绿色（低铁玻璃的真实特征）
-function glassEdges(group, mat){
+function glassEdges(/** @type {any} */ group, /** @type {any} */ mat){
   const { box }=kit(group);
   for(const sz of [-1,1]) box(mat, W, 0.006, T, 0, H+0.003, sz*(D/2-T/2));
   for(const sx of [-1,1]) box(mat, T, 0.006, D-2*T, sx*(W/2-T/2), H+0.003, 0);
   for(const sx of [-1,1]) for(const sz of [-1,1]) box(mat, T*0.9, H, 0.004, sx*(W/2-T/2), H/2, sz*(D/2+0.001));
 }
 // 玻璃内角的黑色硅胶缝
-function siliconeSeams(group, mat){
+function siliconeSeams(/** @type {any} */ group, /** @type {any} */ mat){
   const { box }=kit(group);
   const r=0.012;
   for(const sx of [-1,1]) for(const sz of [-1,1]) box(mat, r, H-0.01, r, sx*(W/2-T-r/2), H/2, sz*(D/2-T-r/2));
@@ -74,7 +77,7 @@ function siliconeSeams(group, mat){
   for(const sx of [-1,1]) box(mat, r, r, D-2*T, sx*(W/2-T-r/2), T+r/2, 0);
 }
 // 吊线：从灯具两端直上天花（画面外）
-function cables(group, xs, y0, z){
+function cables(/** @type {any} */ group, /** @type {any} */ xs, /** @type {number} */ y0, /** @type {number} */ z){
   const mat=new THREE.MeshStandardMaterial({ color:0x2a2c30, roughness:0.4, metalness:0.6 });
   for(const x of xs){
     const c=new THREE.Mesh(new THREE.CylinderGeometry(0.004,0.004,6,5), mat);
@@ -85,7 +88,7 @@ function cables(group, xs, y0, z){
 /* ================================================================ */
 const BUILDERS={
   // 经典黑框：金属包边立柱 + 一体灯罩 + 深色烤漆柜（v1.0 以来的外观）
-  classic(group){
+  classic(/** @type {any} */ group){
     const { box }=kit(group);
     const trim=new THREE.MeshStandardMaterial({ color:0x15181c, roughness:0.35, metalness:0.55 });
     box(trim, W+0.06, 0.07, D+0.06, 0, 0.02, 0);
@@ -100,7 +103,7 @@ const BUILDERS={
   },
 
   // 超白开缸：无框玻璃 + 硅胶缝 + 发泡垫 + 吊装铝灯 + 橡木柜
-  rimless(group){
+  rimless(/** @type {any} */ group){
     const { box }=kit(group);
     glassEdges(group, new THREE.MeshPhysicalMaterial({ color:0x8fd6c2, roughness:0.1, transparent:true, opacity:0.55, clearcoat:1 }));
     siliconeSeams(group, new THREE.MeshStandardMaterial({ color:0x0b0c0d, roughness:0.6 }));
@@ -121,7 +124,7 @@ const BUILDERS={
   },
 
   // 海水礁缸：加强顶框 + 回水弯管 + 造浪泵 + 双灯盘（蓝白）+ 白色烤漆柜
-  reef(group){
+  reef(/** @type {any} */ group){
     const { box }=kit(group);
     const black=new THREE.MeshStandardMaterial({ color:0x0d0f12, roughness:0.45, metalness:0.2 });
     const bw=0.07;
@@ -157,7 +160,7 @@ const BUILDERS={
   },
 
   // 和风木框：胡桃木上下框与立柱 + 木质灯檐（暖光）+ 竖格栅柜
-  zen(group){
+  zen(/** @type {any} */ group){
     const { box }=kit(group);
     const walnut=woodTexture('walnut', 0x8c5f3c, 0x4a2c18, { lines:18, warp:3 });
     const wood=new THREE.MeshPhysicalMaterial({ map:walnut, roughness:0.5, clearcoat:0.35, clearcoatRoughness:0.4 });
@@ -194,13 +197,13 @@ export function buildShell(id, dims, world){
   }
   const group=new THREE.Group();
   group.name=`tank-shell-${id}`;
-  const lightMat=(BUILDERS[id] ?? BUILDERS.classic)(group);
+  const lightMat=(/** @type {any} */ (BUILDERS)[id] ?? /** @type {any} */ (BUILDERS).classic)(group);
   return { group, lightMat, natural:false };
 }
 
 /** 释放外壳（木纹贴图按 key 缓存，不释放） */
-export function disposeShell(group){
-  group.traverse(o=>{
+export function disposeShell(/** @type {any} */ group){
+  group.traverse((/** @type {any} */ o)=>{
     if(!o.isMesh) return;
     o.geometry.dispose();
     if(!o.userData.sharedMat) o.material.dispose();     // 水草材质是跨物件共享的

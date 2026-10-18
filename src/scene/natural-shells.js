@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { clamp, makeRng, rrange, fbm3, vnoise3 } from '../utils.js';
 import { injectCaustics } from './caustics.js';
@@ -29,11 +30,12 @@ export const WATER_EXTEND=1.8;
 const TW=20, TD=17, TZ=1.5;                    // 地形网格：宽 / 深 / 向镜头一侧偏移（开场运镜从 z≈8.8 飞入）                 // 水面向四周多铺的宽度（盖住最宽的浅滩）
 
 /** 地形高度函数：矩形内贴着沙床下方，矩形外按浅滩 → 岸 → 岸上地面过渡 */
+/** @param {any} K @param {any} dims @param {number} waterY @param {any} sandHeight */
 function heightField(K, { W, D, glass }, waterY, sandHeight){
   const W2=W/2-glass, D2=D/2-glass, top=waterY+K.lift;
   // 溪流/小河：河道沿 x 无限延伸出画面，出了鱼的活动区后缓缓拐弯
-  const bend=x=>K.channel ? Math.sign(x)*Math.sin(Math.max(0,Math.abs(x)-W2)*0.5)*0.55 : 0;
-  return (x,z)=>{
+  const bend=(/** @type {number} */ x)=>K.channel ? Math.sign(x)*Math.sin(Math.max(0,Math.abs(x)-W2)*0.5)*0.55 : 0;
+  return (/** @type {number} */ x, /** @type {number} */ z)=>{
     if(Math.abs(x)<W2 && Math.abs(z)<D2) return sandHeight(x,z);   // 矩形内就是河床本身（缸的沙床在自然水域里隐藏）
     const zz=z-bend(x), ax=K.channel ? -1 : Math.abs(x)-W2, az=Math.abs(zz)-D2;
     const d=Math.hypot(Math.max(ax,0),Math.max(az,0));
@@ -49,7 +51,7 @@ function heightField(K, { W, D, glass }, waterY, sandHeight){
   };
 }
 
-function terrain(K, H, waterY){
+function terrain(/** @type {any} */ K, /** @type {any} */ H, /** @type {number} */ waterY){
   const g=new THREE.PlaneGeometry(TW,TD,250,190).rotateX(-Math.PI/2).translate(0,0,TZ);
   const flat=waterY+K.lift-0.03;
   const p=g.attributes.position, col=new Float32Array(p.count*3);
@@ -87,7 +89,7 @@ function terrain(K, H, waterY){
 }
 
 /** 按条件撒点：在大范围内随机取样，离水越近越密 */
-function scatter(rng, H, waterY, n, ok, falloff=3){
+function scatter(/** @type {any} */ rng, /** @type {any} */ H, /** @type {number} */ waterY, /** @type {number} */ n, /** @type {(h:number,d:number)=>boolean} */ ok, /** @type {number} */ falloff=3){
   const out=[];
   for(let tries=0; out.length<n && tries<n*30; tries++){
     const x=rrange(rng,-8.6,8.6), z=rrange(rng,-6.2,7.5), h=H(x,z);
@@ -99,7 +101,7 @@ function scatter(rng, H, waterY, n, ok, falloff=3){
   return out;
 }
 
-function swayInstances(geo, pts, rng, scale, sink=0.01){
+function swayInstances(/** @type {any} */ geo, /** @type {any[]} */ pts, /** @type {any} */ rng, /** @type {any} */ scale, /** @type {number} */ sink=0.01){
   const mesh=new THREE.InstancedMesh(geo, bladeMat(), pts.length);
   mesh.customDepthMaterial=bladeDepth();
   mesh.userData.sharedMat=true;
@@ -117,8 +119,9 @@ function swayInstances(geo, pts, rng, scale, sink=0.01){
 }
 
 /** 构建自然水域外壳 @param {string} kind @param {{W:number,D:number,glass:number}} dims */
+/** @param {string} kind @param {any} dims @param {any} opts */
 export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
-  const K=KINDS[kind] ?? KINDS.pond, rng=makeRng(K.seed);
+  const K=(/** @type {any} */ (KINDS))[kind] ?? KINDS.pond, rng=makeRng(K.seed);
   const H=heightField(K, dims, waterY, sandHeight);
   const group=new THREE.Group();
   group.add(terrain(K, H, waterY));
@@ -126,7 +129,7 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
   // 草丛：岸上
   const grassGeo=ribbons(rng, { n:6, len:[0.12,0.3], width:0.014, twist:0.35, spread:0.04,
     colors:[[0x3d5e22,0x86a848],[0x4a6a28,0x9ab85a],[0x5a6a30,0xb0a868]], segs:5, cols:1 });   // 成片岸草：低面数
-  group.add(swayInstances(grassGeo, scatter(rng, H, waterY, K.grass, (h)=>h>waterY+0.03, 3.5), rng, [0.7,1.5]));
+  group.add(swayInstances(grassGeo, scatter(rng, H, waterY, K.grass, (/** @type {number} */ h)=>h>waterY+0.03, 3.5), rng, [0.7,1.5]));
   // 芦苇香蒲：水线附近（一半站在浅水里）
   if(K.reeds) group.add(swayInstances(reedGeo(rng, true), scatter(rng, H, waterY, K.reeds, (h,d)=>d<1.6 && h>waterY-0.16 && h<waterY+0.12, 2), rng, [0.55,0.95], 0.02));
 

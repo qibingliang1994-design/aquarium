@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -8,7 +9,7 @@ import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
 import { createGradePass } from './grading.js';
 
 export function createWorld(){
-const app = document.getElementById('app');
+const app = document.getElementById('app'); if(!app) throw new Error('missing #app');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 // 触屏设备（手机/平板）GPU 余量小：像素比上限从 2 收到 1.5，交给自动画质阶梯细调
 const coarse = matchMedia?.('(pointer:coarse)').matches ?? false;

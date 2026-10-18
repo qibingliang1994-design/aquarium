@@ -1,18 +1,21 @@
+// @ts-check
 /* ================================================================
  * 拍照模式：H 隐藏 UI · 再按 H 拍摄保存高清 PNG · Esc 退出
  * ================================================================ */
 
+/** @param {{ renderer:any, composer:any, hideTargets:string[], onEnter?:()=>void }} opts */
 export function createPhotoMode({ renderer, composer, hideTargets, onEnter }){
   let on=false;
-  const targets=hideTargets.map(id=>document.getElementById(id)).filter(Boolean);
+  /** @type {HTMLElement[]} */
+  const targets=hideTargets.flatMap((/** @type {string} */ id)=>{ const el=document.getElementById(id); return el?[el]:[]; });
   const tip=document.createElement('div');
   tip.id='photoTip';
   tip.textContent='拍照模式 · H 拍摄保存 · Esc 退出';
   document.body.appendChild(tip);
 
-  function set(v){
+  function set(/** @type {boolean} */ v){
     on=v;
-    targets.forEach(el=>{ el.style.visibility=v?'hidden':'visible'; });
+    targets.forEach((/** @type {HTMLElement} */ el)=>{ el.style.visibility=v?'hidden':'visible'; });
     tip.classList.toggle('on',v);
     if(v) onEnter?.();
   }
@@ -23,7 +26,7 @@ export function createPhotoMode({ renderer, composer, hideTargets, onEnter }){
     renderer.setPixelRatio(hi); renderer.setSize(w,h,false);
     composer.setPixelRatio(hi); composer.setSize(w,h);
     composer.render();
-    renderer.domElement.toBlob(blob=>{
+    renderer.domElement.toBlob((/** @type {any} */ blob)=>{
       if(blob){
         const a=document.createElement('a');
         a.href=URL.createObjectURL(blob);

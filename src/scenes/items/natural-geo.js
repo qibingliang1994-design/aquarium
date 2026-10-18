@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeRng, rrange, fbm3, vnoise3 } from '../../utils.js';
@@ -24,7 +25,7 @@ export function makeRockGeo(r, seed, look='river'){
   const L=ROCK_LOOKS[look], rng=makeRng(seed*7+3), o=(seed%997)*0.37;
   let g=new THREE.IcosahedronGeometry(r,4);
   g.deleteAttribute('normal'); g.deleteAttribute('uv');
-  g=mergeVertices(g);                                                // 共享顶点 → 平滑法线、位移无裂缝
+  g=/** @type {THREE.IcosahedronGeometry} */ (mergeVertices(g));      // 共享顶点 → 平滑法线、位移无裂缝
   const cuts=[{ n:new THREE.Vector3(0,-1,0), d:r*0.32 }];
   for(let i=0;i<L.cuts;i++){
     const n=new THREE.Vector3(rng()*2-1, rng()*1.4-0.35, rng()*2-1).normalize();

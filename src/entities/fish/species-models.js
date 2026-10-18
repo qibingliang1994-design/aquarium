@@ -1,8 +1,10 @@
+// @ts-check
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { prepareFishModel } from '../../fish/glb-style.js';
 
 // 物种 → 骨骼动画 GLB（Quaternius，CC0，via poly.pizza）
+/** @type {Record<string, string>} */
 const FILES = {
   tetra: 'fish-models/species/species-tetra.glb',
   gold:  'fish-models/species/species-goldfish.glb',
@@ -21,7 +23,7 @@ const FILES = {
 export function loadSpeciesModels(species, { only, skip }={}){
   const loader=new GLTFLoader();
   const wanted=species.filter(s=>FILES[s.id] && (!only||only.includes(s.id)) && (!skip||!skip.includes(s.id)));
-  const jobs=wanted.map(spec=>new Promise(resolve=>{
+  const jobs=wanted.map((/** @type {{id:string,L:number}} */ spec)=>new Promise((/** @type {(v:any)=>void} */ resolve)=>{
     loader.load(FILES[spec.id], gltf=>{
       const root=prepareFishModel(gltf.scene, spec.id);   // 调色/平滑法线/湿润皮肤
       root.updateMatrixWorld(true);
@@ -33,9 +35,10 @@ export function loadSpeciesModels(species, { only, skip }={}){
       wrap.add(root);
       wrap.scale.setScalar(spec.L/(size.z||size.x||1));
       resolve({ template:wrap, animations:gltf.animations||[] });
-    }, undefined, err=>{ console.warn('[fish] load fail:', spec.id, (err&&err.message)||err); resolve(null); });
+    }, undefined, (/** @type {any} */ err)=>{ console.warn('[fish] load fail:', spec.id, (err&&err.message)||err); resolve(null); });
   }));
   return Promise.all(jobs).then(list=>{
+    /** @type {Record<string, any>} */
     const map={};
     wanted.forEach((s,i)=>map[s.id]=list[i]);
     return map;

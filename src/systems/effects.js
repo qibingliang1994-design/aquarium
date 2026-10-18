@@ -1,8 +1,10 @@
+// @ts-check
 import * as THREE from 'three';
 import { rand, lerp } from '../utils.js';
 import { U } from '../uniforms.js';
 
 class Bubbles {
+  /** @param {any} opts */
   constructor({ tankGroup, air, sandHeight, waterY }){
     this.air=air; this.sandHeight=sandHeight; this.waterY=waterY;
     this.N=130;
@@ -43,7 +45,7 @@ class Bubbles {
     for(let i=0;i<this.N;i++) this.mesh.setMatrixAt(i,this._m);
     this.mesh.instanceMatrix.needsUpdate=true;
   }
-  update(dt, t){
+  update(/** @type {number} */ dt, /** @type {number} */ t){
     this.timer+=dt;
     while(this.timer>0.04){
       this.timer-=0.04;
@@ -69,6 +71,7 @@ class Bubbles {
 }
 
 class LightRays {
+  /** @param {any} opts */
   constructor({ tankGroup }){
     this.group=new THREE.Group();
     this.mats=[];
@@ -112,7 +115,7 @@ class LightRays {
     }
     tankGroup.add(this.group);
   }
-  setNight(k){
+  setNight(/** @type {number} */ k){
     for(const m of this.mats){
       m.uniforms.uIntensity.value=lerp(0.34,0.12,k);
       m.uniforms.uColor.value.setRGB(lerp(0.5,0.35,k),lerp(0.72,0.5,k),lerp(0.85,0.9,k));
@@ -122,6 +125,7 @@ class LightRays {
 
 class MarineSnow {
   flow=0;                        // 水流速度（+x）
+  /** @param {any} opts */
   constructor({ tankGroup }){
     this.N=300;
     const pos=new Float32Array(this.N*3), size=new Float32Array(this.N), seed=new Float32Array(this.N);
@@ -161,7 +165,7 @@ class MarineSnow {
     this.pts.frustumCulled=false;
     tankGroup.add(this.pts);
   }
-  update(dt,t){
+  update(/** @type {number} */ dt, /** @type {number} */ t){
     const p=this.geo.attributes.position.array;
     for(let i=0;i<this.N;i++){
       p[i*3+1]-=this.sp[i]*dt*8;
@@ -174,6 +178,7 @@ class MarineSnow {
 }
 
 class Ripples {
+  /** @param {any} opts */
   constructor({ tankGroup, waterY }){
     this.pool=[];
     for(let i=0;i<10;i++){
@@ -185,14 +190,14 @@ class Ripples {
       this.pool.push({m, t:1e9});
     }
   }
-  spawn(x,z){
+  spawn(/** @type {number} */ x, /** @type {number} */ z){
     for(const it of this.pool) if(!it.m.visible){
       it.m.visible=true; it.t=0;
       it.m.position.x=x; it.m.position.z=z;
       return;
     }
   }
-  update(dt){
+  update(/** @type {number} */ dt){
     for(const it of this.pool){
       if(!it.m.visible) continue;
       it.t+=dt;
@@ -205,6 +210,7 @@ class Ripples {
   }
 }
 
+/** @param {any} opts */
 export function createEffects({ tankGroup, air, sandHeight, waterY }){
   const bubbles=new Bubbles({ tankGroup, air, sandHeight, waterY });
   const rays=new LightRays({ tankGroup });

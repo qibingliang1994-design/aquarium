@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { U } from '../uniforms.js';
 
@@ -8,7 +9,7 @@ function makeCausticsTexture(size=256, pts=26){
   const P = [];
   for(let i=0;i<pts;i++) P.push([Math.random()*size, Math.random()*size, 0.65+Math.random()*0.6]);
   const cv = document.createElement('canvas'); cv.width=cv.height=size;
-  const ctx = cv.getContext('2d');
+  const ctx = /** @type {CanvasRenderingContext2D} */ (cv.getContext('2d'));
   const img = ctx.createImageData(size,size);
   const data = img.data;
   const W = size*0.05;   // 网线半宽
@@ -32,12 +33,13 @@ function makeCausticsTexture(size=256, pts=26){
 }
 export const causticsTex = makeCausticsTexture();
 export const causticsOn = { value: 1 };   // 全局开关（设置面板控制）
-export function setCausticsEnabled(on){ causticsOn.value = on ? 1 : 0; }
+export function setCausticsEnabled(/** @type {boolean} */ on){ causticsOn.value = on ? 1 : 0; }
 
 // 把焦散注入任意 MeshStandardMaterial（按世界坐标采样，仅投在水下物体上）
+/** @param {any} mat @param {number} strength @param {string} key */
 export function injectCaustics(mat, strength, key){
   mat.customProgramCacheKey = ()=> 'caustic_'+key;
-  mat.onBeforeCompile = (sh)=>{
+  mat.onBeforeCompile = (/** @type {any} */ sh)=>{
     sh.uniforms.uCausticMap = { value: causticsTex };
     sh.uniforms.uCausticK   = { value: strength };
     sh.uniforms.uOn        = causticsOn;

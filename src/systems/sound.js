@@ -1,9 +1,10 @@
+// @ts-check
 // 环境音效：WebAudio 程序合成（无音频素材，无版权负担）
 export class SoundEngine {
   constructor(){ this.ctx=null; this.master=null; this.enabled=true; this._blipTimer=1; }
   ensure(){                       // 必须在用户手势后调用（浏览器自动播放策略）
     if(this.ctx) return;
-    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    const AC=window.AudioContext||/** @type {any} */ (window).webkitAudioContext; if(!AC) return;
     this.ctx=new AC();
     this.master=this.ctx.createGain();
     this.master.gain.value=this.enabled?1:0;
@@ -20,19 +21,19 @@ export class SoundEngine {
     const lg=this.ctx.createGain(); lg.gain.value=0.02;
     lfo.connect(lg).connect(g.gain); lfo.start();
   }
-  setEnabled(on){ this.enabled=on; if(this.master) this.master.gain.value=on?1:0; }
-  _tone(f0,f1,dur,peak,delay=0){
+  setEnabled(/** @type {boolean} */ on){ this.enabled=on; if(this.master) this.master.gain.value=on?1:0; }
+  _tone(/** @type {number} */ f0, /** @type {number} */ f1, /** @type {number} */ dur, /** @type {number} */ peak, /** @type {number} */ delay=0){
     if(!this.ctx||!this.enabled) return;
     const t=this.ctx.currentTime+delay, o=this.ctx.createOscillator(), g=this.ctx.createGain();
     o.type='sine'; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur*0.8);
     g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+dur*0.15);
     g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(g).connect(this.master); o.start(t); o.stop(t+dur+0.02);
+    o.connect(g).connect(/** @type {AudioNode} */ (this.master)); o.start(t); o.stop(t+dur+0.02);
   }
   blip(){ this._tone(400+Math.random()*500,(400+Math.random()*500)*2.2,0.12,0.04+Math.random()*0.03); }
   plop(){ this._tone(700,180,0.2,0.12); }
   // 短促带通噪声：咬食的“咔”
-  _noise(dur,freq,q,peak){
+  _noise(/** @type {number} */ dur, /** @type {number} */ freq, /** @type {number} */ q, /** @type {number} */ peak){
     if(!this.ctx||!this.enabled) return;
     if(!this._noiseBuf){
       const n=Math.ceil(this.ctx.sampleRate*0.1);
@@ -45,7 +46,7 @@ export class SoundEngine {
     const bp=this.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=freq; bp.Q.value=q;
     const g=this.ctx.createGain();
     g.gain.setValueAtTime(peak,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    src.connect(bp).connect(g).connect(this.master); src.start(t); src.stop(t+dur+0.02);
+    src.connect(bp).connect(g).connect(/** @type {AudioNode} */ (this.master)); src.start(t); src.stop(t+dur+0.02);
   }
   crunch(){                       // 抢食时可能一帧多次：限流 60ms
     if(!this.ctx) return;
@@ -60,7 +61,7 @@ export class SoundEngine {
   arrival(){                      // 新鱼入缸：轻快的三音上行琶音
     [523.25,659.25,783.99].forEach((f,i)=>this._tone(f,f*1.005,0.4,0.07,i*0.13));
   }
-  update(dt){                     // 随机气泡声
+  update(/** @type {number} */ dt){   // 随机气泡声
     if(!this.ctx||!this.enabled) return;
     this._blipTimer-=dt;
     if(this._blipTimer<=0){ this.blip(); this._blipTimer=0.4+Math.random()*2.4; }

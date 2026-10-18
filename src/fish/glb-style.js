@@ -111,14 +111,20 @@ export function prepareFishModel(root, speciesId){
   if(root.userData.fishStyled) return root;
   root.userData.fishStyled = true;
   const palette = PALETTES[speciesId];
-  if(!palette){                           // 贴图模型（锦鲤）：只压金属感、加水膜
+  if(!palette){                           // 贴图模型（锦鲤）：压住原模型过强的镜面，保留贴图细节
     root.traverse(o=>{
       if(!o.isMesh || !o.material?.isMeshStandardMaterial) return;
       const old = o.material;
       const m = old.isMeshPhysicalMaterial ? old : new THREE.MeshPhysicalMaterial({
         name:old.name, color:old.color, map:old.map, normalMap:old.normalMap,
         roughnessMap:old.roughnessMap, metalnessMap:old.metalnessMap, roughness:old.roughness, side:old.side });
-      m.metalness = Math.min(old.metalness, 0.15); m.clearcoat = 0.7; m.clearcoatRoughness = 0.2;
+      // 原始 glTF 的 KHR_materials_specular 把 specularColorFactor 拉到 2.0，
+      // 在 ACES + 环境光下会把锦鲤的白斑冲成一片高光；这里按鱼皮重新收一遍。
+      m.metalness = 0;
+      m.specularColor?.setRGB(0.5, 0.5, 0.5);
+      m.specularIntensity = Math.min(m.specularIntensity ?? 1, 0.45);
+      m.clearcoat = 0.45; m.clearcoatRoughness = 0.28;
+      m.envMapIntensity = 0.9;
       o.material = m;
     });
     return root;
@@ -139,7 +145,7 @@ export function prepareFishModel(root, speciesId){
   return root;
 }
 
-/* ---------- 着色器装饰：渐变 / 霓虹 / 焦散 / 逆光 / （静态模型）尾摆 ----------
+/* ---------- 着色器装饰：渐变 / 霓虹 / 焦散 / 逆光 / （无动画模型）尾摆 ----------
  * opts: { causticK?:{value}, sway?:{ phaseU, L, amp, waveK } } */
 export function decorateFishMaterial(mat, opts={}){
   const paint = mat.userData.paint, frame = mat.userData.frame;

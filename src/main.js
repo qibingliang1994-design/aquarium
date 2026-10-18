@@ -13,6 +13,7 @@ import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
 import { SPECIES_META } from './ui/encyclopedia.js';
 import { MILESTONES } from './systems/care.js';
+import { createFishGrid, rebuildFishGrid } from './entities/fish/steering.js';
 import { fishRim } from './fish/glb-style.js';
 import { createSceneStore } from './scenes/scene-store.js';
 import { TANK_STYLES, NATURAL_CAMS, isNatural } from './scenes/tank-styles.js';
@@ -43,9 +44,21 @@ const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第�
 const { bubbles, rays, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
 const feeder=new Feeder({ tankGroup, sandHeight, waterY:TANK.waterY, ripples });
 
-// 预加载骨骼动画模型（失败物种自动回退程序化鱼）
-const glbMap=await loadSpeciesModels(SPECIES);
-console.info('[fish] GLB loaded:', SPECIES.filter(s=>glbMap[s.id]).map(s=>s.id).join(', ')||'none (procedural fallback)');
+/* ---------- 场景基础：昼夜 / 存档 / 模型预加载 ---------- */
+const schools=[], obstacles=[];               // 两个数组都由 runtime 原地维护
+const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
+  waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
+const store=createSceneStore();
+
+// 预加载骨骼动画模型（失败物种自动回退程序化鱼）。
+// 渐进启动：只先等"当前场景用到的物种"，其余后台补载进同一个 map（后续建 School 自然用上）
+const presentIds=Object.entries(store.active().fish).filter(([,n])=>n>0).map(([id])=>id);
+const glbMap=await loadSpeciesModels(SPECIES, { only:presentIds });
+console.info('[fish] GLB loaded:', presentIds.filter(id=>glbMap[id]).join(', ')||'none (procedural fallback)');
+loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
+  Object.assign(glbMap, rest);
+  console.info('[fish] 其余物种 GLB 已后台就绪:', Object.keys(rest).filter(k=>rest[k]).join(', ')||'none');
+});
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
 const settings={ sound:true, cycle:false, night:0, rays:true, bubbles:true, snow:true, caustics:true };
@@ -55,10 +68,6 @@ const sound=new SoundEngine(); sound.setEnabled(settings.sound);
 rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
 
 /* ---------- 场景：存档 → 运行时（造景 / 鱼群 / 主题） ---------- */
-const schools=[], obstacles=[];               // 两个数组都由 runtime 原地维护
-const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
-  waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
-const store=createSceneStore();
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
   onTheme:t=>dayNight.setTheme(t), onTank:t=>{ dayNight.setTank(t); setHint(t.kind==='natural'); }, onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
@@ -236,6 +245,7 @@ addEventListener('keydown',e=>{
 const clock=new THREE.Clock();
 const statsEl=$('stats'), careFill=$('careFill'), careText=$('careText');
 let fpsFrames=0, fpsTime=0, realT=0;
+const fishGrid=createFishGrid();                  // 全体鱼共享的邻域查询网格（每帧重建）
 
 /* ---------- 自动画质：阶梯降级（1.5 → 1.25 → 1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
 const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
@@ -308,7 +318,8 @@ function frame(){
   const flow=TANK_STYLES[runtime.doc.tank]?.env?.current ?? 0;   // 溪流/小河的水流
   feeder.flow=flow; snow.flow=flow; waterUniforms.uFlow.value=flow;
   const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools, current:flow,
-    appetite, fear:input.fear, sleep, onEat };
+    appetite, fear:input.fear, sleep, onEat, grid:fishGrid };
+  rebuildFishGrid(fishGrid, schools);             // 共享统一网格：同种/异种 pair 查询走邻域
   for(const s of schools) s.update(dt,ctx);
 
   feeder.update(dt,t);
@@ -356,6 +367,7 @@ addEventListener('resize',()=>{
 installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
   bloom, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
+  glbLoaded:()=>Object.keys(glbMap).filter(k=>glbMap[k]),
   // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；
   // 配合先把 window.requestAnimationFrame 换成 setTimeout 垫片使用
   restartLoop(){ renderer.setAnimationLoop(null); renderer.setAnimationLoop(frame); } });

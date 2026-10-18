@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
-import { boidsAccumulate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget } from './steering.js';
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { sandHeight, TANK } from '../../scene/tank.js';
@@ -132,7 +132,7 @@ export class School {
     const spec=this.spec;
     const obj=SkeletonUtils.clone(this.template);
     obj.userData.fishIndex=i;
-    // 仅无骨骼动画的静态模型（锦鲤）做程序化尾摆，每条鱼独立相位
+    // 无骨骼动画的静态模型才做程序化尾摆，每条鱼独立相位
     const ph={ value:0 };
     const sway=this.swimClip ? null : { phaseU:ph, L:spec.L, amp:spec.amp, waveK:spec.waveK };
     obj.traverse(o=>{
@@ -141,6 +141,10 @@ export class School {
       const deco=m=>{
         const c=m.clone();
         c.side=THREE.DoubleSide;               // 鳍片是单面几何：双面渲染，避免背向时整片消失
+        if(spec.id==='koi'){                   // 同一张贴图克隆出多条锦鲤：冷暖微调，避免"复制粘贴"
+          const w=(i%2)?-1:1;
+          c.color.setRGB(1+w*0.035, 1+w*0.004, 1-w*0.03);
+        }
         decorateFishMaterial(c, { causticK:this.causticK, sway });
         return c;
       };
@@ -305,15 +309,8 @@ export class School {
         if(R.on){ R.dur-=dt; resting=R.dur>0; if(!resting){ R.on=0; R.t=rand(9,18); } }
       }
 
-      boidsAccumulate(i, this.pos, this.vel, spec, social, _acc, _sep, _ali, _coh);
-      for(const other of ctx.schools){            // 异种：仅分离（体型悬殊时小鱼推不动大鱼）
-        if(other===this) continue;
-        if(other.spec.L < spec.L*0.7) continue;
-        for(const q of other.pos){
-          const d=p.distanceTo(q);
-          if(d<0.2 && d>1e-4) _acc.addScaledVector(_v1.subVectors(p,q), 3.0/d);
-        }
-      }
+      boidsAccumulate(i, this.pos, this.vel, spec, social, _acc, _sep, _ali, _coh, ctx.grid, this);
+      crossSeparate(this, i, ctx.schools, _acc, ctx.grid);   // 异种：仅分离（体型悬殊时小鱼推不动大鱼）
       wanderAcc(_acc, ctx.time, i, wander);       // 漫游：低频缓变，直线巡航为主
       if(flow && !resting){                       // 顶流（趋流性）：在溪流里转头迎着水流缓游，几乎原地"悬停"
         _acc.x+=(-Math.sign(flow)*minS*2.2-v.x)*Math.min(1.2,Math.abs(flow)*5)*social;

@@ -10,11 +10,12 @@ import { schoolNames, personaTags } from './entities/fish/identity.js';
 export function installDebug(d){
   const { schools, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls, bloom, scene,
     hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, stopCamTween,
-    renderer, loopFrame, restartLoop, quality }=d;
+    renderer, loopFrame, restartLoop, quality, glbLoaded }=d;
   const care=()=>runtime.care;
   const sleep=()=>sstep(0.55,0.9,dayNight.k)*(1-U.excite.value)*(1-input.fear);
   window.__aqDebug={
     renderer, loopFrame, restartLoop,
+    glbLoaded:()=>glbLoaded?.() ?? [],
     quality:()=>({ level:quality.level, label:quality.label }),
     qualityForce:lv=>quality.force(lv),
     time:()=>U.time.value,

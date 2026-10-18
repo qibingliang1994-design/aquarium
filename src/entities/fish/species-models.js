@@ -16,12 +16,13 @@ const FILES = {
 };
 
 // 预加载；返回 map[id]={template,animations}，失败项为 null（School 回退程序化鱼）
-export function loadSpeciesModels(species){
+// only/skip 用于启动渐进：先等当前场景用到的物种，其余后台补载进同一个 map
+/** @param {{ id:string, L:number }[]} species @param {{ only?:string[], skip?:string[] }} [opts] */
+export function loadSpeciesModels(species, { only, skip }={}){
   const loader=new GLTFLoader();
-  const jobs=species.map(spec=>new Promise(resolve=>{
-    const file=FILES[spec.id];
-    if(!file) return resolve(null);
-    loader.load(file, gltf=>{
+  const wanted=species.filter(s=>FILES[s.id] && (!only||only.includes(s.id)) && (!skip||!skip.includes(s.id)));
+  const jobs=wanted.map(spec=>new Promise(resolve=>{
+    loader.load(FILES[spec.id], gltf=>{
       const root=prepareFishModel(gltf.scene, spec.id);   // 调色/平滑法线/湿润皮肤
       root.updateMatrixWorld(true);
       const box=new THREE.Box3().setFromObject(root);
@@ -36,7 +37,7 @@ export function loadSpeciesModels(species){
   }));
   return Promise.all(jobs).then(list=>{
     const map={};
-    species.forEach((s,i)=>map[s.id]=list[i]);
+    wanted.forEach((s,i)=>map[s.id]=list[i]);
     return map;
   });
 }

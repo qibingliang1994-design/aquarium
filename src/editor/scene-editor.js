@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { clamp } from '../utils.js';
 import { sandHeight } from '../scene/tank.js';
@@ -17,9 +18,16 @@ const PANEL_W=300, EDIT_PITCH=0.66;   // 左侧面板占位（px）、编辑俯�
 const FACING=new Set(['wood','coralFan']);
 const ROT_STEP=Math.PI/12, SCALE_STEP=1.1, NUDGE=0.05, TAU=Math.PI*2;
 
+/** @param {{ canvas:any, camera:any, controls:any, runtime:any, store:any, tweenCam:any, toast:any, captureThumb:any, onEnter:any, onExit:any }} opts */
 export function createSceneEditor({ canvas, camera, controls, runtime, store, tweenCam, toast, captureThumb, onEnter, onExit }){
-  let active=false, doc=null, savedJson='', selId=null, prevCam=null;
-  let drag=null, pendingTap=null, liveBefore=null;
+  /** @type {any} */ let doc=null;
+  /** @type {string|null} */ let selId=null;
+  /** @type {any} */ let prevCam=null;
+  /** @type {boolean} */ let active=false;
+  let savedJson='';
+  /** @type {any} */ let drag=null;
+  /** @type {any} */ let pendingTap=null;
+  /** @type {string|null} */ let liveBefore=null;
   const hist=createHistory(60);
   const raycaster=new THREE.Raycaster(), ndc=new THREE.Vector2(), plane=new THREE.Plane(), hitP=new THREE.Vector3();
 
@@ -33,7 +41,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   runtime.itemsGroup.parent.add(ring);
 
   const snap=()=>JSON.stringify(doc);
-  const selItem=()=>doc?.items.find(it=>it.id===selId) ?? null;
+  const selItem=()=>doc?.items.find((/** @type {any} */ it)=>it.id===selId) ?? null;
 
   function refresh(){
     panel.render(doc);
@@ -51,7 +59,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     ring.scale.setScalar(r);
   }
   /** 一次离散改动：记快照 → 改文档 → 应用 */
-  function commit(mutate){
+  function commit(/** @type {(d:any)=>void} */ mutate){
     const before=snap();
     mutate(doc);
     if(snap()===before) return;
@@ -59,10 +67,10 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     runtime.apply(doc);
     refresh();
   }
-  function select(id){ selId=id; refresh(); }
+  function select(/** @type {string|null} */ id){ selId=id; refresh(); }
 
   /* ---------- 连续改动（拖动 / 滑块） ---------- */
-  function liveChange(patch){
+  function liveChange(/** @type {any} */ patch){
     const it=selItem();
     if(!it) return;
     liveBefore??=snap();
@@ -79,17 +87,17 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   }
 
   /* ---------- 物件操作 ---------- */
-  function spawnPoint(radius){
+  function spawnPoint(/** @type {number} */ radius){
     // 在前中景找一个离现有物件最远的位置（12 次随机取最优）
     let best={ x:0, z:0.1 }, bestD=-1;
     for(let i=0;i<12;i++){
       const x=(Math.random()*2-1)*1.3, z=Math.random()*0.7-0.3;
-      const d=Math.min(9, ...doc.items.map(o=>Math.hypot(o.x-x,o.z-z)-ITEM_META[o.type].radius*o.s-radius));
+      const d=Math.min(9, ...doc.items.map((/** @type {any} */ o)=>Math.hypot(o.x-x,o.z-z)-ITEM_META[o.type].radius*o.s-radius));
       if(d>bestD){ bestD=d; best={ x, z }; }
     }
     return best;
   }
-  function addItem(type){
+  function addItem(/** @type {string} */ type){
     if(doc.items.length>=MAX_ITEMS){ toast(`物件最多 ${MAX_ITEMS} 件`); return; }
     const m=ITEM_META[type], p=spawnPoint(m.radius);
     // 沉木拱、海扇是"正面朝前"的片状物件：新放时只小幅偏转，避免侧对镜头像根棍子
@@ -113,21 +121,21 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(!selId) return;
     const id=selId;
     selId=null;
-    commit(d=>{ d.items=d.items.filter(o=>o.id!==id); });
+    commit(d=>{ d.items=d.items.filter((/** @type {any} */ o)=>o.id!==id); });
   }
-  const edit=fn=>{ if(selItem()) commit(()=>fn(selItem())); };
-  const rotate=dir=>edit(it=>{ it.rot=((it.rot+dir*ROT_STEP)%TAU+TAU)%TAU; });
-  const rescale=k=>edit(it=>{ const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3); });
-  const nudge=(dx,dz)=>edit(it=>{ it.x=clamp(it.x+dx,-PLACE_BOUNDS.x,PLACE_BOUNDS.x); it.z=clamp(it.z+dz,-PLACE_BOUNDS.z,PLACE_BOUNDS.z); });
+  const edit=(/** @type {(it:any)=>void} */ fn)=>{ if(selItem()) commit(()=>fn(selItem())); };
+  const rotate=(/** @type {number} */ dir)=>edit(it=>{ it.rot=((it.rot+dir*ROT_STEP)%TAU+TAU)%TAU; });
+  const rescale=(/** @type {number} */ k)=>edit(it=>{ const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3); });
+  const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{ it.x=clamp(it.x+dx,-PLACE_BOUNDS.x,PLACE_BOUNDS.x); it.z=clamp(it.z+dz,-PLACE_BOUNDS.z,PLACE_BOUNDS.z); });
   const reseed=()=>edit(it=>{ it.seed=Math.floor(Math.random()*1e9); });
 
-  function setFish(id, delta){
+  function setFish(/** @type {string} */ id, /** @type {number} */ delta){
     commit(d=>{
       const n=d.fish[id] ?? 0, room=FISH_TOTAL_MAX-fishTotal(d);
       d.fish[id]=clamp(n+Math.min(delta,room), 0, FISH_MAX[id]);
     });
   }
-  function undoRedo(redo){
+  function undoRedo(/** @type {boolean} */ redo){
     const s=redo ? hist.redo(snap()) : hist.undo(snap());
     if(s===null) return;
     doc=JSON.parse(s);
@@ -138,29 +146,29 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
 
   const panel=createEditorPanel({
     onAdd:addItem,
-    onName:v=>commit(d=>{ d.name=v.trim().slice(0,16)||d.name; }),
+    onName:(/** @type {string} */ v)=>commit(d=>{ d.name=v.trim().slice(0,16)||d.name; }),
     onUndo:()=>undoRedo(false), onRedo:()=>undoRedo(true),
     onSave:()=>exit(true), onCancel:()=>exit(false),
     onFish:setFish,
-    onTheme:id=>commit(d=>{ d.theme=id; }),
-    onTank:id=>commit(d=>{ d.tank=id; }),
+    onTheme:(/** @type {string} */ id)=>commit(d=>{ d.theme=id; }),
+    onTank:(/** @type {string} */ id)=>commit(d=>{ d.tank=id; }),
     onTransform:liveChange, onTransformEnd:liveEnd,
     onSeed:reseed, onDup:duplicate, onDel:remove,
   });
 
   /* ---------- 指针：点选 / 拖动 ---------- */
-  function rayFrom(e){
+  function rayFrom(/** @type {any} */ e){
     ndc.set((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
     raycaster.setFromCamera(ndc, camera);
   }
-  function pickItem(e){
+  function pickItem(/** @type {any} */ e){
     rayFrom(e);
     const hit=raycaster.intersectObjects(runtime.itemsGroup.children, true)[0];
-    for(let o=hit?.object; o; o=o.parent) if(o.userData.itemId) return o.userData.itemId;
+    for(let o=/** @type {any} */ (hit?.object); o; o=o.parent) if(o.userData.itemId) return o.userData.itemId;
     return null;
   }
   // 捕获阶段注册：先于 OrbitControls 处理，点中物件时禁用视角拖拽
-  canvas.addEventListener('pointerdown',e=>{
+  canvas.addEventListener('pointerdown',(/** @type {any} */ e)=>{
     if(!active || e.button!==0) return;
     const id=pickItem(e);
     pendingTap={ x:e.clientX, y:e.clientY, id };
@@ -174,7 +182,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     canvas.setPointerCapture(e.pointerId);
     e.stopImmediatePropagation();
   }, { capture:true });
-  canvas.addEventListener('pointermove',e=>{
+  canvas.addEventListener('pointermove',(/** @type {any} */ e)=>{
     if(!active) return;
     if(!drag){ canvas.style.cursor=pickItem(e) ? 'pointer' : ''; return; }
     rayFrom(e);
@@ -182,7 +190,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     liveChange({ x:clamp(hitP.x+drag.dx,-PLACE_BOUNDS.x,PLACE_BOUNDS.x), z:clamp(hitP.z+drag.dz,-PLACE_BOUNDS.z,PLACE_BOUNDS.z) });
     canvas.style.cursor='grabbing';
   });
-  const endPointer=e=>{
+  const endPointer=(/** @type {any} */ e)=>{
     if(!active) return;
     if(drag){
       canvas.releasePointerCapture?.(drag.pointer);
@@ -205,6 +213,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(mod && k==='y'){ e.preventDefault(); undoRedo(true); return; }
     if(mod && k==='s'){ e.preventDefault(); exit(true); return; }
     if(typing || mod) return;
+    /** @type {Record<string, ()=>void>} */
     const acts={
       delete:remove, backspace:remove, q:()=>rotate(-1), e:()=>rotate(1),
       '-':()=>rescale(1/SCALE_STEP), '_':()=>rescale(1/SCALE_STEP), '=':()=>rescale(SCALE_STEP), '+':()=>rescale(SCALE_STEP),
@@ -237,7 +246,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     refresh();
     onEnter?.();
   }
-  function exit(save){
+  function exit(/** @type {boolean} */ save){
     if(!active) return;
     let saved=null;
     if(save){
@@ -266,7 +275,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     get active(){ return active; },
     enter, exit,
     /** 选中圈呼吸 */
-    update(t){ if(ring.visible) ringMat.opacity=0.72+0.25*Math.sin(t*4); },
+    update(/** @type {number} */ t){ if(ring.visible) ringMat.opacity=0.72+0.25*Math.sin(t*4); },
     // 自动化测试用
     debug:{ get doc(){ return doc; }, select, addItem, remove, rotate, rescale, nudge, setFish, undo:()=>undoRedo(false), redo:()=>undoRedo(true),
       get selected(){ return selId; } },

@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { rand } from '../utils.js';
 import { TANK, sandHeight } from '../scene/tank.js';
@@ -14,13 +15,14 @@ const TANK_BOX=new THREE.Box3(
 
 export const randomFeedPoint=()=>new THREE.Vector3(rand(-1.1,1.1),TANK.waterY,rand(-0.38,0.38));
 
+/** @param {{ camera:any, canvas:any, schools:any[], fishCard:any, feeder:any, sound:any, isBlocked:()=>boolean }} opts */
 export function createTankInput({ camera, canvas, schools, fishCard, feeder, sound, isBlocked }){
   const raycaster=new THREE.Raycaster();
   let fear=0, shake=0;
-  const ray=(cx,cy)=>raycaster.setFromCamera(new THREE.Vector2((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1), camera);
+  const ray=(/** @type {number} */ cx, /** @type {number} */ cy)=>raycaster.setFromCamera(new THREE.Vector2((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1), camera);
 
-  function feedAt(p){ sound.ensure(); sound.plop(); fishCard.hide(); feeder.spawn(p); }
-  function tapGlass(cx,cy){
+  function feedAt(/** @type {THREE.Vector3} */ p){ sound.ensure(); sound.plop(); fishCard.hide(); feeder.spawn(p); }
+  function tapGlass(/** @type {number} */ cx, /** @type {number} */ cy){
     ray(cx,cy);
     const point=raycaster.ray.intersectBox(TANK_BOX,new THREE.Vector3())   // 视线进入缸体处
       ?? TANK_BOX.getCenter(new THREE.Vector3());
@@ -28,10 +30,10 @@ export function createTankInput({ camera, canvas, schools, fishCard, feeder, sou
     fear=1; shake=SHAKE_SECS;
     for(const s of schools) s.startle(point);
   }
-  function feedPointFromScreen(cx,cy){
+  function feedPointFromScreen(/** @type {number} */ cx, /** @type {number} */ cy){
     ray(cx,cy);
     const o=raycaster.ray.origin, d=raycaster.ray.direction;
-    const inXZ=(x,z)=>Math.abs(x)<2.15 && Math.abs(z)<0.78;
+    const inXZ=(/** @type {number} */ x,/** @type {number} */ z)=>Math.abs(x)<2.15 && Math.abs(z)<0.78;
     if(Math.abs(d.y)>1e-4){
       for(const y of [TANK.waterY, 0.5]){            // 先打水面，兜底打沙面上方
         const t=(y-o.y)/d.y;
@@ -44,8 +46,8 @@ export function createTankInput({ camera, canvas, schools, fishCard, feeder, sou
   }
 
   let downX=0,downY=0,downT=0, lastTapT=-1e9, lastTapX=0, lastTapY=0;
-  canvas.addEventListener('pointerdown',e=>{ downX=e.clientX; downY=e.clientY; downT=performance.now(); });
-  canvas.addEventListener('pointerup',e=>{
+  canvas.addEventListener('pointerdown',(/** @type {PointerEvent} */ e)=>{ downX=e.clientX; downY=e.clientY; downT=performance.now(); });
+  canvas.addEventListener('pointerup',(/** @type {PointerEvent} */ e)=>{
     if(isBlocked()) return;
     const now=performance.now();
     if(Math.hypot(e.clientX-downX,e.clientY-downY)>=7 || now-downT>=450) return;   // 拖拽不算点击
@@ -63,7 +65,7 @@ export function createTankInput({ camera, canvas, schools, fishCard, feeder, sou
     feedAt, tapGlass,
     get fear(){ return fear; },
     /** 每帧：惊吓衰减；返回本帧镜头震动偏移（无震动时为 null） */
-    update(dt, t){
+    update(/** @type {number} */ dt, /** @type {number} */ t){
       fear=Math.max(0,fear-dt/FEAR_SECS);
       if(shake<=0) return null;
       shake=Math.max(0,shake-dt);

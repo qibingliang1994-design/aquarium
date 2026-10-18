@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { lerp } from '../utils.js';
 
@@ -8,6 +9,7 @@ import { lerp } from '../utils.js';
 
 const CYCLE_SECS=180;
 
+/** @param {any} opts */
 export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, floorGlowMat, rays, schools, fishRim }){
   const { hoodSpot, hemi, fillLight, waterGlow, rim }=lights;
   const DAY={ spot:16, spotCol:new THREE.Color(0xfff2dc), hemi:0.35, fill:0.5, env:0.45,
@@ -18,9 +20,9 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     fog:new THREE.Color(0x061420), sky:new THREE.Color(0.1,0.16,0.28), deep:new THREE.Color(0.005,0.03,0.06) };
   let k=0, target=0;
   // 自然水域的户外环境：天空色/雾色/环境光覆盖日间表（夜间仍是统一的月光表）
-  let ENV=null; const envBg=new THREE.Color(), envFog=new THREE.Color();
+  /** @type {any} */ let ENV=null; const envBg=new THREE.Color(), envFog=new THREE.Color();
 
-  function apply(v){
+  function apply(/** @type {number} */ v){
     k=v;
     hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k);
     hoodSpot.color.lerpColors(DAY.spotCol,NIGHT.spotCol,k);
@@ -45,17 +47,18 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
   return {
     get k(){ return k; },
     get target(){ return target; },
-    set target(v){ target=v; },
+    set target(/** @type {number} */ v){ target=v; },
     /** 立即跳到某个状态（启动时恢复存档用） */
-    jump(v){ target=v; apply(v); },
+    jump(/** @type {number} */ v){ target=v; apply(v); },
     /** 场景主题只改日间表，然后按当前 k 重新应用 */
-    setTheme(t){
+    setTheme(/** @type {any} */ t){
       DAY.fog.setHex(t.fog); DAY.glow.setHex(t.glow);
-      DAY.sky.setRGB(...t.sky); DAY.deep.setRGB(...t.deep);
+      DAY.sky.setRGB(.../** @type {[number,number,number]} */ (t.sky));
+      DAY.deep.setRGB(.../** @type {[number,number,number]} */ (t.deep));
       apply(k);
     },
     /** 缸体款式：主灯色/强度/高度跟随灯具（夜间月光表不变） */
-    setTank(t){
+    setTank(/** @type {any} */ t){
       DAY.spotCol.setHex(t.light.spotCol); DAY.spot=16*t.light.spotK;
       hoodSpot.position.y=t.light.spotY;
       ENV=t.env ?? null;
@@ -65,7 +68,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     },
     /** 鱼群重建后补一次（新鱼的焦散强度跟上当前昼夜） */
     refresh(){ apply(k); },
-    update(dt, t, cycle){
+    update(/** @type {number} */ dt, /** @type {number} */ t, /** @type {boolean} */ cycle){
       if(cycle) target=(1-Math.cos(t*Math.PI*2/CYCLE_SECS))/2;     // 自动昼夜循环
       if(Math.abs(k-target)>1e-3) apply(k+(target-k)*Math.min(1,dt*1.6));
     },

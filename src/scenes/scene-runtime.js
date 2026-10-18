@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { makeRng, rrange } from '../utils.js';
 import { sandHeight, TANK } from '../scene/tank.js';
@@ -20,13 +21,15 @@ import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
 
 const GRAVEL_N=56;
 
+/** @param {any} opts */
 export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, onTheme, onTank, onSchools }){
   const itemsGroup=new THREE.Group();
   itemsGroup.name='scene-items';
   tankGroup.add(itemsGroup);
   /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[] }>} */
   const live=new Map();
-  let doc=null, care=null;
+  /** @type {any} */ let doc=null;
+  /** @type {any} */ let care=null;
 
   /* ---------- 碎石（主题配色，位置固定） ---------- */
   const gravel=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),   // 圆润卵石（十二面体太像碎块）
@@ -45,17 +48,17 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     tankGroup.add(gravel);
   }
 
-  function setTheme(id){
+  function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
     tank.setSandColors(t.sand[0], t.sand[1]);
     tank.setBackdrop(t.backdrop);
     for(let i=0;i<GRAVEL_N;i++) gravel.setColorAt(i, c.setHex(t.gravel[(i*7)%t.gravel.length]));
-    gravel.instanceColor.needsUpdate=true;
+    if(gravel.instanceColor) gravel.instanceColor.needsUpdate=true;
     onTheme?.(t);
   }
 
   /* ---------- 物件 ---------- */
-  function place(e){
+  function place(/** @type {any} */ e){
     const it=e.item;
     const y=sandHeight(it.x,it.z);
     e.root.position.set(it.x, y, it.z);
@@ -65,7 +68,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     e.root.updateMatrix();
     e.root.updateMatrixWorld(true);
   }
-  function build(item){
+  function build(/** @type {any} */ item){
     const { object, obstacles:local }=buildItem(item.type, item.seed);
     const root=new THREE.Group();
     root.matrixAutoUpdate=false;                 // 变换只在 place() 里更新
@@ -76,25 +79,25 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     place(e);
     return e;
   }
-  function destroy(e){ e.root.removeFromParent(); disposeItem(e.root); }
+  function destroy(/** @type {any} */ e){ e.root.removeFromParent(); disposeItem(e.root); }
 
   // 物件局部障碍 → 世界障碍；同时刷新气泡发射点
   function refreshDerived(){
     obstacles.length=0;
     for(const e of live.values())
       for(const o of e.local) obstacles.push({ c:o.c.clone().applyMatrix4(e.root.matrix), r:o.r*e.item.s });
-    const first=[...live.values()].find(e=>e.item.type==='airstone');
+    const first=[...live.values()].find((/** @type {any} */ e)=>e.item.type==='airstone');
     air.on=!!first;
     if(first){ air.x=first.item.x; air.z=first.item.z; }
   }
 
   /** 让场景里的物件与列表一致（新增/删除/移动/重建），保持文档顺序 */
-  function syncItems(items){
-    const keep=new Set(items.map(it=>it.id));
+  function syncItems(/** @type {any[]} */ items){
+    const keep=new Set(items.map((/** @type {any} */ it)=>it.id));
     for(const [id,e] of live) if(!keep.has(id)){ destroy(e); live.delete(id); }
     const next=new Map();
     for(const it of items){
-      let e=live.get(it.id);
+      /** @type {any} */ let e=live.get(it.id);
       if(e && (e.item.type!==it.type || e.item.seed!==it.seed)){ destroy(e); e=null; }
       if(!e) e=build(it);
       else{ e.item={ ...it }; place(e); }
@@ -106,13 +109,13 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   }
 
   /* ---------- 鱼群 ---------- */
-  const countsOf=fish=>SPECIES.map(s=>fish[s.id] ?? 0);
-  function setFish(fish, { reset=false }={}){
+  const countsOf=(/** @type {any} */ fish)=>SPECIES.map((/** @type {any} */ s)=>fish[s.id] ?? 0);
+  function setFish(/** @type {any} */ fish, /** @type {{ reset?:boolean }} */ { reset=false }={}){
     const counts=countsOf(fish);
     const specs=SPECIES.map((s,i)=>({ ...s, count:counts[i] }));
     care?.dispose();
     care=createCare(specs, { key:careKey(doc.id) });
-    const old=new Map(schools.map(s=>[s.spec.id, s]));
+    const old=new Map(schools.map((/** @type {any} */ s)=>[s.spec.id, s]));
     const next=[];
     for(const spec of specs){
       const prev=old.get(spec.id);
@@ -130,7 +133,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   }
 
   /** 应用文档。fresh=true 用于切换场景（鱼群全部重生）；否则只做差量更新（编辑器预览） */
-  function apply(nextDoc, { fresh=false }={}){
+  function apply(/** @type {any} */ nextDoc, /** @type {{ fresh?:boolean }} */ { fresh=false }={}){
     const prev=doc;
     doc=cloneDoc(nextDoc);
     if(fresh || !prev || prev.theme!==doc.theme) setTheme(doc.theme);
@@ -149,20 +152,20 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     get care(){ return care; },
     itemsGroup,
     /** @param {string} id */
-    rootOf: id => live.get(id)?.root ?? null,
+    rootOf: (/** @type {string} */ id) => live.get(id)?.root ?? null,
     /** 编辑器拖拽时的轻量更新：只改变换，不重建 */
-    moveItem(item){
+    moveItem(/** @type {any} */ item){
       const e=live.get(item.id);
       if(!e) return;
       e.item={ ...item, x:item.x, z:item.z, rot:item.rot, s:item.s };
       place(e);
       refreshDerived();
     },
-    fishTotal: () => schools.reduce((a,s)=>a+s.spec.count, 0),
+    fishTotal: () => schools.reduce((/** @type {number} */ a,/** @type {any} */ s)=>a+s.spec.count, 0),
     /** 亲密度发鱼：原地给该物种加一条（不重建鱼群），并同步文档计数；
      * 调用方负责 store.save 持久化。返回命中的鱼群，失败返回 null */
-    addFish(speciesId){
-      const s=schools.find(x=>x.spec.id===speciesId);
+    addFish(/** @type {string} */ speciesId){
+      const s=schools.find((/** @type {any} */ x)=>x.spec.id===speciesId);
       if(!s || doc.fish[speciesId]==null) return null;
       if(s.spec.count>=s.capacity || fishTotalOf(doc)>=FISH_TOTAL_MAX) return null;
       const i=s.addFish();
@@ -171,7 +174,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
       return s;
     },
     /** 光泽度变化时刷新全部鱼群（School 内部去重，同值不重设材质） */
-    setGloss(k){ for(const s of schools) s.setGloss(k); },
+    setGloss(/** @type {number} */ k){ for(const s of /** @type {any[]} */ (schools)) s.setGloss(k); },
   };
 }
-const fishTotalOf=d=>Object.values(d.fish).reduce((a,n)=>a+n,0);
+const fishTotalOf=(/** @type {any} */ d)=>Object.values(d.fish).reduce((/** @type {number} */ a,/** @type {any} */ n)=>a+n,0);

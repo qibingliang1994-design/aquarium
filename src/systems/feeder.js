@@ -1,7 +1,9 @@
+// @ts-check
 import * as THREE from 'three';
 import { clamp, rand } from '../utils.js';
 
 export class Feeder {
+  /** @param {{ tankGroup:any, sandHeight:any, waterY:number, ripples:any }} opts */
   constructor({ tankGroup, sandHeight, waterY, ripples }){
     this.ripples=ripples; this.sandHeight=sandHeight; this.waterY=waterY;
     this.flow=0;                 // 水流速度（+x），溪流/小河场景由 main 每帧设置
@@ -11,7 +13,7 @@ export class Feeder {
       new THREE.MeshStandardMaterial({color:0x9c6a33, roughness:0.9}), this.N);
     this.mesh.frustumCulled=false;
     tankGroup.add(this.mesh);
-    this.items=new Array(this.N).fill(null);
+    /** @type {any[]} */ this.items=new Array(this.N).fill(null);
     this.head=0;
     this._m=new THREE.Matrix4();
     // 进食碎屑：饲料被咬中时崩出几粒小碎屑，缓慢下沉淡出
@@ -20,13 +22,13 @@ export class Feeder {
       new THREE.DodecahedronGeometry(0.0075), this.mesh.material, this.CN);
     this.crumbMesh.frustumCulled=false;
     tankGroup.add(this.crumbMesh);
-    this.crumbs=new Array(this.CN).fill(null);
+    /** @type {any[]} */ this.crumbs=new Array(this.CN).fill(null);
     this.crumbHead=0;
   }
   // 切换场景时清空水中饲料与碎屑
   clear(){ this.items.fill(null); this.crumbs.fill(null); }
   get pellets(){ return this.items.filter(it=>it && !it.eaten && it.age<28); }
-  spawn(center){
+  spawn(/** @type {THREE.Vector3} */ center){
     this.ripples.spawn(center.x, center.z);
     setTimeout(()=>this.ripples.spawn(center.x+0.06, center.z-0.05), 260);
     for(let k=0;k<10;k++){
@@ -39,7 +41,7 @@ export class Feeder {
     }
   }
   // 返回是否真的吃到（同帧多条鱼抢同一颗时只算第一条）
-  consume(p){
+  consume(/** @type {any} */ p){
     if(p.eaten) return false;
     p.eaten=1e-6;
     for(let k=0;k<3;k++){
@@ -50,7 +52,7 @@ export class Feeder {
     }
     return true;
   }
-  _updateCrumbs(dt){
+  _updateCrumbs(/** @type {number} */ dt){
     const LIFE=1.6;
     for(let i=0;i<this.CN;i++){
       const c=this.crumbs[i];
@@ -68,7 +70,7 @@ export class Feeder {
     }
     this.crumbMesh.instanceMatrix.needsUpdate=true;
   }
-  update(dt,t){
+  update(/** @type {number} */ dt, /** @type {number} */ t){
     this._updateCrumbs(dt);
     for(let i=0;i<this.N;i++){
       const it=this.items[i];

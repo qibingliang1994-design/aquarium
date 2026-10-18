@@ -29,7 +29,8 @@ import { sstep, vnoise } from '../../utils.js';
  * @property {number} senseR 觅食感知半径
  * @property {boolean} [hunts] 是否参与抢食
  * @property {boolean} [bottomRest] 底栖趴沙停顿
- * @property {[number,number,number,number]} [territory] 领地 [x,y,z,半径]
+ * @property {number[]} [territory] 领地 [x, y(未用), z, x 半径, z 半径?]（椭圆，缸深方向可以窄一些）
+ * @property {number} [hug] 底栖：水层下界改为"沙面 + hug + 半个体高"，跟着沙面起伏（band[0] 只作出生参考）
  * @property {(u:number,c:number,y:number,z:number,out:THREE.Color)=>void} [paint] 程序化体色
  */
 
@@ -91,7 +92,7 @@ export const SPECIES = [
     rough:0.45, metal:0.3, scaleI:0.6, irid:0.35, scaleTiles:24, eyeSize:0.058,
     amp:0.07, beat:3.2, waveK:4.0,
     schoolRad:1.1, wSep:2.0, wAli:0.25, wCoh:0.35,
-    minSpeed:0.06, maxSpeed:0.3, wander:0.1, turn:2.4, territory:[0,0.8,-0.45,0.5],
+    minSpeed:0.06, maxSpeed:0.3, wander:0.1, turn:2.4, territory:[0,0.8,-0.12,0.65,0.3],
     band:[0.73,1.58], senseR:2.2, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.8,0.84,0.88);
@@ -114,8 +115,8 @@ export const SPECIES = [
     rough:0.55, metal:0.15, scaleI:1.0, irid:0.12, scaleTiles:22, eyeSize:0.082,
     amp:0.115, beat:11, waveK:6.4,
     schoolRad:0.45, wSep:2.6, wAli:0.35, wCoh:0.2,
-    minSpeed:0.04, maxSpeed:0.5, wander:0.5, bottomRest:true,
-    band:[0.6,0.96], senseR:1.6, hunts:true,
+    minSpeed:0.04, maxSpeed:0.5, wander:0.5, bottomRest:true, hug:0.03,
+    band:[0.45,0.9], senseR:1.6, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.60,0.49,0.34);
       out.lerp(new THREE.Color(0.24,0.19,0.13), sstep(0.1,0.85,c)*0.72);
@@ -198,8 +199,8 @@ export const SPECIES = [
     rough:0.4, metal:0.2, scaleI:0.55, irid:0.4, scaleTiles:22, eyeSize:0.066,
     amp:0.08, beat:9, waveK:5.6,
     schoolRad:0.5, wSep:2.2, wAli:0.2, wCoh:0.3,
-    minSpeed:0.03, maxSpeed:0.18, wander:0.12, turn:2.2,
-    band:[0.63,1.13], senseR:2.0, hunts:true,
+    minSpeed:0.03, maxSpeed:0.18, wander:0.12, turn:2.2, hug:0.05,
+    band:[0.5,1.05], senseR:2.0, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.12,0.35,0.5);
       const n=vnoise(u*3.0+1.7, y*2.4+5.1);

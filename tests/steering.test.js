@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget,
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, SWIM, swimLimits, sepRadius, crossRadius,
   createFishGrid, rebuildFishGrid } from '../src/entities/fish/steering.js';
 
 const V = (x=0, y=0, z=0) => new THREE.Vector3(x, y, z);
@@ -56,7 +56,7 @@ describe('wanderAcc', () => {
 describe('boundaryAcc', () => {
   it('越界 → 弹簧把鱼推回（左右 / 上下）', () => {
     const acc=V();
-    boundaryAcc(V(-1.6, 1, 0), [0.6, 1.6], acc);
+    boundaryAcc(V(-SWIM.x, 1, 0), [0.6, 1.6], acc);
     expect(acc.x).toBeGreaterThan(0);           // 左界外 → 向右推
     const acc2=V();
     boundaryAcc(V(0, 1.7, 0), [0.6, 1.6], acc2);
@@ -64,6 +64,23 @@ describe('boundaryAcc', () => {
     const acc3=V();
     boundaryAcc(V(0, 1.0, 0), [0.6, 1.6], acc3);
     expect(acc3.length()).toBe(0);              // 界内无弹力
+  });
+
+  it('活动范围覆盖缸内腔大部分：小鱼能到 x≈±1.8 / z≈±0.55，大鱼离玻璃更远', () => {
+    for(const [x,z] of [[1.75,0],[-1.75,0],[0,0.5],[0,-0.5]]){
+      const a=V(); boundaryAcc(V(x, 1, z), [0.6, 1.6], a, swimLimits(0.17));
+      expect(a.length()).toBe(0);
+    }
+    expect(swimLimits(0.42).x).toBeLessThan(swimLimits(0.17).x);
+    expect(SWIM.x).toBeLessThan(2.265);         // 缸内腔半宽
+    expect(SWIM.z).toBeLessThan(0.865);
+  });
+
+  it('floor 抬高下界（底栖种贴沙面）', () => {
+    const a=V(); boundaryAcc(V(0, 0.4, 0), [0.3, 0.9], a, SWIM, 0.45);
+    expect(a.y).toBeGreaterThan(0);
+    const b=V(); boundaryAcc(V(0, 0.4, 0), [0.3, 0.9], b, SWIM, 0.25);
+    expect(b.y).toBe(0);
   });
 });
 
@@ -153,6 +170,24 @@ describe('网格路径与线性路径等价', () => {
         expect(a2.z).toBeCloseTo(a1.z, 9);
       }
     }
+  });
+});
+
+describe('体型相关的分离半径', () => {
+  it('小鱼保持 0.16，大鱼按体长放大且不超过聚群半径', () => {
+    expect(sepRadius({ L:0.17, schoolRad:0.6 })).toBeCloseTo(0.16);
+    expect(sepRadius({ L:0.42, schoolRad:1.4 })).toBeGreaterThan(0.3);
+    expect(sepRadius({ L:0.42, schoolRad:0.2 })).toBe(0.2);
+    expect(crossRadius(0.42, 0.34)).toBeGreaterThan(0.3);   // 锦鲤 vs 金鱼：至少半身长之和
+    expect(crossRadius(0.17, 0.15)).toBe(0.2);
+  });
+
+  it('同种大鱼贴得越近推力越大', () => {
+    const SPECB={ L:0.42, schoolRad:1.4, wSep:1, wAli:0, wCoh:0 };
+    const mk=d=>{ const pos=[V(0,1,0), V(d,1,0)], vel=[V(), V()], acc=V();
+      boidsAccumulate(0, pos, vel, SPECB, 1, acc, V(), V(), V()); return -acc.x; };
+    expect(mk(0.3)).toBeGreaterThan(0);           // 0.3 < 0.357：大鱼之间也会分开（此前 0.16 外完全不推）
+    expect(mk(0.05)).toBeGreaterThan(mk(0.3));
   });
 });
 

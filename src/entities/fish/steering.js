@@ -66,23 +66,30 @@ export function rebuildFishGrid(grid, schools){
 
 /* ---------- 同种 Boids：分离 / 对齐 / 聚合 ---------- */
 /** 网格查询的共享状态（单线程 + 同步查询，无重入，避免每鱼每帧建闭包） */
-/** @type {{ school:any, i:number, p:THREE.Vector3, v:THREE.Vector3, rad2:number, sep:THREE.Vector3, ali:THREE.Vector3, coh:THREE.Vector3, cnt:number }} */
-const _bq={ school:null, i:0, p:new THREE.Vector3(), v:new THREE.Vector3(), rad2:0,
+/** @type {{ school:any, i:number, p:THREE.Vector3, v:THREE.Vector3, rad2:number, sepR:number, sep:THREE.Vector3, ali:THREE.Vector3, coh:THREE.Vector3, cnt:number }} */
+const _bq={ school:null, i:0, p:new THREE.Vector3(), v:new THREE.Vector3(), rad2:0, sepR:0.16,
   sep:new THREE.Vector3(), ali:new THREE.Vector3(), coh:new THREE.Vector3(), cnt:0 };
+
+/** 同种分离半径：随体长放大（锦鲤/金鱼/神仙鱼此前用小鱼的 0.16，大量互相穿模），小鱼保持 0.16 不变；不超过聚群半径
+ * @param {{ L?:number, schoolRad:number }} spec */
+export const sepRadius = spec => Math.min(spec.schoolRad, Math.max(0.16, (spec.L ?? 0)*0.85));
+/** 分离推力：单位方向 ×(1..2)，贴得越近推得越狠（此前恒为单位向量，靠得再近也推不开）
+ * @param {THREE.Vector3} out @param {THREE.Vector3} p @param {THREE.Vector3} q @param {number} d2 @param {number} R */
+function sepPush(out, p, q, d2, R){
+  const d=Math.sqrt(d2);
+  out.add(_v.subVectors(p,q).multiplyScalar((1+Math.max(0,(R-d)/R))/Math.max(d,0.02)));
+}
 /** @param {{school:any,i:number,p:THREE.Vector3}} e @param {number} d2 */
 const _boidsGridCb=(e,d2)=>{
   const q=_bq;
   if(e.school!==q.school || e.i===q.i) return;
-  if(d2<0.0256){                                 // 分离（0.16²）
-    const d=Math.sqrt(d2);
-    q.sep.add(_v.subVectors(q.p,e.p).multiplyScalar(1/Math.max(d,0.02)));
-  }
+  if(d2<q.sepR*q.sepR) sepPush(q.sep, q.p, e.p, d2, q.sepR);   // 分离（半径随体长）
   if(d2<q.rad2){ q.ali.add(e.school.vel[e.i]); q.coh.add(e.p); q.cnt++; }
 };
 
-/** 同种 Boids：分离 / 对齐 / 聚合（schoolRad 内对齐聚合；0.16 内分离）
+/** 同种 Boids：分离 / 对齐 / 聚合（schoolRad 内对齐聚合；sepRadius 内分离）
  * @param {number} i @param {THREE.Vector3[]} pos @param {THREE.Vector3[]} vel
- * @param {{ schoolRad:number, wSep:number, wAli:number, wCoh:number }} spec
+ * @param {{ L?:number, schoolRad:number, wSep:number, wAli:number, wCoh:number }} spec
  * @param {number} social 群聚力系数（惊吓时削弱）
  * @param {THREE.Vector3} acc @param {THREE.Vector3} sep @param {THREE.Vector3} ali @param {THREE.Vector3} coh
  * @param {any} [grid] 共享网格（提供时走邻域查询）
@@ -92,9 +99,9 @@ export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, g
   sep.set(0,0,0); ali.set(0,0,0); coh.set(0,0,0);
   const p=pos[i], v=vel[i];
   let cnt=0;
-  const rad2=spec.schoolRad*spec.schoolRad;
+  const rad2=spec.schoolRad*spec.schoolRad, sepR=sepRadius(spec), sepR2=sepR*sepR;
   if(grid && school){
-    _bq.school=school; _bq.i=i; _bq.p=p; _bq.v=v; _bq.rad2=rad2;
+    _bq.school=school; _bq.i=i; _bq.p=p; _bq.v=v; _bq.rad2=rad2; _bq.sepR=sepR;
     _bq.sep=sep; _bq.ali=ali; _bq.coh=coh; _bq.cnt=0;
     grid.forNeighbors(p, spec.schoolRad, _boidsGridCb);
     cnt=_bq.cnt;
@@ -102,10 +109,7 @@ export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, g
     for(let j=0;j<pos.length;j++){
       if(j===i) continue;
       const q=pos[j], d2=p.distanceToSquared(q);
-      if(d2<0.0256){
-        const d=Math.sqrt(d2);
-        sep.add(_v.subVectors(p,q).multiplyScalar(1/Math.max(d,0.02)));
-      }
+      if(d2<sepR2) sepPush(sep, p, q, d2, sepR);
       if(d2<rad2){ ali.add(vel[j]); coh.add(q); cnt++; }
     }
   }
@@ -117,26 +121,31 @@ export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, g
 }
 
 /* ---------- 异种分离：只推小鱼（体型悬殊时小鱼推不动大鱼） ---------- */
-/** @type {{ school:any, p:THREE.Vector3, bigL:number, acc:THREE.Vector3 }} */
-const _xq={ school:null, p:new THREE.Vector3(), bigL:0, acc:new THREE.Vector3() };
+/** 异种分离半径：两条鱼半身长之和留点余量（此前固定 0.2，锦鲤半个身长就有 0.21） @param {number} La @param {number} Lb */
+export const crossRadius = (La, Lb) => Math.max(0.2, 0.45*(La+Lb));
+const CROSS_QUERY=0.5;            // ≥ crossRadius 的最大值（锦鲤长满 0.525 × 2 × 0.45 ≈ 0.47）
+/** @type {{ school:any, p:THREE.Vector3, L:number, bigL:number, acc:THREE.Vector3 }} */
+const _xq={ school:null, p:new THREE.Vector3(), L:0, bigL:0, acc:new THREE.Vector3() };
 /** @param {{school:any,i:number,p:THREE.Vector3}} e @param {number} d2 */
 const _crossGridCb=(e,d2)=>{
   if(e.school===_xq.school || e.school.spec.L<_xq.bigL) return;
-  if(d2<0.04 && d2>1e-8) _xq.acc.addScaledVector(_v.subVectors(_xq.p,e.p), 3.0/Math.sqrt(d2));
+  const r=crossRadius(_xq.L, e.school.spec.L);
+  if(d2<r*r && d2>1e-8) _xq.acc.addScaledVector(_v.subVectors(_xq.p,e.p), 3.0/Math.sqrt(d2));
 };
 /** @param {any} school @param {number} i @param {any[]} schools @param {THREE.Vector3} acc @param {any} [grid] */
 export function crossSeparate(school, i, schools, acc, grid=null){
-  const p=school.pos[i], bigL=school.spec.L*0.7;
+  const p=school.pos[i], L=school.spec.L, bigL=L*0.7;
   if(grid){
-    _xq.school=school; _xq.p=p; _xq.bigL=bigL; _xq.acc=acc;
-    grid.forNeighbors(p, 0.2, _crossGridCb);
+    _xq.school=school; _xq.p=p; _xq.L=L; _xq.bigL=bigL; _xq.acc=acc;
+    grid.forNeighbors(p, CROSS_QUERY, _crossGridCb);
     return;
   }
   for(const other of schools){
     if(other===school || other.spec.L<bigL) continue;
-    for(const q of other.pos){
-      const d2=p.distanceToSquared(q);
-      if(d2<0.04 && d2>1e-8) acc.addScaledVector(_v.subVectors(p,q), 3.0/Math.sqrt(d2));
+    const r=crossRadius(L, other.spec.L), r2=r*r;
+    for(let j=0;j<other.spec.count;j++){
+      const d2=p.distanceToSquared(other.pos[j]);
+      if(d2<r2 && d2>1e-8) acc.addScaledVector(_v.subVectors(p,other.pos[j]), 3.0/Math.sqrt(d2));
     }
   }
 }
@@ -149,16 +158,23 @@ export function wanderAcc(acc, time, i, wander){
   acc.z+=Math.cos(wT*0.9+i*3.3)*wander*0.4;
 }
 
-/** 缸体软边界（x ±1.5 / z ±0.48 / band 水层带，边界内 0.14 起弹簧）
- * @param {THREE.Vector3} p @param {[number,number]} band @param {THREE.Vector3} acc */
-export function boundaryAcc(p, band, acc){
-  const m=0.14, k=7;
-  if(p.x<-1.5+m) acc.x+=k*((-1.5+m)-p.x);
-  if(p.x> 1.5-m) acc.x-=k*(p.x-(1.5-m));
-  if(p.z> 0.48-m) acc.z-=k*(p.z-(0.48-m));
-  if(p.z<-0.48+m) acc.z+=k*((-0.48+m)-p.z);
+/** 活动范围（鱼体中心）：缸内腔 x ±2.265 / z ±0.865（TANK 4.6×1.8 减玻璃）留出贴玻璃的余量。
+ * 此前写死 ±1.5 / ±0.48，鱼只用了约四分之一的水体；按体长再往里收（swimLimits） */
+export const SWIM={ x:2.13, z:0.74 };
+/** 某体长的鱼的水平软边界半宽：大鱼离玻璃更远（转身时头尾不撞玻璃） @param {number} L */
+export const swimLimits = L => ({ x:SWIM.x-0.5*L, z:SWIM.z-0.3*L });
+
+/** 缸体软边界（swimLimits 内 0.14 起弹簧；y 为 band 水层带，floor 可抬高下界——底栖种按沙面算）
+ * @param {THREE.Vector3} p @param {[number,number]} band @param {THREE.Vector3} acc
+ * @param {{x:number,z:number}} [lim] 水平半宽（默认按 0 体长） @param {number} [floor] 下界（默认 band[0]） */
+export function boundaryAcc(p, band, acc, lim=SWIM, floor=band[0]){
+  const m=0.14, k=7, X=lim.x-m, Z=lim.z-m;
+  if(p.x<-X) acc.x+=k*(-X-p.x);
+  if(p.x> X) acc.x-=k*(p.x-X);
+  if(p.z> Z) acc.z-=k*(p.z-Z);
+  if(p.z<-Z) acc.z+=k*(-Z-p.z);
   if(p.y>band[1]-0.08) acc.y-=k*(p.y-(band[1]-0.08));
-  if(p.y<band[0]+0.08) acc.y+=k*((band[0]+0.08)-p.y);
+  if(p.y<floor+0.08) acc.y+=k*((floor+0.08)-p.y);
 }
 
 /** 障碍推离（岩石/沉木等的包围球）
@@ -171,11 +187,14 @@ export function obstacleAcc(p, obstacles, acc){
 }
 
 /** 觅食目标：感知半径内最近的未吃饲料（无则 null）
- * @param {THREE.Vector3} p @param {{p:THREE.Vector3, eaten?:number}[]} pellets @param {number} senseR */
-export function huntTarget(p, pellets, senseR){
+ * minY：沉到这个高度以下的饲料不追（中层鱼游不下去，留给底栖鱼；此前沉底前就被抢光，鼠鱼一颗都吃不到）
+ * bottomOk：是否追沉底片（feeder 的 bottom 饲料只给底栖鱼）
+ * @param {THREE.Vector3} p @param {{p:THREE.Vector3, eaten?:number, bottom?:boolean}[]} pellets @param {number} senseR
+ * @param {number} [minY] @param {boolean} [bottomOk] */
+export function huntTarget(p, pellets, senseR, minY=-Infinity, bottomOk=true){
   let best=null, bd=senseR;
   for(const pel of pellets){
-    if(pel.eaten) continue;
+    if(pel.eaten || pel.p.y<minY || (pel.bottom && !bottomOk)) continue;
     const d=p.distanceTo(pel.p);
     if(d<bd){ bd=d; best=pel; }
   }

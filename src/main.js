@@ -326,6 +326,7 @@ function frame(){
 
   const flow=/** @type {any} */ (TANK_STYLES[runtime.doc.tank])?.env?.current ?? 0;   // 溪流/小河的水流
   feeder.flow=flow; snow.flow=flow; waterUniforms.uFlow.value=flow;
+  feeder.wafers=schools.some(s=>s.spec.hug!=null && s.spec.count>0) ? 3 : 0;   // 有底栖鱼才投沉底片
   const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools, current:flow,
     appetite, fear:input.fear, sleep, onEat, grid:fishGrid };
   rebuildFishGrid(fishGrid, schools);             // 共享统一网格：同种/异种 pair 查询走邻域

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
-import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget } from './steering.js';
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, swimLimits } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { sandHeight, TANK } from '../../scene/tank.js';
@@ -21,6 +21,7 @@ const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
 const _eyeLocal=new THREE.Matrix4(), _eyeM=new THREE.Matrix4();
 
 const BITE_DUR=0.35;                // 咬食动作时长（秒）
+const FLOW_PUSH=0.55;               // 水流把鱼往下游推的比例（相对 env.current）
 const REGROUP_SECS=6;               // 惊散后向鱼群中心回聚的时长
 const _center=new THREE.Vector3();
 
@@ -49,6 +50,7 @@ export class School {
     const N=spec.count;
     this.capacity=Math.max(N, Math.floor(capacity??N), 1);
     this.spawnObstacles=obstacles;               // addFish 出生避让岩石时复用
+    this.lim=swimLimits(spec.L);                 // 水平活动半宽（按体长离玻璃留距）
     this.group=new THREE.Group();
     this.causticK=null;
     if(this.glbMode){
@@ -322,11 +324,13 @@ export class School {
       _acc.set(0,0,0);
       // 底栖贴底停顿：定时趴沙 2~3 秒
       const R=this.rest?this.rest[i]:null;
+      // 水层下界：底栖种（hug）贴着沙面起伏，其余按 band
+      const floorY=spec.hug!=null ? sandHeight(p.x,p.z)+spec.hug+spec.H*0.5 : spec.band[0];
       let resting=false;
       if(R){
         R.t-=dt;
         if(!R.on){
-          if(R.t<=0 && p.y<spec.band[0]+0.25){ R.on=1; R.dur=rand(2,3.2);
+          if(R.t<=0 && p.y<floorY+0.25){ R.on=1; R.dur=rand(2,3.2);
             R.p.set(p.x,0,p.z); R.p.y=sandHeight(p.x,p.z)+0.03; }
           else if(R.t<=0){ R.t=2; }
         }
@@ -336,20 +340,23 @@ export class School {
       boidsAccumulate(i, this.pos, this.vel, spec, social, _acc, _sep, _ali, _coh, ctx.grid, this);
       crossSeparate(this, i, ctx.schools, _acc, ctx.grid);   // 异种：仅分离（体型悬殊时小鱼推不动大鱼）
       wanderAcc(_acc, ctx.time, i, wander);       // 漫游：低频缓变，直线巡航为主
-      if(flow && !resting){                       // 顶流（趋流性）：在溪流里转头迎着水流缓游，几乎原地"悬停"
-        _acc.x+=(-Math.sign(flow)*minS*2.2-v.x)*Math.min(1.2,Math.abs(flow)*5)*social;
+      if(flow && !resting){                       // 顶流（趋流性）：迎着水流游、对地速度约为 0，前后缓缓进退
+        // 相对水的目标速度 = 水流推送量 ×(1±0.35)：平均对地静止（此前恒逆游 minS×2.2，比水流快，全挤到上游玻璃）
+        const hold=FLOW_PUSH*Math.abs(flow)*(1+0.35*Math.sin(ctx.time*0.35+i*2.3));
+        _acc.x+=(-Math.sign(flow)*hold-v.x)*1.2*social;
       }
       if(sleep>0) _acc.y+=(sleepY-p.y)*0.8*sleep;  // 夜间沉向水层带下部休息
       if(regroup>0) _acc.addScaledVector(_v1.subVectors(_center,p), regroup);
-      if(spec.territory && !hunting){                // 领地盘旋（觅食时让位）
-        const [tx, , tz, tr]=spec.territory;            // [x, y(未用), z, 半径]
-        const dx=p.x-tx, dz=p.z-tz;
-        const d=Math.hypot(dx,dz)||1e-4;
-        if(d>tr){ const s=(d-tr)*3; _acc.x-=dx/d*s; _acc.z-=dz/d*s; }   // 越界弹簧拉回
-        else if(d<tr*0.5){ _acc.x+=dx/d*0.5; _acc.z+=dz/d*0.5; } // 防塌中心
-        _acc.x+=(-dz/d)*0.24; _acc.z+=(dx/d)*0.24;             // 切向绕圈
+      if(spec.territory && !hunting){                // 领地盘旋（觅食时让位）：椭圆，缸深方向窄，整圈都在活动范围内
+        const [tx, , tz, rx, rzRaw]=spec.territory;     // [x, y(未用), z, x 半径, z 半径]
+        const rz=rzRaw??rx;
+        const ex=(p.x-tx)/rx, ez=(p.z-tz)/rz;           // 归一化到单位圆
+        const d=Math.hypot(ex,ez)||1e-4;
+        if(d>1){ const s=(d-1)*3; _acc.x-=ex/d*s*rx; _acc.z-=ez/d*s*rz; }     // 越界弹簧拉回
+        else if(d<0.5){ _acc.x+=ex/d*0.5; _acc.z+=ez/d*0.5; }                  // 防塌中心
+        _acc.x+=(-ez/d)*0.45*rx/Math.max(rx,rz); _acc.z+=(ex/d)*0.45*rz/Math.max(rx,rz);   // 切向绕圈
       }
-      boundaryAcc(p, spec.band, _acc);            // 边界软约束
+      boundaryAcc(p, spec.band, _acc, this.lim, floorY);   // 边界软约束
       obstacleAcc(p, ctx.obstacles, _acc);        // 障碍
       if(resting){                                // 趴底：忽略社交力，弹簧锚定沙面
         _acc.set(0,0,0);
@@ -357,7 +364,8 @@ export class School {
       }
       if(this.gulpCool[i]>0) this.gulpCool[i]-=dt;
       if(hunting && !resting && this.gulpCool[i]<=0){   // 觅食
-        const best=huntTarget(p, ctx.pellets, senseR);
+        const bottomFeeder=spec.hug!=null;
+        const best=huntTarget(p, ctx.pellets, senseR, bottomFeeder ? -Infinity : spec.band[0]+0.05, bottomFeeder);
         if(best){
           const bd=p.distanceTo(best.p);
           _acc.addScaledVector(_v1.subVectors(best.p,p).normalize(), 2.6);
@@ -369,12 +377,20 @@ export class School {
       let s=v.length();
       if(s<1e-5){ v.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(spec.minSpeed); s=v.length(); }
       if(s>maxS) v.multiplyScalar(maxS/s);
-      else if(!resting && s<minS) v.multiplyScalar(minS/s);
+      else if(!resting && s<minS){
+        // 顶流时最低游速放宽到水流推送量附近：否则被抬到 minS，又变成整群往上游挤
+        const lo=flow ? Math.min(minS, FLOW_PUSH*Math.abs(flow)*0.65) : minS;
+        if(s<lo) v.multiplyScalar(lo/s);
+      }
       v.y*=1-Math.min(0.5, dt*0.8);               // 保持水平姿态
       p.addScaledVector(v, dt);
-      if(flow && !resting) p.x+=flow*dt*0.55;     // 水流推送（鱼要一直逆游才能保持位置）
+      if(flow && !resting) p.x+=flow*dt*FLOW_PUSH; // 水流推送（鱼要一直逆游才能保持位置）
       if(resting) v.multiplyScalar(1-Math.min(1,dt*3));   // 趴底阻尼
-      p.x=clamp(p.x,-2.0,2.0); p.y=clamp(p.y,(resting?0.25:0.4),1.66); p.z=clamp(p.z,-0.68,0.68);
+      // 硬约束：不出玻璃、不钻沙（沙面按高度场，趴底时可以贴近）
+      const sandY=sandHeight(p.x,p.z);
+      p.x=clamp(p.x,-this.lim.x-0.06,this.lim.x+0.06);
+      p.y=clamp(p.y, resting ? sandY+0.03 : Math.max(sandY+spec.H*0.5+0.02, spec.hug!=null ? 0 : 0.4), 1.66);
+      p.z=clamp(p.z,-this.lim.z-0.06,this.lim.z+0.06);
       speedSum+=v.length();
 
       // 平滑朝向：速度方向低通滤波（帧率无关），转弯呈弧线而非瞬时甩头

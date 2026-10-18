@@ -35,7 +35,7 @@ function renderEncyclopedia(){
     return `<article class="species-card">
       <div class="species-art ${m.className}"><canvas class="species-preview" data-species="${spec.id}" aria-label="${m.name}三维模型预览"></canvas></div>
       <div class="species-body">
-        <div class="species-title"><h3>${m.name}</h3><span class="species-count">${spec.count} 条</span></div>
+        <div class="species-title"><h3>${m.name}</h3><span class="species-count" data-count="${spec.id}"></span></div>
         <p class="species-latin">${m.latin}</p>
         <p class="species-desc">${m.desc}</p>
         <dl class="species-meta">
@@ -47,9 +47,22 @@ function renderEncyclopedia(){
       </div>
     </article>`;
   }).join('');
-  const sc=document.getElementById('speciesCount'); if(sc) sc.textContent=String(SPECIES.length);
 }
 renderEncyclopedia();
+
+/** 条数与"当前水族箱已收录"跟随当前水景（此前写死物种默认条数与 9 种）。只改文字，不重建卡片——
+ * 重建会换掉预览 canvas，渲染缓存全部失效 @param {Record<string, number>} fish */
+export function syncEncyclopediaCounts(fish){
+  let present=0;
+  for(const el of /** @type {NodeListOf<HTMLElement>} */ (speciesGrid.querySelectorAll('[data-count]'))){
+    const n=fish[el.dataset.count ?? ''] ?? 0;
+    el.textContent=n>0 ? `${n} 条` : '不在此缸';
+    el.classList.toggle('is-absent', n<=0);
+    el.closest('.species-card')?.classList.toggle('is-absent', n<=0);
+    if(n>0) present++;
+  }
+  const sc=document.getElementById('speciesCount'); if(sc) sc.textContent=String(present);
+}
 /* ---------- 图鉴模型预览：优先加载本地鱼种 GLB，失败回退程序化鱼体网格 ---------- */
 const fishPreviewEntries=new Map();
 const glbSpeciesEntries=new Map();

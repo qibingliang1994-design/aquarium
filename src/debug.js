@@ -20,6 +20,7 @@ export function installDebug(/** @type {any} */  d){
     quality:()=>({ level:quality.level, label:quality.label }),
     qualityForce:(/** @type {number} */ lv)=>quality.force(lv),
     time:()=>U.time.value,
+    pellets:()=>feeder.pellets.map((/** @type {any} */ it)=>it.p.toArray().map((/** @type {number} */ v)=>+v.toFixed(2))),
     pelletCount:()=>feeder.items.filter((/** @type {any} */ it)=>it&&!(it.eaten>0)).length,
     excite:()=>U.excite.value,
     night:()=>dayNight.k,

@@ -49,6 +49,8 @@
 .species-title h3{margin:0;color:var(--ink);font-size:17px;letter-spacing:.08em;font-weight:600}
 .species-count{padding:2px 8px;border-radius:999px;font-size:11px;white-space:nowrap;
   color:var(--sp);background:color-mix(in srgb,var(--sp) 12%,transparent)}
+.species-count.is-absent{color:var(--ink-3);background:color-mix(in srgb,var(--ink-3) 10%,transparent)}
+.species-card.is-absent .species-art{opacity:.55}                       /* 不在当前水景的物种：淡一点，仍可浏览 */
 .species-latin{margin:5px 0 12px;color:var(--ink-3);font-size:11px;font-style:italic}
 .species-desc{min-height:40px;margin:0 0 14px;color:var(--ink-2);font-size:12px;line-height:1.7}
 .species-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;margin:0;padding-top:12px;border-top:1px solid var(--line)}

@@ -10,8 +10,9 @@ import { TANK_STYLES } from '../scenes/tank-styles.js';
 
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
-/** @param {{ store:any, onSwitch:any, onEdit:any, toast:any }} opts */
-export function createScenePicker({ store, onSwitch, onEdit, toast }){
+/** onCreate：新建空缸后直接进造景（放弃时由 main 删掉这个从未保存过的缸）
+ * @param {{ store:any, onSwitch:any, onEdit:any, onCreate?:any, toast:any }} opts */
+export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, toast }){
   const modal=$('scenes'), grid=$('sceneGrid');
   /** @type {string|null} */ let confirmId=null;
   /** @type {string|null} */ let renameId=null;
@@ -102,7 +103,7 @@ export function createScenePicker({ store, onSwitch, onEdit, toast }){
     for(const id of THEME_IDS) opts.appendChild(btn(THEMES[id].label,'',()=>{
       const d=store.create(`我的${THEMES[id].label}`, id);
       if(!d){ toast('水景数量已达上限'); return; }
-      close(); onEdit(d.id);
+      close(); onCreate(d.id);
     }));
     if(!store.canAdd()) opts.querySelectorAll('button').forEach(b=>{ b.disabled=true; });
     el.appendChild(opts);

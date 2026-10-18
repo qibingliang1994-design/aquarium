@@ -1,5 +1,6 @@
 // @ts-check
 import { clamp, sstep } from '../utils.js';
+import { canWrite } from './write-lock.js';
 
 /** @typedef {{ id:string, count:number }} SpeciesLike */
 /** @typedef {{ satiety?:unknown, t?:unknown, fed?:Record<string, unknown>, bond?:unknown, milestones?:unknown }} CareSave */
@@ -73,6 +74,7 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
 
   function save(){
     if(Date.now()-lastT>STALL_SECS*1000) settle(0);   // 后台挂着直接关页：先补扣再落盘，否则这段时间永久丢失
+    if(!canWrite()) return;                       // 另一个窗口持有写锁：只读
     try{ localStorage.setItem(key, JSON.stringify({ satiety, t:Date.now(), fed, bond, milestones:milestonesDone })); dirty=false; }
     catch(err){ console.warn('[care] 保存饲养存档失败', err); }
   }

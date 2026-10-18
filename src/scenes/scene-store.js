@@ -1,6 +1,7 @@
 // @ts-check
 import { sanitizeDoc, cloneDoc, newId, emptyDoc } from './scene-doc.js';
 import { PRESETS, findPreset } from './presets.js';
+import { canWrite } from '../systems/write-lock.js';
 
 /* ================================================================
  * 场景存档：localStorage['aquarium.scenes'] = { version, activeId, scenes:[文档] }
@@ -80,11 +81,11 @@ export function createSceneStore(){
 
   const snapshot = () => JSON.stringify({ version:VERSION, activeId, scenes, seeded });
   /** 只读时不写；写失败返回 false（调用方决定是否报错） */
-  const persist = () => readOnly || writeRaw(KEY, snapshot());
+  const persist = () => readOnly || !canWrite() || writeRaw(KEY, snapshot());
   if(snapshot()!==rawStr) persist();          // 内容没变（清洗/补发都没改动）就不回写
   // 缩略图写满时淘汰最旧的几张再试（缩略图丢了会自动重拍，场景文档更重要）
   const writeThumbs = () => {
-    if(readOnly) return;
+    if(readOnly || !canWrite()) return;
     while(!writeJSON(THUMBS, thumbs)){
       const ids = Object.keys(thumbs);
       if(!ids.length) return;
@@ -145,7 +146,7 @@ export function createSceneStore(){
       scenes.splice(i,1);
       if(activeId===id) activeId = scenes[Math.max(0,i-1)].id;
       delete thumbs[id]; writeThumbs();
-      if(!readOnly) try{ localStorage.removeItem(careKey(id)); }catch(err){ console.warn('[scenes] 清理饲养存档失败', err); }
+      if(!readOnly && canWrite()) try{ localStorage.removeItem(careKey(id)); }catch(err){ console.warn('[scenes] 清理饲养存档失败', err); }
       persist();
       return true;
     },
@@ -167,7 +168,8 @@ export function createSceneStore(){
     /** @param {string} id @param {string} dataUrl */
     setThumb(id, dataUrl){ thumbs[id]=dataUrl; writeThumbs(); },
     /** 存档来自更新版本：本次运行的修改不会写盘 */
-    readOnly,
+    /** 存档来自更新版本，或另一个窗口正在写（write-lock）：本次运行不落盘 */
+    get readOnly(){ return readOnly || !canWrite(); },
     /** 启动时发现存档损坏，已备份到 BACKUP_KEY 并用预设重新播种 */
     recovered,
   };

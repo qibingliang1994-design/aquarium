@@ -17,10 +17,11 @@ import { MILESTONES } from './systems/care.js';
 import { createFishGrid, rebuildFishGrid } from './entities/fish/steering.js';
 import { fishRim } from './fish/glb-style.js';
 import { createSceneStore } from './scenes/scene-store.js';
+import { acquireWriter, canWrite } from './systems/write-lock.js';
 import { TANK_STYLES, NATURAL_CAMS, isNatural } from './scenes/tank-styles.js';
 import { createSceneRuntime } from './scenes/scene-runtime.js';
 import { createSceneEditor } from './editor/scene-editor.js';
-import { renderEncyclopediaPreviews, modelPreviewStats } from './ui/encyclopedia.js';
+import { renderEncyclopediaPreviews, modelPreviewStats, syncEncyclopediaCounts } from './ui/encyclopedia.js';
 import { createFishCard } from './ui/fish-card.js';
 import { createSettingsPanel } from './ui/settings-panel.js';
 import { installBackup } from './ui/backup.js';
@@ -50,6 +51,8 @@ const feeder=new Feeder({ tankGroup, sandHeight, waterY:TANK.waterY, ripples });
 /** @type {any[]} */ const obstacles=[];
 const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
   waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
+// 多窗口单写者：必须在第一次写存档（createSceneStore 启动时会回写）之前拿锁
+const isWriter=await acquireWriter();
 const store=createSceneStore();
 
 // 预加载骨骼动画模型（失败物种自动回退程序化鱼）。
@@ -65,7 +68,7 @@ loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
 /** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, night:0, rays:true, bubbles:true, snow:true, caustics:true };
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
-const saveSettings=()=>{ try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
+const saveSettings=()=>{ if(!canWrite()) return; try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
 rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
 
@@ -82,7 +85,8 @@ function toast(/** @type {string} */ msg){
   toastEl.textContent=msg; toastEl.classList.add('on');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('on'), msg.length>20?4200:2200);
 }
-if(store.readOnly) toast('存档来自更新的版本：本次的修改不会被保存');
+if(!isWriter) toast('水族箱已在另一个窗口打开：这里可以观赏，但改动不会保存');
+else if(store.readOnly) toast('存档来自更新的版本：本次的修改不会被保存');
 else if(store.recovered) toast('水景存档无法读取，已备份并恢复为默认水景');
 
 /* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
@@ -166,6 +170,7 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
 const hudScene=$('hudScene'), fadeEl=$('sceneFade');
 const syncHud=()=>{ hudScene.textContent=`「${runtime.doc.name}」`; };
 /** @type {boolean} */ let switching=false;
+/** 刚新建、还没保存过的空缸（放弃造景时删掉） @type {{ id:string, back:string }|null} */ let pendingNew=null;
 const MAX_PRECOMPILE_MS=1500;               // 切场景黑场里等着色器预编译的上限
 function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then?:(()=>void)|null }} */ { force=false, then=null }={}){
   if(switching || !store.get(id)) return;
@@ -194,10 +199,18 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
 /* ---------- 造景编辑器 / 水景选择 ---------- */
 editor=createSceneEditor({ canvas:renderer.domElement, camera, controls, runtime, store, tweenCam, toast, captureThumb,
   onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); waterMesh.visible=false; },   // 俯视时水面会挡住造景
-  onExit:()=>{ waterMesh.visible=true; syncHud(); } });
+  onExit:(/** @type {any} */ saved)=>{
+    waterMesh.visible=true; syncHud();
+    // 新建空缸后在造景里直接放弃：这个缸从没保存过，删掉并回到原来的水景（此前会留下一个空缸，人也停在里面）
+    const nw=pendingNew; pendingNew=null;
+    if(nw && !saved && store.activeId===nw.id && store.remove(nw.id)){
+      switchScene(store.get(nw.back) ? nw.back : store.activeId, { force:true, then:()=>toast('已放弃新建的水景') });
+    }
+  } });
 const picker=createScenePicker({ store, toast,
   onSwitch:(/** @type {string} */ id, /** @type {any} */ opts)=>switchScene(id, opts),
-  onEdit:(/** @type {string} */ id)=>switchScene(id, { then:()=>editor.enter() }) });
+  onEdit:(/** @type {string} */ id)=>switchScene(id, { then:()=>editor.enter() }),
+  onCreate:(/** @type {string} */ id)=>{ pendingNew={ id, back:store.activeId }; switchScene(id, { then:()=>editor.enter() }); } });
 picker.onRenamed=(/** @type {string} */ id)=>{ if(id===store.activeId){ runtime.doc.name=(store.get(id) ?? { name:'' }).name; syncHud(); } };
 $('bScenes').addEventListener('click',()=>{ settingsPanel.close(); fishCard.hide(); picker.open(); });
 $('bEdit').addEventListener('click',()=>editor.enter());
@@ -214,7 +227,7 @@ const syncBondHud=()=>{                       // 图鉴页脚的亲密度进度
     ? `亲密度 Lv.${lv} · ${c.bondProgress()>=1 ? '鱼儿们容光焕发' : '鱼群渐渐泛起光泽'}`
     : `亲密度 Lv.${lv} · 距离下一位新朋友 ${Math.round(c.bondProgress()*100)}%`;
 };
-const openGuide=()=>{ guideEl.hidden=false; guideEl.setAttribute('aria-hidden','false'); syncBondHud(); requestAnimationFrame(renderEncyclopediaPreviews); };
+const openGuide=()=>{ guideEl.hidden=false; guideEl.setAttribute('aria-hidden','false'); syncBondHud(); syncEncyclopediaCounts(runtime.doc.fish); requestAnimationFrame(renderEncyclopediaPreviews); };
 const closeGuide=()=>{ guideEl.hidden=true; guideEl.setAttribute('aria-hidden','true'); };
 $('bGuide').addEventListener('click',openGuide);
 $('guideClose').addEventListener('click',closeGuide);

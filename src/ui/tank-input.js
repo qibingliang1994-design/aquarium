@@ -1,6 +1,6 @@
 // @ts-check
 import * as THREE from 'three';
-import { rand } from '../utils.js';
+import { rand, clamp } from '../utils.js';
 import { TANK, sandHeight } from '../scene/tank.js';
 
 /* ================================================================
@@ -9,6 +9,7 @@ import { TANK, sandHeight } from '../scene/tank.js';
  * ================================================================ */
 
 const TAP_GAP_MS=300, TAP_SLOP_PX=30, FEAR_SECS=2, SHAKE_SECS=0.18;
+const FEED_REACH={ x:6, z:3 };       // 点到这个范围内的水面才算"点水"（覆盖自然水域可见的水面），再收进投喂范围
 const TANK_BOX=new THREE.Box3(
   new THREE.Vector3(-TANK.W/2+TANK.glass, sandHeight(0,0), -TANK.D/2+TANK.glass),
   new THREE.Vector3( TANK.W/2-TANK.glass, TANK.waterY,      TANK.D/2-TANK.glass));
@@ -33,13 +34,15 @@ export function createTankInput({ camera, canvas, schools, fishCard, feeder, sou
   function feedPointFromScreen(/** @type {number} */ cx, /** @type {number} */ cy){
     ray(cx,cy);
     const o=raycaster.ray.origin, d=raycaster.ray.direction;
-    const inXZ=(/** @type {number} */ x,/** @type {number} */ z)=>Math.abs(x)<2.15 && Math.abs(z)<0.78;
+    // 命中点收进投喂范围（鱼的活动区）：点在自然水域的岸边水面、或缸的边缘外一点，饲料落在离点击最近的位置
+    // （此前只认 |x|<2.15、|z|<0.78 的命中，其余一律随机落点：池塘/溪流里点哪都像没反应）
+    const near=(/** @type {number} */ x,/** @type {number} */ z)=>Math.abs(x)<FEED_REACH.x && Math.abs(z)<FEED_REACH.z;
     if(Math.abs(d.y)>1e-4){
       for(const y of [TANK.waterY, 0.5]){            // 先打水面，兜底打沙面上方
         const t=(y-o.y)/d.y;
         if(t<=0) continue;
         const x=o.x+d.x*t, z=o.z+d.z*t;
-        if(inXZ(x,z)) return new THREE.Vector3(x,TANK.waterY,z);
+        if(near(x,z)) return new THREE.Vector3(clamp(x,-2.15,2.15),TANK.waterY,clamp(z,-0.78,0.78));
       }
     }
     return randomFeedPoint();

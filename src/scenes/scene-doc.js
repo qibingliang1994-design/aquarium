@@ -33,7 +33,7 @@ export function sanitizeItem(raw){
   if(!raw || typeof raw!=='object') return null;
   const r = /** @type {Record<string, unknown>} */ (raw);
   const type = typeof r.type==='string' ? r.type : '';
-  const meta = ITEM_META[type];
+  const meta = Object.hasOwn(ITEM_META, type) ? ITEM_META[type] : null;   // 自有键：坏存档里的 "constructor"/"__proto__" 不能查到原型链上
   if(!meta) return null;
   const rot = num(r.rot, 0) % (Math.PI*2);
   return {
@@ -70,7 +70,7 @@ export function sanitizeDoc(raw){
     .filter(/** @returns {it is SceneItem} */ it => it!==null).slice(0, MAX_ITEMS);
   const seen = new Set();                       // 物件 id 去重（复制粘贴的坏存档）
   for(const it of items){ if(seen.has(it.id)) it.id = newId('it'); seen.add(it.id); }
-  const theme = typeof r.theme==='string' && THEMES[r.theme] ? r.theme : 'fresh';
+  const theme = typeof r.theme==='string' && Object.hasOwn(THEMES, r.theme) ? r.theme : 'fresh';
   /** @type {SceneDoc} */
   const doc = {
     id: r.id.slice(0,40),

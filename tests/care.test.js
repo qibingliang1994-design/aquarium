@@ -150,4 +150,26 @@ describe('createCare', () => {
     expect(again.bondLevel).toBe(1);
     expect(again.milestoneDue()).toBe(false);
   });
+
+  it('渲染循环停摆（标签页在后台）后按墙钟补扣，与离线衰减一致', () => {
+    stubBrowser();
+    const care = createCare(SPECIES);
+    care.satiety = 1;
+    care.update(0.016);
+    vi.setSystemTime(new Date(Date.now() + 90_000));   // 后台 90 秒，rAF 停摆；回来第一帧 dt 被钳到 0.05
+    care.update(0.05);
+    expect(care.satiety).toBeCloseTo(0.5, 2);
+  });
+
+  it('后台挂着直接关页：落盘前先补扣停摆期间的衰减', () => {
+    const store = stubBrowser();
+    const care = createCare(SPECIES);
+    care.satiety = 1;
+    care.update(0.016);
+    vi.setSystemTime(new Date(Date.now() + 90_000));
+    care.save();                                   // pagehide
+    const saved = JSON.parse(store.get(KEY));
+    expect(saved.satiety).toBeCloseTo(0.5, 2);
+    expect(saved.t).toBe(Date.now());
+  });
 });

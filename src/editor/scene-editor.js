@@ -224,6 +224,13 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(acts[k]){ e.preventDefault(); acts[k](); }
   });
 
+  // 有未保存的造景（含拖动中）时刷新/关页先确认：造景动辄十几分钟，误关就全丢了
+  addEventListener('beforeunload',e=>{
+    if(!active || (liveBefore===null && snap()===savedJson)) return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+
   /* ---------- 进入 / 退出 ---------- */
   // 俯视机位：让整缸落在面板右侧的可视区内（窄屏面板在底部，不偏移）
   function editCam(){
@@ -255,7 +262,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
         runtime.apply(saved);
       }catch(err){
         console.warn('[editor] 保存失败', err);
-        toast('保存失败：存储空间可能已满');
+        toast(err instanceof Error ? err.message : '保存失败');
         return;
       }
     } else runtime.apply(store.get(doc.id) ?? doc);

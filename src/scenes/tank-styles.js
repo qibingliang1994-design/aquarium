@@ -46,11 +46,11 @@ export const NATURAL_CAMS = [
   { pos:[-2.2,2.7,2.3], tgt:[-0.6,1.3,-0.1] },
 ];
 /** @param {string} id */
-export const isNatural = id => TANK_STYLES[id]?.kind==='natural';
+export const isNatural = id => Object.hasOwn(TANK_STYLES, id) && TANK_STYLES[id].kind==='natural';
 
 /** 旧存档没有 tank 字段时的兜底：预设按预设，其余按水体主题
  * @param {unknown} tank @param {string} theme @param {string} [presetId] */
 export function resolveTank(tank, theme, presetId){
-  if(typeof tank==='string' && TANK_STYLES[tank]) return tank;
-  return (presetId && BY_PRESET[presetId]) || BY_THEME[theme] || 'classic';
+  if(typeof tank==='string' && Object.hasOwn(TANK_STYLES, tank)) return tank;
+  return (presetId && Object.hasOwn(BY_PRESET, presetId) && BY_PRESET[presetId]) || (Object.hasOwn(BY_THEME, theme) && BY_THEME[theme]) || 'classic';
 }

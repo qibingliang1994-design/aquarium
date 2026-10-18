@@ -61,8 +61,9 @@ export class SoundEngine {
   arrival(){                      // 新鱼入缸：轻快的三音上行琶音
     [523.25,659.25,783.99].forEach((f,i)=>this._tone(f,f*1.005,0.4,0.07,i*0.13));
   }
-  update(/** @type {number} */ dt){   // 随机气泡声
-    if(!this.ctx||!this.enabled) return;
+  /** 随机气泡声：只有缸里有气石且气泡开着时才响（池塘/溪流没有气石） @param {number} dt @param {boolean} [bubbling] */
+  update(dt, bubbling=true){
+    if(!this.ctx||!this.enabled||!bubbling) return;
     this._blipTimer-=dt;
     if(this._blipTimer<=0){ this.blip(); this._blipTimer=0.4+Math.random()*2.4; }
   }

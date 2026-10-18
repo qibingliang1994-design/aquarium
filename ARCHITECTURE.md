@@ -170,6 +170,17 @@
   快速失败）；tests 不参与类型检查（由 vitest 运行时验证）。中途一次自动标注脚本事故
   （双括号/坏默认参）以回退到提交点 + 纯手工重做收场，教训：JSDoc 参数标注的正确形式是
   `f(/** @type {X} */ x)`，带默认值的参数不能写成 `[x=v]`（那是解构）。
+- 健壮性修复（v2.1.2，来自全项目审查）：
+  - GPU 泄漏：`School.dispose()` 补 `skeleton.dispose()`——`SkeletonUtils.clone` 给每个 SkinnedMesh 一份骨架，
+    骨骼纹理此前每次切场景/改鱼数都会留下（实测切 7 个场景一轮 +700 余张纹理，修复后持平）。
+  - 存档：`scene-store` 版本升到 2 并启用版本闸门（读到更高版本的存档 → 只读，不回写）；无法解析的存档重新播种前
+    备份到 `aquarium.scenes.bak`；内容没变不回写；`save()` 写盘失败回滚内存并抛错（编辑器如实提示）；缩略图写满
+    淘汰最旧的；存储被禁用时也能启动；预设播种也经过 `sanitizeDoc`（此前首次运行与刷新后的物件种子不一致）。
+    `sanitizeDoc` / `resolveTank` / `isNatural` 查表改用 `Object.hasOwn`（`constructor` 等键名曾让启动崩溃）。
+  - 饱食度按墙钟结算：两次结算间隔超过 1 秒（后台标签页 rAF 停摆、休眠）按真实时间补扣，落盘前也先补扣。
+  - 拍照：拍摄中忽略重复按键（此前连按会把渲染器永久卡在高像素比），像素总量封顶 24M，拍完 toast 反馈。
+  - 交互小修：造景中刷新/关页有未保存改动时确认；输入框里 Ctrl+S 也走保存；Esc 关帮助；没有气石（或关了气泡）时不再
+    播放气泡声；`_serve.cjs` 限制在项目根/public 内（此前 `..%2f` 可读任意文件、畸形 URL 会让进程崩溃），支持 `PORT`。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

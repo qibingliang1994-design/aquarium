@@ -258,6 +258,7 @@ export class School {
       for(const f of this.fishes) f.traverse((/** @type {any} */ o)=>{
         if(!o.isMesh) return;
         (Array.isArray(o.material)?o.material:[o.material]).forEach((/** @type {any} */ m)=>m.dispose());
+        o.skeleton?.dispose();                   // SkeletonUtils.clone 给每个 SkinnedMesh 一份骨架：骨骼纹理不释放会一直累积
       });
       return;
     }

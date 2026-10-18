@@ -80,8 +80,10 @@ const toastEl=$('toast');
 /** @type {number|undefined} */ let toastTimer;
 function toast(/** @type {string} */ msg){
   toastEl.textContent=msg; toastEl.classList.add('on');
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('on'), 2200);
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('on'), msg.length>20?4200:2200);
 }
+if(store.readOnly) toast('存档来自更新的版本：本次的修改不会被保存');
+else if(store.recovered) toast('水景存档无法读取，已备份并恢复为默认水景');
 
 /* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
 const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care, getSceneId:()=>runtime.doc.id });
@@ -229,11 +231,13 @@ if(import.meta.env.PROD && 'serviceWorker' in navigator){
 
 /* ---------- 拍照模式 / 全局按键 ---------- */
 const photo=createPhotoMode({ renderer, composer, hideTargets:['hud','dock','care','stats','hint'],
-  onEnter:()=>{ fishCard.hide(); settingsPanel.close(); } });
+  onEnter:()=>{ fishCard.hide(); settingsPanel.close(); },
+  onShot:ok=>toast(ok?'照片已保存':'拍摄失败，请稍后再试') });
 addEventListener('keydown',e=>{
   if(editor.active) return;                    // 编辑器有自己的快捷键
   if(e.key==='Escape'){
     if(!guideEl.hidden) closeGuide();
+    helpEl.hidden=true;
     if(picker.isOpen) picker.close();
     fishCard.hide(); settingsPanel.close();
     if(photo.on) photo.set(false);
@@ -279,7 +283,8 @@ function grantArrival(){
     const spec=present[(start+k)%present.length];
     if(!runtime.addFish(spec.id)) continue;
     care.takeMilestone();
-    runtime.apply(store.save(runtime.doc));   // 计数已同步到文档：差量应用不会重建鱼群
+    try{ runtime.apply(store.save(runtime.doc)); }   // 计数已同步到文档：差量应用不会重建鱼群
+    catch(err){ console.warn('[bond] 入缸存档失败（本次仍可见）', err); }
     toast(`亲密度 Lv.${care.bondLevel}：一条${SPECIES_META[spec.id].name}入缸了`);
     sound.arrival();
     updateCareHud();
@@ -329,7 +334,7 @@ function frame(){
   feeder.update(dt,t);
   bubbles.mesh.visible=settings.bubbles && air.on;
   bubbles.update(dt,t);
-  sound.update(dt);
+  sound.update(dt, settings.bubbles && air.on);
   snow.update(dt,t);
   ripples.update(dt);
   editor.update(t);

@@ -4,7 +4,7 @@ import { ITEM_META, ITEM_TYPES, PLACE_BOUNDS, MAX_ITEMS } from '../src/scenes/it
 import { THEMES } from '../src/scenes/themes.js';
 import { sanitizeDoc, sanitizeItem, sanitizeFish, FISH_IDS, FISH_MAX, FISH_TOTAL_MAX, fishTotal, emptyDoc } from '../src/scenes/scene-doc.js';
 import { PRESETS } from '../src/scenes/presets.js';
-import { createSceneStore, careKey, MAX_SCENES } from '../src/scenes/scene-store.js';
+import { createSceneStore, careKey, MAX_SCENES, VERSION, BACKUP_KEY } from '../src/scenes/scene-store.js';
 import { createHistory } from '../src/editor/history.js';
 import { TANK_STYLES, resolveTank, isNatural } from '../src/scenes/tank-styles.js';
 import { SPECIES } from '../src/entities/fish/species.js';
@@ -30,6 +30,18 @@ describe('makeRng', () => {
 });
 
 describe('场景文档校验', () => {
+  it('原型链上的键名（constructor/__proto__/toString）当作未知类型丢弃，不会抛错', () => {
+    for (const type of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(sanitizeItem({ id: 'a', type, x: 0, z: 0, rot: 0, s: 1, seed: 1 })).toBeNull();
+    }
+    const doc = sanitizeDoc({ id: 'x', name: 'x', theme: 'constructor', tank: '__proto__', presetId: 'toString', items: [{ type: 'constructor' }] });
+    expect(doc?.theme).toBe('fresh');
+    expect(TANK_STYLES[doc?.tank ?? '']).toBeTruthy();
+    expect(Object.hasOwn(TANK_STYLES, doc?.tank ?? '')).toBe(true);
+    expect(doc?.items).toEqual([]);
+    expect(isNatural('constructor')).toBe(false);
+  });
+
   it('FISH_IDS 与 SPECIES 顺序一致', () => {
     expect(FISH_IDS).toEqual(SPECIES.map(s => s.id));
   });
@@ -175,8 +187,45 @@ describe('createSceneStore', () => {
     expect(createSceneStore().list()).toHaveLength(MAX_SCENES);
   });
 
-  it('损坏的存档不会让程序崩溃', () => {
+  it('损坏的存档不会让程序崩溃，且重新播种前原样备份', () => {
     mem.set('aquarium.scenes', '{oops');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = createSceneStore();
+    expect(store.list()).toHaveLength(PRESETS.length);
+    expect(store.recovered).toBe(true);
+    expect(mem.get(BACKUP_KEY)).toBe('{oops');
+  });
+
+  it('来自更新版本的存档只读：启动与保存都不回写', () => {
+    const raw = JSON.stringify({ version: VERSION + 1, activeId: 'reef', scenes: [PRESETS[1], { ...PRESETS[0], items: [{ id: 'x', type: 'future-thing', x: 0, z: 0, rot: 0, s: 1, seed: 1 }] }], seeded: PRESETS.map(p => p.id) });
+    mem.set('aquarium.scenes', raw);
+    const store = createSceneStore();
+    expect(store.readOnly).toBe(true);
+    store.activate(PRESETS[0].id);
+    store.save({ ...store.active(), name: '改名' });
+    expect(mem.get('aquarium.scenes')).toBe(raw);
+  });
+
+  it('内容没变时启动不回写', () => {
+    createSceneStore();
+    const first = mem.get('aquarium.scenes');
+    const setItem = vi.spyOn(localStorage, 'setItem');
+    createSceneStore();
+    expect(setItem.mock.calls.filter(([k]) => k === 'aquarium.scenes')).toHaveLength(0);
+    expect(mem.get('aquarium.scenes')).toBe(first);
+  });
+
+  it('写盘失败时保存抛错并回滚内存', () => {
+    const store = createSceneStore();
+    const before = store.active();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+    expect(() => store.save({ ...before, name: '新名字' })).toThrow(/保存失败/);
+    expect(store.active().name).toBe(before.name);
+  });
+
+  it('禁用存储（getItem 抛错）时也能启动', () => {
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('SecurityError'); }, removeItem: () => {} });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(createSceneStore().list()).toHaveLength(PRESETS.length);
   });

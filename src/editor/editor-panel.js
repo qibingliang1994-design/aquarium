@@ -12,6 +12,13 @@ import { SPECIES_META } from '../ui/encyclopedia.js';
 
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 const DEG=180/Math.PI;
+/** Ctrl/⌘+S 在输入框里也要交给编辑器保存（否则被拦截后浏览器弹"另存网页"）：先失焦提交输入，再放行冒泡
+ * @param {KeyboardEvent} e */
+function saveKey(e){
+  if(!((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s')) return false;
+  /** @type {HTMLElement} */ (e.target).blur();
+  return true;
+}
 const hex=(/** @type {number} */ n)=>`#${n.toString(16).padStart(6,'0')}`;
 
 /** @param {any} h */
@@ -26,7 +33,7 @@ export function createEditorPanel(h){
 
   /* ---------- 顶栏 ---------- */
   nameEl.addEventListener('change',()=>h.onName(nameEl.value));
-  nameEl.addEventListener('keydown',e=>{ if(e.key==='Enter') nameEl.blur(); e.stopPropagation(); });
+  nameEl.addEventListener('keydown',e=>{ if(e.key==='Enter') nameEl.blur(); if(saveKey(e)) return; e.stopPropagation(); });
   undoEl.addEventListener('click',h.onUndo);
   redoEl.addEventListener('click',h.onRedo);
   saveEl.addEventListener('click',h.onSave);
@@ -116,7 +123,7 @@ export function createEditorPanel(h){
   scaleEl.addEventListener('input',()=>h.onTransform({ s:+scaleEl.value }));
   for(const el of [rotEl, scaleEl]){
     el.addEventListener('change',h.onTransformEnd);
-    el.addEventListener('keydown',e=>e.stopPropagation());   // 方向键调滑块，不移动物件
+    el.addEventListener('keydown',e=>{ if(!saveKey(e)) e.stopPropagation(); });   // 方向键调滑块，不移动物件
   }
   $('insSeed').addEventListener('click',h.onSeed);
   $('insDup').addEventListener('click',h.onDup);

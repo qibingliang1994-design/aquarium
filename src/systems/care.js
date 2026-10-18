@@ -53,6 +53,18 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
   let bond=Math.max(0, Math.floor(Number(saved.bond)||0));
   let milestonesDone=clamp(Math.floor(Number(saved.milestones)||0), 0, MILESTONES.length);
   let dirty=false, saveTimer=SAVE_INTERVAL;
+  // 最近一次把饱食度结算到"现在"的墙钟时间：标签页在后台时 rAF 停摆、dt 被钳，
+  // 回来后（或后台直接关页）按墙钟补扣，和关掉重开的离线衰减一致
+  let lastT=Date.now();
+  const STALL_SECS=1;              // 两次结算间隔超过它，视为渲染循环停过，按墙钟补算
+  /** 按墙钟补算停摆期间的衰减；返回本次实际用的秒数 @param {number} dt */
+  function settle(dt){
+    const now=Date.now(), gap=(now-lastT)/1000;
+    lastT=now;
+    const step=gap>STALL_SECS ? gap : dt;
+    satiety=Math.max(0,satiety-step*DECAY_PER_SEC);
+    return step;
+  }
 
   /** @type {(id:string, i:number)=>number} */
   const growthProgress=(id,i)=>Math.min(1,(fed[id]?.[i]??0)/GROW_PELLETS);
@@ -60,6 +72,7 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
   const growthOf=(id,i)=>1+GROW_MAX*growthProgress(id,i);
 
   function save(){
+    if(Date.now()-lastT>STALL_SECS*1000) settle(0);   // 后台挂着直接关页：先补扣再落盘，否则这段时间永久丢失
     try{ localStorage.setItem(key, JSON.stringify({ satiety, t:Date.now(), fed, bond, milestones:milestonesDone })); dirty=false; }
     catch(err){ console.warn('[care] 保存饲养存档失败', err); }
   }
@@ -107,8 +120,7 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
     glossK(){ return milestonesDone>=MILESTONES.length ? clamp((bond-MILESTONES[MILESTONES.length-1])/GLOSS_SPAN,0,1) : 0; },
     /** @param {number} dt 秒 */
     update(dt){
-      satiety=Math.max(0,satiety-dt*DECAY_PER_SEC);
-      saveTimer-=dt;
+      saveTimer-=settle(dt);
       if(saveTimer<=0){ saveTimer=SAVE_INTERVAL; if(dirty) save(); }
     },
     save,

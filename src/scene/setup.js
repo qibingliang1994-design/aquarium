@@ -78,5 +78,15 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 composer.addPass(createGradePass());
-  return { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim };
+
+/** 后期链的 MSAA：antialias:true 只作用于最后贴到画布的全屏四边形，场景本身画在 composer 的离屏目标里，
+ * 默认 samples=0 → 细草、吊线、鱼鳍边缘全是锯齿。按像素比开 MSAA（高 DPI 屏本身够细，省掉）。
+ * 改 samples 后 dispose，three 会在下次使用时按新采样数重建 @param {number} n */
+function setMSAA(n){
+  for(const rt of [composer.renderTarget1, composer.renderTarget2]){
+    if(rt.samples===n) continue;
+    rt.samples=n; rt.dispose();
+  }
+}
+  return { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA };
 }

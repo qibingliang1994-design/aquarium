@@ -37,7 +37,7 @@ const VERSION='v2.1';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
-const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim }=world;
+const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA }=world;
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
 
@@ -274,6 +274,7 @@ const quality=createQuality({
       if(gm.material===glassHigh || gm.material===glassLow) gm.material=q.glass==='low'?glassLow:glassHigh;
     }
     bloom.enabled=q.bloom;
+    setMSAA(q.ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
   },
 });
 
@@ -392,6 +393,7 @@ addEventListener('resize',()=>{
 installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
   bloom, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
+  setCycle:(/** @type {boolean} */ on)=>{ settings.cycle=on; },   // 只改本次运行，不落盘
   glbLoaded:()=>Object.keys(glbMap).filter(k=>/** @type {any} */ (glbMap)[k]),
   // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；
   // 配合先把 window.requestAnimationFrame 换成 setTimeout 垫片使用

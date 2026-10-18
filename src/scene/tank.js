@@ -4,6 +4,7 @@ import { vnoise } from '../utils.js';
 import { U } from '../uniforms.js';
 import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
+import { DEPTH_MAX } from './natural-shells.js';
 
 /* ================================================================
  * 水族箱尺寸
@@ -61,6 +62,9 @@ const waterUniforms={
   uCMap:{value:causticsTex},
   uClear:{value:0},          // 0 = 缸（水面近乎不透明，主要从侧面看）；1 = 自然水域（俯视时清澈见底，掠射角才反光）
   uFlow:{value:0},           // 水流速度：波纹沿 +x 漂移
+  uDepthTex:{value:/** @type {THREE.Texture|null} */ (null)},   // 自然水域的水深贴图（natural-shells bakeDepth）
+  uDepthBox:{value:new THREE.Vector4(0,0,1,1)},  // 贴图覆盖范围：x0, z0, 1/宽, 1/深
+  uDepthOn:{value:0},
 };
 const waterMesh=new THREE.Mesh(
   new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.01, TANK.D-2*TANK.glass-0.01, 48, 24).rotateX(-Math.PI/2),
@@ -78,14 +82,18 @@ const waterMesh=new THREE.Mesh(
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,
     fragmentShader:`
-      uniform float uTime, uClear; uniform vec3 uSky, uDeep, uLightColor; uniform sampler2D uCMap;
+      uniform float uTime, uClear, uDepthOn; uniform vec3 uSky, uDeep, uLightColor; uniform sampler2D uCMap, uDepthTex;
+      uniform vec4 uDepthBox;
       varying vec3 vW; varying vec2 vXZ;
       void main(){
+        float depth=1.0;                                   // 水深（自然水域按贴图，缸里视为很深）
+        if(uDepthOn>0.5) depth=texture2D(uDepthTex, (vW.xz-uDepthBox.xy)*uDepthBox.zw).r*${DEPTH_MAX.toFixed(2)};
         float t=uTime;
         vec2 g=vec2(
           7.0*cos(vXZ.x*7.0+t*1.3)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006,
           9.0*cos(vXZ.y*9.0+t*1.7)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006);
-        vec3 n=normalize(vec3(-g.x,mix(0.02,0.4,uClear),-g.y));   // 自然水域多为俯视：法线放缓，否则菲涅尔出现条纹
+        // 法线 y 分量太小（此前缸模式 0.02，而波斜率可达 0.07）会让法线几乎水平，俯视时菲涅尔变成大块条纹
+        vec3 n=normalize(vec3(-g.x,mix(0.25,0.4,uClear),-g.y));
         if(!gl_FrontFacing) n=-n;
         vec3 v=normalize(cameraPosition-vW);
         float fres=pow(1.0-max(dot(n,v),0.0),3.0);
@@ -94,7 +102,21 @@ const waterMesh=new THREE.Mesh(
         float alpha=0.93;
         if(gl_FrontFacing){
           col = mix(uDeep, uSky, fres*0.95);
-          alpha = mix(0.93, mix(0.2, 0.92, pow(fres,0.8)), uClear);   // 自然水域：近看清澈，远处/掠射反光
+          // 按视角：侧看（掠射）仍是反光的水面，俯视时透出缸里（此前缸模式恒 0.93，俯视机位和编辑器都被一块深色板挡住）
+          alpha = mix(mix(0.32, 0.93, pow(fres,0.7)), mix(0.2, 0.92, pow(fres,0.8)), uClear);
+          if(uDepthOn>0.5){
+            // 岸线：越浅越透、贴岸处淡出到 0（不再是平面插进地形的硬边）；浅滩微微提亮
+            float shallow=1.0-smoothstep(0.04, 0.5, depth);
+            alpha *= smoothstep(0.0, 0.16, depth)*mix(1.0, 0.55, shallow);
+            col = mix(col, uSky*0.85, shallow*0.22);
+            // 湿边白沫：岸线内侧一窄条，焦散纹理当碎沫噪声，随时间缓慢流动
+            // 带宽要比地形网格的三角面大，否则水深贴图（平滑插值）与分段线性的地形对不齐，白沫成锯齿折线
+            float fo=(1.0-smoothstep(0.0, 0.09, depth))*smoothstep(0.0, 0.025, depth);
+            float nz=texture2D(uCMap, vXZ*1.6+vec2(t*0.04, -t*0.03)).r;
+            fo*=smoothstep(0.2, 0.8, nz);
+            col += vec3(0.85,0.9,0.92)*fo*0.3;
+            alpha = max(alpha, fo*0.28);
+          }
         }
         else {
           float graze = pow(1.0-abs(dot(n,v)), 2.2);
@@ -221,6 +243,11 @@ function setShell(/** @type {string} */ id){
   const wx=built.group.userData.water;          // 自然水域：水面铺到浅滩上（河道铺满），岸线由地形自然遮挡
   waterMesh.scale.set(nat ? wx.x*2/TANK.W : 1, 1, nat ? wx.z*2/TANK.D : 1);
   waterUniforms.uClear.value=nat ? 1 : 0;
+  waterUniforms.uDepthTex.value?.dispose();      // 上一个自然水域的水深贴图
+  const dp=built.group.userData.depth;
+  waterUniforms.uDepthTex.value=dp?.tex ?? null;
+  if(dp) waterUniforms.uDepthBox.value.copy(dp.box);
+  waterUniforms.uDepthOn.value=dp ? 1 : 0;
 }
 
 /* ---------- 房间地面 ---------- */

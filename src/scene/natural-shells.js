@@ -1,6 +1,6 @@
 // @ts-check
 import * as THREE from 'three';
-import { clamp, makeRng, rrange, fbm3, vnoise3 } from '../utils.js';
+import { clamp, makeRng, rrange, fbm3, vnoise3, sstep } from '../utils.js';
 import { injectCaustics } from './caustics.js';
 import { injectSurfaceDetail } from '../scenes/items/common.js';
 import { ribbons } from '../scenes/items/leaf-shapes.js';
@@ -51,26 +51,48 @@ function heightField(K, { W, D, glass }, waterY, sandHeight){
   };
 }
 
+/** 实际铺出来的地形高度：高度场在网格边缘压平接远景地面（terrain 网格与水深贴图共用） */
+function meshHeight(/** @type {any} */ K, /** @type {any} */ H, /** @type {number} */ waterY){
+  const flat=waterY+K.lift-0.03;
+  return (/** @type {number} */ x, /** @type {number} */ z)=>{
+    const edge=clamp(Math.min(TW/2-Math.abs(x), TD/2-Math.abs(z-TZ))/1.8, 0, 1);   // 边缘压平，接远景地面
+    return flat+(H(x,z)-flat)*edge*edge*(3-2*edge);
+  };
+}
+
+/** 水深贴图：水面范围内 (waterY - 地形高) / DEPTH_MAX 存成 R8，水面着色器据此做岸线淡出、浅滩与湿边白沫
+ * （此前水面是一块平面硬插进地形，岸线是一条锐利的交线） */
+export const DEPTH_MAX=0.6;
+function bakeDepth(/** @type {(x:number,z:number)=>number} */ hAt, /** @type {number} */ waterY, /** @type {{x:number,z:number}} */ ext){
+  const NX=Math.min(512, Math.round(ext.x*2*28)), NZ=Math.round(ext.z*2*28), data=new Uint8Array(NX*NZ);
+  for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
+    const x=-ext.x+(i+0.5)/NX*ext.x*2, z=-ext.z+(j+0.5)/NZ*ext.z*2;
+    data[j*NX+i]=Math.round(clamp((waterY-hAt(x,z))/DEPTH_MAX,0,1)*255);
+  }
+  const tex=new THREE.DataTexture(data, NX, NZ, THREE.RedFormat, THREE.UnsignedByteType);
+  tex.magFilter=tex.minFilter=THREE.LinearFilter; tex.needsUpdate=true;
+  return { tex, box:new THREE.Vector4(-ext.x, -ext.z, 1/(ext.x*2), 1/(ext.z*2)) };
+}
+
 function terrain(/** @type {any} */ K, /** @type {any} */ H, /** @type {number} */ waterY){
   const g=new THREE.PlaneGeometry(TW,TD,250,190).rotateX(-Math.PI/2).translate(0,0,TZ);
-  const flat=waterY+K.lift-0.03;
+  const hAt=meshHeight(K, H, waterY);
   const p=g.attributes.position, col=new Float32Array(p.count*3);
   const u0=new THREE.Color(K.under[0]), u1=new THREE.Color(K.under[1]);
   const l0=new THREE.Color(K.land[0]), l1=new THREE.Color(K.land[1]), l2=new THREE.Color(K.land[2]), c=new THREE.Color();
+  // 湿泥：水下泥色与岸上裸土之间偏暗一点（此前 under[1]×0.72 很黑，水面淡出后在粗网格上显成一圈黑色锯齿）
+  const cu=new THREE.Color(), cl=new THREE.Color(), cw=new THREE.Color(K.under[1]).lerp(new THREE.Color(K.land[2]),0.45).multiplyScalar(0.82);
   for(let i=0;i<p.count;i++){
     const x=p.getX(i), z=p.getZ(i);
-    const edge=clamp(Math.min(TW/2-Math.abs(x), TD/2-Math.abs(z-TZ))/1.8, 0, 1);   // 边缘压平，接远景地面
-    const h=flat+(H(x,z)-flat)*edge*edge*(3-2*edge);
+    const h=hAt(x,z);
     p.setY(i,h);
-    if(h<waterY-0.02){                                         // 水下：泥沙，越深越暗
-      c.copy(u0).lerp(u1, fbm3(x*1.3,2,z*1.3,3)).multiplyScalar(1-Math.min(0.4,(waterY-h)*0.3));
-    } else if(h<waterY+0.05){                                  // 水线：湿泥
-      c.copy(u1).multiplyScalar(0.72);
-    } else {                                                   // 岸上：草地 / 土块 / 近岸裸土
-      c.copy(l0).lerp(l1, fbm3(x*0.7,3,z*0.7,3));
-      const bare=Math.max(fbm3(x*0.45+9,4,z*0.45,3)*1.6-0.75, 1-(h-waterY-0.05)/0.06);   // 水线上方一窄条裸土
-      c.lerp(l2, clamp(bare,0,1));
-    }
+    // 水下泥沙 → 水线湿泥 → 岸上（草地/土块/近岸裸土）按高度平滑过渡（此前三段硬切，岸线成一条锐利的色带边）
+    cu.copy(u0).lerp(u1, fbm3(x*1.3,2,z*1.3,3)).multiplyScalar(1-Math.min(0.4,Math.max(0,waterY-h)*0.3));
+    cl.copy(l0).lerp(l1, fbm3(x*0.7,3,z*0.7,3));
+    const bare=Math.max(fbm3(x*0.45+9,4,z*0.45,3)*1.6-0.75, 1-(h-waterY-0.05)/0.1);    // 水线上方一窄条裸土
+    cl.lerp(l2, clamp(bare,0,1));
+    const w1=sstep(waterY-0.22, waterY-0.01, h), w2=sstep(waterY+0.02, waterY+0.1, h);
+    c.copy(cu).lerp(cw, w1).lerp(cl, w2);
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col,3));
@@ -83,7 +105,7 @@ function terrain(/** @type {any} */ K, /** @type {any} */ H, /** @type {number} 
   // 远景地面：一圈大圆盘接在地形边缘外，任何缩放距离都看不到地形的边
   const far=new THREE.Mesh(new THREE.RingGeometry(8,60,48,1).rotateX(-Math.PI/2),
     new THREE.MeshStandardMaterial({ color:new THREE.Color(K.land[0]).lerp(new THREE.Color(K.land[1]),0.5).multiplyScalar(0.85), roughness:1 }));
-  far.position.set(0, flat-0.02, TZ);
+  far.position.set(0, waterY+K.lift-0.05, TZ);   // 与 meshHeight 的压平高度 flat 对齐（flat-0.02）
   m.add(far);
   return m;
 }
@@ -177,5 +199,6 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
   }
   // 水面需要铺开的半宽（tank.setShell 读取）：河道一直铺到地形边缘
   group.userData.water={ x:K.channel ? 9 : dims.W/2+WATER_EXTEND, z:dims.D/2+Math.max(WATER_EXTEND, K.shore[1]*K.beach+0.2) };
+  group.userData.depth=bakeDepth(meshHeight(K, H, waterY), waterY, group.userData.water);   // tank.setShell 接到水面，换壳时释放
   return group;
 }

@@ -23,6 +23,7 @@ export function installDebug(/** @type {any} */  d){
     pelletCount:()=>feeder.items.filter((/** @type {any} */ it)=>it&&!(it.eaten>0)).length,
     excite:()=>U.excite.value,
     night:()=>dayNight.k,
+    setNight:(/** @type {number} */ k)=>{ d.setCycle?.(false); dayNight.jump(k); },   // 固定昼夜（截图对比用，关自动循环、不落盘）
     modelStatus:()=>modelPreviewStats(),
     pickAt:(/** @type {number} */ x,/** @type {number} */ y)=>{ const h=fishCard.pick(x,y); return h?{ id:h.school.spec.id, n:h.fid, glb:h.school.glbMode }:null; },
     satiety:()=>+care().satiety.toFixed(3),

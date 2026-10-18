@@ -28,6 +28,7 @@ import { installBackup } from './ui/backup.js';
 import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
+import { createHazePass, attachDepth } from './scene/water-haze.js';
 import { installDebug } from './debug.js';
 
 /* ================================================================
@@ -41,6 +42,9 @@ const world=createWorld();
 const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA }=world;
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
+const haze=createHazePass(camera, scene);       // 水体纵深：紧跟 RenderPass，在泛光之前（线性 HDR）
+attachDepth(composer);
+composer.insertPass(haze, 1);
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
 const { bubbles, rays, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
@@ -74,7 +78,7 @@ rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEna
 
 /* ---------- 场景：存档 → 运行时（造景 / 鱼群 / 主题） ---------- */
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
-  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); }, onSchools:()=>dayNight.refresh() });
+  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); haze.enabled=t.kind!=='natural'; }, onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
 
@@ -404,7 +408,7 @@ addEventListener('resize',()=>{
 });
 
 installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
-  bloom, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
+  bloom, haze, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
   setCycle:(/** @type {boolean} */ on)=>{ settings.cycle=on; },   // 只改本次运行，不落盘
   glbLoaded:()=>Object.keys(glbMap).filter(k=>/** @type {any} */ (glbMap)[k]),

@@ -6,6 +6,7 @@ import { WAVE_GLSL } from './water-wave.js';
 import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX } from './natural-shells.js';
+import { createSkirtMaterial } from './substrate.js';
 
 /* ================================================================
  * 水族箱尺寸
@@ -33,9 +34,10 @@ scene.add(tankGroup);
 const glassHigh=new THREE.MeshPhysicalMaterial({
   color:0xcfeef0, roughness:0.04, metalness:0, transparent:true, opacity:0.018,
   envMapIntensity:0.8, clearcoat:1, clearcoatRoughness:0.06,
-  specularIntensity:1 });
+  specularIntensity:1, depthWrite:false });
 const glassLow=new THREE.MeshPhysicalMaterial({
-  color:0xdff2f4, transparent:true, opacity:0.035, roughness:0.08, metalness:0, envMapIntensity:0.9 });
+  color:0xdff2f4, transparent:true, opacity:0.035, roughness:0.08, metalness:0, envMapIntensity:0.9, depthWrite:false });
+// 玻璃不写深度：几乎全透明，写了反而让水体纵深后期（water-haze.js）只"看到"前玻璃
 const glassMat=glassHigh;
 /** @type {any[]} */ const glassPanes=[];      // 自然水域时隐藏
 {
@@ -170,12 +172,14 @@ const skirtGeo=(()=>{
   const iw=TANK.W/2-TANK.glass-0.004, id=TANK.D/2-TANK.glass-0.004;
   /** @type {any[]} */ const parts=[];
   const side=(/** @type {number} */ x0,/** @type {number} */ z0,/** @type {number} */ x1,/** @type {number} */ z1)=>{
-    const n=48, g=new THREE.PlaneGeometry(1,1,n,3), p=g.attributes.position;
+    const n=48, g=new THREE.PlaneGeometry(1,1,n,3), p=g.attributes.position, sk=new Float32Array(p.count);
     for(let i=0;i<p.count;i++){
       const u=p.getX(i)+0.5, v=p.getY(i)+0.5, x=x0+(x1-x0)*u, z=z0+(z1-z0)*u;
       p.setXYZ(i, x, TANK.glass+(sandHeight(x,z)-TANK.glass)*v, z);
+      sk[i]=v;                                      // 纵向比例：着色器据此分层
     }
     g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(p.count*3),3));
+    g.setAttribute('aSkD', new THREE.BufferAttribute(sk,1));
     g.computeVertexNormals();
     parts.push(g);
   };
@@ -183,7 +187,8 @@ const skirtGeo=(()=>{
   return parts;
 })();
 /** @type {any[]} */ const sandParts=[];        // 沙床 + 侧裙：自然水域时由地形接管
-for(const g of skirtGeo){ const m=new THREE.Mesh(g, sandMat); m.receiveShadow=true; tankGroup.add(m); sandParts.push(m); }
+const skirtMat=createSkirtMaterial();             // 分层底砂截面（substrate.js）
+for(const g of skirtGeo){ const m=new THREE.Mesh(g, skirtMat); m.receiveShadow=true; tankGroup.add(m); sandParts.push(m); }
 // 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合；侧壁越深越暗（湿砂 + 光线衰减）
 function setSandColors(/** @type {number} */ a, /** @type {number} */ b){
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
@@ -194,7 +199,7 @@ function setSandColors(/** @type {number} */ a, /** @type {number} */ b){
       tmp.copy(c1).lerp(c2, vnoise(x*2.3+11,z*2.3+5)*0.8);
       if(skirt){
         const depth=1-(p.getY(i)-TANK.glass)/Math.max(0.01,sandHeight(x,z)-TANK.glass);
-        tmp.multiplyScalar(0.92-depth*0.45+ (vnoise(x*40,p.getY(i)*60)-0.5)*0.12);   // 越深越暗 + 砂层颗粒感
+        tmp.multiplyScalar(0.92-depth*0.45);         // 越深越暗（颗粒与分层在 skirtMat 着色器里）
       }
       col.setXYZ(i, tmp.r, tmp.g, tmp.b);
     }

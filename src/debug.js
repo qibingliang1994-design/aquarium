@@ -9,7 +9,7 @@ import { schoolNames, personaTags } from './entities/fish/identity.js';
  * ================================================================ */
 
 export function installDebug(/** @type {any} */  d){
-  const { schools, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls, bloom, scene,
+  const { schools, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls, bloom, haze, scene,
     hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, stopCamTween,
     renderer, loopFrame, restartLoop, quality, glbLoaded }=d;
   const care=()=>runtime.care;
@@ -47,6 +47,7 @@ export function installDebug(/** @type {any} */  d){
     restState:(/** @type {number} */ si,/** @type {number} */ ii)=>{ const r=schools[si].rest; return r?{on:r[ii].on,t:+r[ii].t.toFixed(1),dur:+r[ii].dur.toFixed(1)}:null; },
     velOf:(/** @type {number} */ si,/** @type {number} */ ii)=>schools[si].vel[ii].toArray().map((/** @type {any} */ v)=>+v.toFixed(3)),
     bloom:(/** @type {any} */ on)=>{ bloom.enabled=on; },
+    haze:(/** @type {any} */ on, /** @type {number} */ k, /** @type {number} */ max)=>{ haze.enabled=on; if(k!==undefined) haze.uniforms.uDensity.value=k; if(max!==undefined) haze.uniforms.uMaxMix.value=max; },   // 水体纵深后期（对比截图用；k = 每单位雾化系数）
     scene:()=>scene,
     hide:(/** @type {string} */ what,/** @type {any} */ on)=>{ if(what==='light') hoodSpot.visible=!on; if(what==='water') waterMesh.visible=!on; if(what==='glass') glassHigh.visible=!on; },
     restP:(/** @type {number} */ si,/** @type {number} */ ii)=>schools[si].rest?schools[si].rest[ii].p.toArray().map((/** @type {any} */ v)=>+v.toFixed(2)):null,

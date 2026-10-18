@@ -231,6 +231,12 @@
   - 水体纵深后期（`scene/water-haze.js`）：紧跟 RenderPass、在泛光之前，用深度重建世界坐标，与缸内水体盒求交得到视线在水中的
     长度，按 `1-exp(-L·0.24)`（上限 0.42）混向当前水色（`scene.fog.color`）。composer 两块离屏目标都挂了 DepthTexture；
     玻璃改为不写深度（几乎全透明，写了深度就只"看得到"前玻璃）。自然水域关闭（水面着色器已按水深处理）。调试钩子 `haze(on, k?, max?)`。
+- 镜头景深（v2.1.9）：
+  - 水体纵深与新加的景深合并为一个镜头 pass（`scene/lens-pass.js`，取代 `water-haze.js`）：两者都读场景深度，拆成两个 pass 时
+    第二个会写进挂着这张深度纹理的目标，WebGL 反馈环 → 整屏黑。先景深模糊，再按中心像素深度上水雾。
+  - 景深：弥散圆按屈光度差 |1/对焦 - 1/深度| × 26 px（按 1000 px 画面高归一，上限 11 px），黄金角 24 点聚集，样本自身弥散圆
+    够大才计入（清晰主体与背景互不渗色）。远景机位几乎全清晰，拉近看鱼时背景化开；对焦默认是 OrbitControls 目标，
+    识鱼卡片打开时平滑拉焦到那条鱼（`fishCard.focusPoint`）。画质最低一档随泛光一起关。调试钩子 `dof(on, k?)`。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

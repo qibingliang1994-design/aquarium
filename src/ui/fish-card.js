@@ -15,6 +15,7 @@ export function createFishCard({ camera, schools, getCare, getSceneId }){   // g
   const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
   const cardEl=$('fishCard');
   /** @type {number|undefined} */ let timer;
+  /** 卡片打开期间的那条鱼（景深对焦用） @type {{ school:any, fid:number }|null} */ let focused=null;
 
   function pick(/** @type {number} */ cx, /** @type {number} */ cy){
     const ndc=new THREE.Vector2((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1);
@@ -55,12 +56,19 @@ export function createFishCard({ camera, schools, getCare, getSceneId }){   // g
     bar.style.width=`${Math.round(grow*100)}%`;
     $('fcGrowth').textContent=grow>=1 ? '已长成' : `${Math.round(grow*100)}%`;
     cardEl.hidden=false;
+    focused={ school:s, fid:hit.fid };
     cardEl.style.left=`${Math.min(cx+14, innerWidth-CARD_W)}px`;
     cardEl.style.top =`${Math.min(cy+14, innerHeight-CARD_H)}px`;
     clearTimeout(timer); timer=setTimeout(hide, CARD_MS);
   }
-  function hide(){ cardEl.hidden=true; }
+  function hide(){ cardEl.hidden=true; focused=null; }
   $('fcClose').addEventListener('click',hide);
 
-  return { pick, show, hide };
+  /** 卡片打开时返回那条鱼的世界坐标（写入 out），否则 null @param {THREE.Vector3} out */
+  function focusPoint(out){
+    if(!focused || !focused.school.pos[focused.fid]) return null;
+    return focused.school.group.localToWorld(out.copy(focused.school.pos[focused.fid]));
+  }
+
+  return { pick, show, hide, focusPoint };
 }

@@ -28,7 +28,7 @@ import { installBackup } from './ui/backup.js';
 import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
-import { createHazePass, attachDepth } from './scene/water-haze.js';
+import { createLensPass, attachDepth } from './scene/lens-pass.js';
 import { installDebug } from './debug.js';
 
 /* ================================================================
@@ -42,9 +42,10 @@ const world=createWorld();
 const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA }=world;
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
-const haze=createHazePass(camera, scene);       // 水体纵深：紧跟 RenderPass，在泛光之前（线性 HDR）
+const lens=createLensPass(camera, scene);       // 景深 + 水体纵深：紧跟 RenderPass，在泛光之前（线性 HDR）
 attachDepth(composer);
-composer.insertPass(haze, 1);
+composer.insertPass(lens, 1);
+const focusPt=new THREE.Vector3();
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
 const { bubbles, rays, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
@@ -78,7 +79,7 @@ rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEna
 
 /* ---------- 场景：存档 → 运行时（造景 / 鱼群 / 主题） ---------- */
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
-  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); haze.enabled=t.kind!=='natural'; }, onSchools:()=>dayNight.refresh() });
+  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); lens.setHaze(t.kind!=='natural'); }, onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
 
@@ -290,7 +291,7 @@ const quality=createQuality({
       const gm=/** @type {any} */ (g);
       if(gm.material===glassHigh || gm.material===glassLow) gm.material=q.glass==='low'?glassLow:glassHigh;
     }
-    bloom.enabled=q.bloom;
+    bloom.enabled=q.bloom; lens.setDof(q.bloom);      // 最低一档连景深一起关
     setMSAA(q.ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
   },
 });
@@ -339,6 +340,7 @@ function frame(){
     if(k>=1) camTween=null;
   }
   controls.update();
+  lens.focusOn(fishCard.focusPoint(focusPt) ?? controls.target, dt);   // 识鱼时拉焦到那条鱼
 
   // 兴奋度：有饲料 → 升到食欲上限（饿 → 疯抢，饱 → 懒散）
   const care=runtime.care;
@@ -408,7 +410,7 @@ addEventListener('resize',()=>{
 });
 
 installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
-  bloom, haze, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
+  bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
   setCycle:(/** @type {boolean} */ on)=>{ settings.cycle=on; },   // 只改本次运行，不落盘
   glbLoaded:()=>Object.keys(glbMap).filter(k=>/** @type {any} */ (glbMap)[k]),

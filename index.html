@@ -4,6 +4,11 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="#04070c"/>
+<link rel="manifest" href="./manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="./icons/icon-192.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="水族箱"/>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235fd4e8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 12c2.8-4.6 8.6-5.8 12.6-2.8L20.5 6v12l-5.4-3.2C11.1 17.8 5.3 16.6 2.5 12z'/%3E%3C/svg%3E"/>
 <title>水族箱 · Aquarium</title>
 <link rel="stylesheet" href="./src/ui/styles/base.css"/>
@@ -88,6 +93,12 @@
   <label class="switch-row"><span>气泡</span><input type="checkbox" id="setBubbles" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>悬浮颗粒</span><input type="checkbox" id="setSnow" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>水面焦散</span><input type="checkbox" id="setCaustics" role="switch"/><i class="switch"></i></label>
+  <p class="pop-title">存档</p>
+  <div class="backup-row">
+    <button id="bExport" class="chip-btn" type="button">导出存档</button>
+    <button id="bImport" class="chip-btn" type="button">导入存档</button>
+  </div>
+  <input type="file" id="importFile" accept="application/json,.json" hidden/>
 </div>
 
 <div id="fishCard" class="glass-strong" hidden>
@@ -95,6 +106,7 @@
     <div>
       <div class="fc-name"><span id="fcTitle"></span><span id="fcNo"></span></div>
       <p class="fc-latin" id="fcLatin"></p>
+      <div class="fc-tags" id="fcTags"></div>
     </div>
     <button id="fcClose" class="icon-btn" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
   </div>
@@ -115,7 +127,7 @@
     <h2 id="helpTitle">怎么玩</h2>
     <ul class="help-list">
       <li><kbd>点击水面</kbd><span>撒饲料，鱼群会争抢前来；吃饱了就懒得理，约 3 分钟后又会饿</span></li>
-      <li><kbd>点击鱼</kbd><span>查看它的资料卡与成长进度——常吃到饲料的鱼会慢慢长大</span></li>
+      <li><kbd>点击鱼</kbd><span>认识它：名字与个性由真实行为养成——常吃饲料的鱼会长大，喂得越多亲密度越高，攒够会有新鱼入缸</span></li>
       <li><kbd>快速双击</kbd><span>敲玻璃，鱼群受惊四散，片刻后重新聚拢</span></li>
       <li><kbd>拖拽 / 滚轮</kbd><span>旋转、缩放视角；右键拖拽平移</span></li>
       <li><kbd>水景</kbd><span>在多个水族箱之间切换，或复制、新建一个自己的缸</span></li>
@@ -141,6 +153,7 @@
     <div id="speciesGrid" class="species-grid"></div>
     <footer class="encyclopedia-foot">
       <span>当前水族箱已收录 <strong id="speciesCount">4</strong> 个鱼种</span>
+      <span id="bondText"></span>
       <span class="guide-tip">提示：点击“喂食”观察不同鱼类的觅食反应</span>
     </footer>
   </section>

@@ -1,5 +1,6 @@
 import { U } from './uniforms.js';
 import { sstep } from './utils.js';
+import { schoolNames, personaTags } from './entities/fish/identity.js';
 
 /* ================================================================
  * window.__aqDebug：自动化验证用的调试钩子
@@ -8,10 +9,14 @@ import { sstep } from './utils.js';
 
 export function installDebug(d){
   const { schools, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls, bloom, scene,
-    hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, stopCamTween }=d;
+    hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, stopCamTween,
+    renderer, loopFrame, restartLoop, quality }=d;
   const care=()=>runtime.care;
   const sleep=()=>sstep(0.55,0.9,dayNight.k)*(1-U.excite.value)*(1-input.fear);
   window.__aqDebug={
+    renderer, loopFrame, restartLoop,
+    quality:()=>({ level:quality.level, label:quality.label }),
+    qualityForce:lv=>quality.force(lv),
     time:()=>U.time.value,
     pelletCount:()=>feeder.items.filter(it=>it&&!(it.eaten>0)).length,
     excite:()=>U.excite.value,
@@ -25,6 +30,12 @@ export function installDebug(d){
     sleep:()=>+sleep().toFixed(3),
     tapGlass:(x,y)=>input.tapGlass(x,y),
     growthOf:(si,ii)=>({ target:+schools[si].growthTarget[ii].toFixed(3), now:+schools[si].growth[ii].toFixed(3) }),
+    // —— 个体身份 / 亲密度 ——
+    nameOf:(si,ii)=>schoolNames(store.activeId, schools[si].spec.id, schools[si].spec.count)[ii],
+    personaOf:(si,ii)=>personaTags(schools[si].persona(ii), schools[si].personaAvg()),
+    bond:()=>{ const c=care(); return { level:c.bondLevel, due:c.milestoneDue(),
+      progress:+c.bondProgress().toFixed(3), gloss:+c.glossK().toFixed(3) }; },
+    addFish:id=>!!runtime.addFish(id),
     feed:()=>input.feedAt(d.randomFeedPoint()),
     tpFish:(si,ii,x,y,z)=>{ const s=schools[si]; s.pos[ii].set(x,y,z); s.vel[ii].set(0.15,0,0);
       if(s.glbMode && s.fishes[ii]){ s.fishes[ii].position.copy(s.pos[ii]); } },

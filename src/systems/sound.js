@@ -21,9 +21,9 @@ export class SoundEngine {
     lfo.connect(lg).connect(g.gain); lfo.start();
   }
   setEnabled(on){ this.enabled=on; if(this.master) this.master.gain.value=on?1:0; }
-  _tone(f0,f1,dur,peak){
+  _tone(f0,f1,dur,peak,delay=0){
     if(!this.ctx||!this.enabled) return;
-    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    const t=this.ctx.currentTime+delay, o=this.ctx.createOscillator(), g=this.ctx.createGain();
     o.type='sine'; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur*0.8);
     g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+dur*0.15);
     g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
@@ -56,6 +56,9 @@ export class SoundEngine {
   knock(){                        // 敲玻璃：低沉闷响 + 玻璃高频脆响
     this._tone(170,70,0.22,0.32);
     this._tone(1300,700,0.06,0.05);
+  }
+  arrival(){                      // 新鱼入缸：轻快的三音上行琶音
+    [523.25,659.25,783.99].forEach((f,i)=>this._tone(f,f*1.005,0.4,0.07,i*0.13));
   }
   update(dt){                     // 随机气泡声
     if(!this.ctx||!this.enabled) return;

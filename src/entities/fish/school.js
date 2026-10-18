@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
+import { boidsAccumulate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
-import { sandHeight } from '../../scene/tank.js';
+import { sandHeight, TANK } from '../../scene/tank.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 /* ---------- 鱼群（Boids + 转弯侧倾） ---------- */
@@ -18,61 +19,33 @@ const REGROUP_SECS=6;               // 惊散后向鱼群中心回聚的时长
 const _center=new THREE.Vector3();
 
 export class School {
-  constructor(spec, obstacles, glbData, { growth }={}){
+  // capacity：可容纳的最大条数（预分配实例/状态数组，addFish 原地入缸不用重建）
+  constructor(spec, obstacles, glbData, { growth, capacity, gloss }={}){
     this.spec=spec;
     this.glbMode=!!glbData;
     const N=spec.count;
+    this.capacity=Math.max(N, Math.floor(capacity??N), 1);
+    this.spawnObstacles=obstacles;               // addFish 出生避让岩石时复用
     this.group=new THREE.Group();
     this.causticK=null;
     if(this.glbMode){
       // —— 骨骼动画模型模式 ——
       const clips=glbData.animations||[];
       // 无动画模型（如静态雕塑）也能跑：仅靠 Boids 位移
-      const swimClip=clips.find(c=>/Swimming_Normal/i.test(c.name))
+      this.template=glbData.template;
+      this.swimClip=clips.find(c=>/Swimming_Normal/i.test(c.name))
         ||clips.find(c=>/swim/i.test(c.name))||clips[0]||null;
-      const fastClip=clips.find(c=>/Swimming_Fast/i.test(c.name))||null;   // 受惊冲刺
-      const biteClip=clips.find(c=>/Attack/i.test(c.name))||null;          // 咬食
+      this.fastClip=clips.find(c=>/Swimming_Fast/i.test(c.name))||null;   // 受惊冲刺
+      this.biteClip=clips.find(c=>/Attack/i.test(c.name))||null;          // 咬食
       this.fishes=[]; this.mixers=[]; this.actions=[]; this.swimUniforms=[];
       this.phaseU={ value: rand(10) };
       this.causticK={ value:0.22 };            // 鱼体焦散强度（applyNight 调节）
-      for(let i=0;i<N;i++){
-        const obj=SkeletonUtils.clone(glbData.template);
-        obj.userData.fishIndex=i;
-        // 仅无骨骼动画的静态模型（锦鲤）做程序化尾摆，每条鱼独立相位
-        const ph={ value:0 };
-        const sway=swimClip ? null : { phaseU:ph, L:spec.L, amp:spec.amp, waveK:spec.waveK };
-        obj.traverse(o=>{
-          if(!o.isMesh) return;
-          o.castShadow=true; o.frustumCulled=false;
-          const deco=m=>{
-            const c=m.clone();
-            c.side=THREE.DoubleSide;               // 鳍片是单面几何：双面渲染，避免背向时整片消失
-            decorateFishMaterial(c, { causticK:this.causticK, sway });
-            return c;
-          };
-          o.material=Array.isArray(o.material)?o.material.map(deco):deco(o.material);
-        });
-        if(sway) this.swimUniforms.push({ u:ph, off:rand(6.283) });
-        if(swimClip){
-          const mixer=new THREE.AnimationMixer(obj);
-          const swim=mixer.clipAction(swimClip);
-          swim.time=rand((swimClip.duration||1)*0.8);     // 个体相位错开
-          swim.play();
-          const fast=fastClip?mixer.clipAction(fastClip):null;
-          if(fast){ fast.time=rand(fastClip.duration*0.8); fast.setEffectiveWeight(0); fast.play(); }
-          const bite=biteClip?mixer.clipAction(biteClip):null;
-          if(bite) bite.setLoop(THREE.LoopOnce,1);
-          this.mixers.push(mixer);
-          this.actions.push({ swim, fast, bite });
-        }
-        this.fishes.push(obj);
-        this.group.add(obj);
-      }
+      for(let i=0;i<N;i++) this._glbFish(i);
     } else {
     // —— 程序化模式（GLB 加载失败的兜底） ——
     const bodyGeo=buildFishBody(spec);          // 眼睛已烘入体网格
     const finGeo=buildFishFins(spec, profileSampler(spec.profileH), profileSampler(spec.profileW));
-    const anim=new Float32Array(N*2);
+    const anim=new Float32Array(this.capacity*2);
     for(let i=0;i<N;i++){ anim[i*2]=rand(6.283); anim[i*2+1]=rand(0.8,1.2); }
     for(const g of [bodyGeo, finGeo])
       g.setAttribute('aAnim', new THREE.InstancedBufferAttribute(anim,2));
@@ -99,16 +72,19 @@ export class School {
     const depthMat=new THREE.MeshDepthMaterial({ depthPacking:THREE.RGBADepthPacking });
     injectSwim(depthMat, spec, this.phaseU, spec.id, false);
 
-    this.mesh=new THREE.InstancedMesh(bodyGeo, matBody, N);
+    this.mesh=new THREE.InstancedMesh(bodyGeo, matBody, this.capacity);
+    this.mesh.count=N;
     this.mesh.castShadow=true;
     this.mesh.customDepthMaterial=depthMat;
     this.mesh.frustumCulled=false;
-    this.finMesh=new THREE.InstancedMesh(finGeo, matFin, N);
+    this.finMesh=new THREE.InstancedMesh(finGeo, matFin, this.capacity);
+    this.finMesh.count=N;
     this.finMesh.frustumCulled=false;
     const eye=fishEyeLayout(spec);
     const eyeGeo=new THREE.SphereGeometry(1,10,8);
     const eyeMat=new THREE.MeshPhysicalMaterial({color:0x111216,roughness:0.22,metalness:0.05,clearcoat:0.9,clearcoatRoughness:0.12});
-    this.eyeMesh=new THREE.InstancedMesh(eyeGeo, eyeMat, N*2);
+    this.eyeMesh=new THREE.InstancedMesh(eyeGeo, eyeMat, this.capacity*2);
+    this.eyeMesh.count=N*2;
     this.eyeMesh.castShadow=true;
     this.eyeMesh.frustumCulled=false;
     this.eyeInfo=eye;
@@ -134,14 +110,115 @@ export class School {
     this.rest = spec.bottomRest
       ? Array.from({length:N},()=>({t:rand(4,10),on:0,dur:0,p:new THREE.Vector3()}))
       : null;
-    // 成长体型（当前值缓动到目标值）与咬食计时
-    this.growth=Float32Array.from({length:N},(_,i)=>growth?.[i]??1);
-    this.growthTarget=Float32Array.from(this.growth);
-    this.biteT=new Float32Array(N);
-    this.gulpCool=new Float32Array(N);         // 刚吃过：短暂不抢，饲料分散到更多鱼
+    // 成长体型（当前值缓动到目标值）与咬食计时（容量预分配，addFish 原地追加）
+    const cap=this.capacity;
+    this.growth=new Float32Array(cap).fill(1);
+    if(growth) for(let i=0;i<N;i++) this.growth[i]=growth[i]??1;
+    this.growthTarget=new Float32Array(this.growth);
+    this.biteT=new Float32Array(cap); this.gulpCool=new Float32Array(cap);   // 刚吃过：短暂不抢，饲料分散到更多鱼
+    // 个性统计：均速/转向频率/水层 的指数滑动平均（identity.js 据此出标签）
+    this.pSpd=new Float32Array(cap).fill(0.5);
+    this.pTurn=new Float32Array(cap).fill(0.3);
+    this.pY=new Float32Array(cap).fill(0.5);
+    this.obsT=0;
     this.regroupT=0;
     this.baseScale=this.glbMode ? (this.fishes[0]?.scale.x??1) : 1;
+    this.glossK=-1; this.setGloss(gloss??0);
     this.update(0.016, { obstacles, pellets:[], excite:0, time:0, schools:[] });
+  }
+
+  // 克隆一条 GLB 鱼并接好动画（构造与 addFish 共用）
+  _glbFish(i){
+    const spec=this.spec;
+    const obj=SkeletonUtils.clone(this.template);
+    obj.userData.fishIndex=i;
+    // 仅无骨骼动画的静态模型（锦鲤）做程序化尾摆，每条鱼独立相位
+    const ph={ value:0 };
+    const sway=this.swimClip ? null : { phaseU:ph, L:spec.L, amp:spec.amp, waveK:spec.waveK };
+    obj.traverse(o=>{
+      if(!o.isMesh) return;
+      o.castShadow=true; o.frustumCulled=false;
+      const deco=m=>{
+        const c=m.clone();
+        c.side=THREE.DoubleSide;               // 鳍片是单面几何：双面渲染，避免背向时整片消失
+        decorateFishMaterial(c, { causticK:this.causticK, sway });
+        return c;
+      };
+      o.material=Array.isArray(o.material)?o.material.map(deco):deco(o.material);
+    });
+    if(sway) this.swimUniforms.push({ u:ph, off:rand(6.283) });
+    if(this.swimClip){
+      const mixer=new THREE.AnimationMixer(obj);
+      const swim=mixer.clipAction(this.swimClip);
+      swim.time=rand((this.swimClip.duration||1)*0.8);     // 个体相位错开
+      swim.play();
+      const fast=this.fastClip?mixer.clipAction(this.fastClip):null;
+      if(fast){ fast.time=rand(this.fastClip.duration*0.8); fast.setEffectiveWeight(0); fast.play(); }
+      const bite=this.biteClip?mixer.clipAction(this.biteClip):null;
+      if(bite) bite.setLoop(THREE.LoopOnce,1);
+      this.mixers.push(mixer);
+      this.actions.push({ swim, fast, bite });
+    }
+    this.fishes.push(obj);
+    this.group.add(obj);
+  }
+
+  // 亲密度入缸：原地追加一条（容量内），从小长大完成"入缸动画"；返回新鱼下标，满了返回 -1
+  addFish(){
+    const spec=this.spec, i=spec.count;
+    if(i>=this.capacity) return -1;
+    spec.count=i+1;
+    const p=new THREE.Vector3(rand(-0.6,0.6), spec.band[1]-0.18, rand(-0.3,0.3));
+    for(let k=0;k<8;k++){                       // 与出生时一样避开岩石
+      if(!this.spawnObstacles.some(o=>p.distanceTo(o.c)<o.r+0.12)) break;
+      p.set(rand(-1.3,1.3), spec.band[1]-0.18, rand(-0.4,0.4));
+    }
+    const a=rand(6.283);
+    this.pos.push(p);
+    this.vel.push(new THREE.Vector3(Math.sin(a),0,Math.cos(a)).multiplyScalar(spec.minSpeed*2));
+    this.smv.push(new THREE.Vector3(Math.sin(a),0,Math.cos(a)));
+    this.yaw.push(a); this.bank.push(0);
+    this.rest?.push({t:rand(4,10),on:0,dur:0,p:new THREE.Vector3()});
+    this.growth[i]=0.45; this.growthTarget[i]=1;   // 0.45 → 1：几秒内长大
+    this.biteT[i]=0; this.gulpCool[i]=rand(0.5,1.5);
+    this.pSpd[i]=0.5; this.pTurn[i]=0.3;
+    this.pY[i]=(p.y-0.35)/(TANK.waterY-0.35);
+    if(this.glbMode) this._glbFish(i);
+    else { this.mesh.count=i+1; this.finMesh.count=i+1; this.eyeMesh.count=(i+1)*2; }
+    return i;
+  }
+
+  // 亲密度的"光泽度"加成：环境反射与水膜清漆随 k 增强（0..1）
+  setGloss(k){
+    k=clamp(k,0,1);
+    if(k===this.glossK) return;
+    this.glossK=k;
+    if(this.glbMode){
+      this.group.traverse(o=>{
+        if(!o.isMesh) return;
+        (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{
+          if(!m || !('envMapIntensity' in m)) return;
+          m.userData._g0??={ env:m.envMapIntensity, cc:m.clearcoat??0 };
+          const g0=m.userData._g0;
+          m.envMapIntensity=g0.env*(1+0.9*k);
+          if('clearcoat' in m) m.clearcoat=Math.min(1, g0.cc+(1-g0.cc)*0.6*k);
+        });
+      });
+      return;
+    }
+    this.mesh.material.envMapIntensity=0.9+0.7*k;
+    this.mesh.material.clearcoat=Math.min(1,0.55+0.3*k);
+  }
+
+  /** 个体行为统计（归一化） @param {number} i */
+  persona(i){ return { spd:this.pSpd[i], turn:this.pTurn[i], layer:this.pY[i], obs:this.obsT }; }
+  /** 全群平均（个性标签的相对基准） */
+  personaAvg(){
+    const n=this.spec.count;
+    if(!n) return { spd:0, turn:0 };
+    let s=0,t=0;
+    for(let i=0;i<n;i++){ s+=this.pSpd[i]; t+=this.pTurn[i]; }
+    return { spd:s/n, turn:t/n };
   }
 
   setGrowth(i,g){ this.growthTarget[i]=g; }
@@ -187,6 +264,7 @@ export class School {
 
   update(dt, ctx){
     const spec=this.spec, N=spec.count;
+    this.obsT+=dt;
     const fear=ctx.fear??0, sleep=ctx.sleep??0, appetite=ctx.appetite??1, flow=ctx.current??0;
     // 摆频耦合游速（Strouhal 关系）：速度快 → 摆尾快；睡眠减缓、惊吓加快
     this.phaseU.value += dt*spec.beat
@@ -213,8 +291,7 @@ export class School {
 
     for(let i=0;i<N;i++){
       const p=this.pos[i], v=this.vel[i];
-      _acc.set(0,0,0); _sep.set(0,0,0); _ali.set(0,0,0); _coh.set(0,0,0);
-      let cnt=0;
+      _acc.set(0,0,0);
       // 底栖贴底停顿：定时趴沙 2~3 秒
       const R=this.rest?this.rest[i]:null;
       let resting=false;
@@ -228,17 +305,7 @@ export class School {
         if(R.on){ R.dur-=dt; resting=R.dur>0; if(!resting){ R.on=0; R.t=rand(9,18); } }
       }
 
-      for(let j=0;j<N;j++){                       // 同种：分离/对齐/聚合
-        if(j===i) continue;
-        const q=this.pos[j], d=p.distanceTo(q);
-        if(d<0.16) _sep.add(_v1.subVectors(p,q).multiplyScalar(1/Math.max(d,0.02)));
-        if(d<spec.schoolRad){ _ali.add(this.vel[j]); _coh.add(q); cnt++; }
-      }
-      if(cnt){
-        _acc.addScaledVector(_sep, spec.wSep);
-        _ali.divideScalar(cnt); _acc.addScaledVector(_v1.subVectors(_ali,v), spec.wAli*social);
-        _coh.divideScalar(cnt); _acc.addScaledVector(_v1.subVectors(_coh,p), spec.wCoh*social);
-      }
+      boidsAccumulate(i, this.pos, this.vel, spec, social, _acc, _sep, _ali, _coh);
       for(const other of ctx.schools){            // 异种：仅分离（体型悬殊时小鱼推不动大鱼）
         if(other===this) continue;
         if(other.spec.L < spec.L*0.7) continue;
@@ -247,12 +314,7 @@ export class School {
           if(d<0.2 && d>1e-4) _acc.addScaledVector(_v1.subVectors(p,q), 3.0/d);
         }
       }
-      {                                           // 漫游：低频缓变，直线巡航为主
-        const wT=ctx.time*0.3+i*2.1;
-        _acc.x+=Math.sin(wT*1.1+i*2.7)*wander*0.4;
-        _acc.y+=Math.sin(wT*0.5+i*1.7)*wander*0.1;
-        _acc.z+=Math.cos(wT*0.9+i*3.3)*wander*0.4;
-      }
+      wanderAcc(_acc, ctx.time, i, wander);       // 漫游：低频缓变，直线巡航为主
       if(flow && !resting){                       // 顶流（趋流性）：在溪流里转头迎着水流缓游，几乎原地"悬停"
         _acc.x+=(-Math.sign(flow)*minS*2.2-v.x)*Math.min(1.2,Math.abs(flow)*5)*social;
       }
@@ -266,32 +328,17 @@ export class School {
         else if(d<tr*0.5){ _acc.x+=dx/d*0.5; _acc.z+=dz/d*0.5; } // 防塌中心
         _acc.x+=(-dz/d)*0.24; _acc.z+=(dx/d)*0.24;             // 切向绕圈
       }
-      {                                           // 边界软约束
-        const m=0.14, k=7;
-        if(p.x<-1.5+m) _acc.x+=k*((-1.5+m)-p.x);
-        if(p.x> 1.5-m) _acc.x-=k*(p.x-(1.5-m));
-        if(p.z> 0.48-m) _acc.z-=k*(p.z-(0.48-m));
-        if(p.z<-0.48+m) _acc.z+=k*((-0.48+m)-p.z);
-        if(p.y>spec.band[1]-0.08) _acc.y-=k*(p.y-(spec.band[1]-0.08));
-        if(p.y<spec.band[0]+0.08) _acc.y+=k*((spec.band[0]+0.08)-p.y);
-      }
-      for(const o of ctx.obstacles){              // 障碍
-        const d=p.distanceTo(o.c), rr=o.r+0.13;
-        if(d<rr) _acc.add(_v1.subVectors(p,o.c).normalize().multiplyScalar((rr-d)*16));
-      }
+      boundaryAcc(p, spec.band, _acc);            // 边界软约束
+      obstacleAcc(p, ctx.obstacles, _acc);        // 障碍
       if(resting){                                // 趴底：忽略社交力，弹簧锚定沙面
         _acc.set(0,0,0);
         _acc.add(_v1.subVectors(R.p,p).multiplyScalar(3));
       }
       if(this.gulpCool[i]>0) this.gulpCool[i]-=dt;
       if(hunting && !resting && this.gulpCool[i]<=0){   // 觅食
-        let best=null, bd=senseR;
-        for(const pel of ctx.pellets){
-          if(pel.eaten) continue;
-          const d=p.distanceTo(pel.p);
-          if(d<bd){ bd=d; best=pel; }
-        }
+        const best=huntTarget(p, ctx.pellets, senseR);
         if(best){
+          const bd=p.distanceTo(best.p);
           _acc.addScaledVector(_v1.subVectors(best.p,p).normalize(), 2.6);
           if(bd<0.13 && ctx.feeder.consume(best)){ this._bite(i); ctx.onEat?.(this,i); }
         }
@@ -321,6 +368,12 @@ export class School {
       this.yaw[i]=yaw;
       const bankT=clamp(-yawRate*0.45,-0.6,0.6);
       this.bank[i]+=(bankT-this.bank[i])*Math.min(1,dt*5);
+      // 个性统计：均速/转向频率/水层 的滑动平均（≈12 秒时间常数，帧率无关）
+      // 水层按整个水柱归一（0.35≈沙面 .. 水面），底栖种的"底栖宅"才名副其实
+      const pk=1-Math.exp(-dt*0.085);
+      this.pSpd[i]+=(Math.min(s/spec.maxSpeed,1.5)-this.pSpd[i])*pk;
+      this.pTurn[i]+=(Math.min(Math.abs(yawRate),8)/8-this.pTurn[i])*pk;
+      this.pY[i]+=((p.y-0.35)/(TANK.waterY-0.35)-this.pY[i])*pk;
       this.growth[i]+=(this.growthTarget[i]-this.growth[i])*Math.min(1,dt*1.5);
       if(this.biteT[i]>0) this.biteT[i]=Math.max(0,this.biteT[i]-dt);
 

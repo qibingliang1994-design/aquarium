@@ -8,8 +8,11 @@ import { setCausticsEnabled } from './scene/caustics.js';
 import { createEffects } from './systems/effects.js';
 import { Feeder } from './systems/feeder.js';
 import { SoundEngine } from './systems/sound.js';
+import { createQuality } from './systems/quality.js';
 import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
+import { SPECIES_META } from './ui/encyclopedia.js';
+import { MILESTONES } from './systems/care.js';
 import { fishRim } from './fish/glb-style.js';
 import { createSceneStore } from './scenes/scene-store.js';
 import { TANK_STYLES, NATURAL_CAMS, isNatural } from './scenes/tank-styles.js';
@@ -18,6 +21,7 @@ import { createSceneEditor } from './editor/scene-editor.js';
 import { renderEncyclopediaPreviews, modelPreviewStats } from './ui/encyclopedia.js';
 import { createFishCard } from './ui/fish-card.js';
 import { createSettingsPanel } from './ui/settings-panel.js';
+import { installBackup } from './ui/backup.js';
 import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
@@ -27,7 +31,7 @@ import { installDebug } from './debug.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.0';
+const VERSION='v2.1';
 const $=id=>document.getElementById(id);
 
 const world=createWorld();
@@ -69,7 +73,7 @@ function toast(msg){
 }
 
 /* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
-const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care });
+const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care, getSceneId:()=>runtime.doc.id });
 let editor=null;
 const input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, feeder, sound,
   isBlocked:()=>editor?.active });
@@ -183,7 +187,13 @@ $('bHelp').addEventListener('click',()=>{ helpEl.hidden=false; });
 $('helpClose').addEventListener('click',()=>{ helpEl.hidden=true; });
 helpEl.addEventListener('click',e=>{ if(e.target===helpEl) helpEl.hidden=true; });
 const guideEl=$('encyclopedia');
-const openGuide=()=>{ guideEl.hidden=false; guideEl.setAttribute('aria-hidden','false'); requestAnimationFrame(renderEncyclopediaPreviews); };
+const syncBondHud=()=>{                       // 图鉴页脚的亲密度进度
+  const c=runtime.care, lv=c.bondLevel;
+  $('bondText').textContent = lv>=MILESTONES.length
+    ? `亲密度 Lv.${lv} · ${c.bondProgress()>=1 ? '鱼儿们容光焕发' : '鱼群渐渐泛起光泽'}`
+    : `亲密度 Lv.${lv} · 距离下一位新朋友 ${Math.round(c.bondProgress()*100)}%`;
+};
+const openGuide=()=>{ guideEl.hidden=false; guideEl.setAttribute('aria-hidden','false'); syncBondHud(); requestAnimationFrame(renderEncyclopediaPreviews); };
 const closeGuide=()=>{ guideEl.hidden=true; guideEl.setAttribute('aria-hidden','true'); };
 $('bGuide').addEventListener('click',openGuide);
 $('guideClose').addEventListener('click',closeGuide);
@@ -199,6 +209,12 @@ const settingsPanel=createSettingsPanel({ settings, onChange:(key,on)=>{
   saveSettings();
 }});
 addEventListener('pointerdown',()=>sound.ensure(),{ once:true });
+installBackup({ toast });                         // 设置弹层里的存档导出/导入
+
+/* ---------- PWA：生产构建注册 Service Worker（离线可玩），dev 不介入 ---------- */
+if(import.meta.env.PROD && 'serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('[pwa] 注册失败', err));
+}
 
 /* ---------- 拍照模式 / 全局按键 ---------- */
 const photo=createPhotoMode({ renderer, composer, hideTargets:['hud','dock','care','stats','hint'],
@@ -219,18 +235,50 @@ addEventListener('keydown',e=>{
  * ================================================================ */
 const clock=new THREE.Clock();
 const statsEl=$('stats'), careFill=$('careFill'), careText=$('careText');
-let fpsFrames=0, fpsTime=0, totalFrames=0, qualityChecked=false, lowQuality=false;
+let fpsFrames=0, fpsTime=0, realT=0;
+
+/* ---------- 自动画质：阶梯降级（1.5 → 1.25 → 1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
+const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
+const quality=createQuality({
+  baseRatio:Math.min(devicePixelRatio, coarsePointer?1.5:2),
+  onLevel(q){
+    renderer.setPixelRatio(q.ratio);
+    composer.setPixelRatio(q.ratio);
+    composer.setSize(innerWidth,innerHeight);
+    for(const g of tankGroup.children)
+      if(g.material===glassHigh || g.material===glassLow) g.material=q.glass==='low'?glassLow:glassHigh;
+    bloom.enabled=q.bloom;
+  },
+});
 
 const onEat=(school,i)=>{ school.setGrowth(i, runtime.care.eat(school.spec.id,i)); sound.crunch(); };
 function updateCareHud(){                // 圆环 pathLength=100：dashoffset = 100 - 百分比
   careFill.style.strokeDashoffset=`${100-Math.round(runtime.care.satiety*100)}`;
   careText.textContent=runtime.care.status();
 }
+/* ---------- 亲密度里程碑：攒够就发一条新鱼入缸（原地加，不重建鱼群） ---------- */
+function grantArrival(){
+  const care=runtime.care;
+  const present=SPECIES.filter(s=>runtime.doc.fish[s.id]>0);
+  const start=care.bondLevel%Math.max(1,present.length);
+  for(let k=0;k<present.length;k++){
+    const spec=present[(start+k)%present.length];
+    if(!runtime.addFish(spec.id)) continue;
+    care.takeMilestone();
+    runtime.apply(store.save(runtime.doc));   // 计数已同步到文档：差量应用不会重建鱼群
+    toast(`亲密度 Lv.${care.bondLevel}：一条${SPECIES_META[spec.id].name}入缸了`);
+    sound.arrival();
+    updateCareHud();
+    return;
+  }
+  care.takeMilestone();                       // 缸满了：里程碑转为光泽度
+}
 syncHud();
 scheduleThumb();
 
-renderer.setAnimationLoop(()=>{
-  const dt=Math.min(clock.getDelta(),0.05);
+function frame(){
+  const rawDt=clock.getDelta();
+  const dt=Math.min(rawDt,0.05);
   U.time.value+=dt;
   const t=U.time.value;
 
@@ -248,6 +296,8 @@ renderer.setAnimationLoop(()=>{
   // 兴奋度：有饲料 → 升到食欲上限（饿 → 疯抢，饱 → 懒散）
   const care=runtime.care;
   care.update(dt);
+  if(care.milestoneDue() && !editor.active && !switching) grantArrival();
+  runtime.setGloss(care.glossK());            // 里程碑领完后的余量换光泽（同值不重设）
   const appetite=care.appetite();
   const active=feeder.pellets;
   U.excite.value+=((active.length?appetite:0)-U.excite.value)*Math.min(1,dt*1.4);
@@ -282,25 +332,19 @@ renderer.setAnimationLoop(()=>{
     setTimeout(()=>l.remove(),900);
   }
 
-  // FPS / 自动降质
-  fpsFrames++; fpsTime+=dt; totalFrames++;
+  // FPS / 自动画质：按真实帧间隔统计（页面隐藏回来的大间隔重置窗口，不计入）
+  realT+=rawDt;
+  fpsFrames++;
+  if(rawDt<=0.5) fpsTime+=rawDt; else fpsFrames=0;
   if(fpsTime>=0.5){
     const fps=Math.round(fpsFrames/fpsTime);
-    statsEl.textContent=`${fps} FPS · ${runtime.fishTotal()} 条鱼 · ${lowQuality?'流畅模式':'高清模式'} · ${VERSION}`;
+    statsEl.textContent=`${fps} FPS · ${runtime.fishTotal()} 条鱼 · ${quality.label}模式 · ${VERSION}`;
     fpsFrames=0; fpsTime=0;
     updateCareHud();
+    quality.sample(fps, realT);   // 门槛/迟滞按真实秒计：低帧率下模拟时间会被 clamp 拖慢
   }
-  if(!qualityChecked && t>6){
-    qualityChecked=true;
-    if(totalFrames/t < 30){
-      lowQuality=true;
-      renderer.setPixelRatio(1);
-      composer.setSize(innerWidth,innerHeight);
-      for(const g of tankGroup.children.filter(c=>c.material===glassHigh)) g.material=glassLow;
-      bloom.enabled=false;
-    }
-  }
-});
+}
+renderer.setAnimationLoop(frame);
 
 addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;
@@ -311,4 +355,7 @@ addEventListener('resize',()=>{
 
 installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
   bloom, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
-  stopCamTween:()=>{ camTween=null; } });
+  stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
+  // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；
+  // 配合先把 window.requestAnimationFrame 换成 setTimeout 垫片使用
+  restartLoop(){ renderer.setAnimationLoop(null); renderer.setAnimationLoop(frame); } });

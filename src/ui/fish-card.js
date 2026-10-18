@@ -1,19 +1,21 @@
 import * as THREE from 'three';
 import { SPECIES_META } from './encyclopedia.js';
+import { schoolNames, personaTags } from '../entities/fish/identity.js';
 
 /* ================================================================
  * 识鱼：射线拾取（GLB 逐条模型 / 程序化 InstancedMesh）+ 资料卡片
+ * 卡片带个体身份：名字（getName，随场景确定性生成）与个性标签（真实行为统计）
  * ================================================================ */
-const CARD_W=284, CARD_H=236, CARD_MS=6000;
+const CARD_W=284, CARD_H=268, CARD_MS=6000;
 
-export function createFishCard({ camera, schools, getCare }){   // getCare：饲养存档随场景切换
-  const raycaster=new THREE.Raycaster(), ndc=new THREE.Vector2();
+export function createFishCard({ camera, schools, getCare, getSceneId }){   // getCare/getSceneId：随场景切换
+  const raycaster=new THREE.Raycaster();
   const $=id=>document.getElementById(id);
   const cardEl=$('fishCard');
   let timer=null;
 
   function pick(cx,cy){
-    ndc.set((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1);
+    const ndc=new THREE.Vector2((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1);
     raycaster.setFromCamera(ndc,camera);
     let best=null;
     for(const s of schools){
@@ -35,15 +37,18 @@ export function createFishCard({ camera, schools, getCare }){   // getCare：饲
   function show(hit,cx,cy){
     const s=hit.school, m=SPECIES_META[s.spec.id];
     const care=getCare(), grow=care.growthProgress(s.spec.id,hit.fid);
+    const name=getSceneId ? schoolNames(getSceneId(), s.spec.id, s.spec.count)[hit.fid] : null;
     cardEl.dataset.species=s.spec.id;           // 物种强调色（CSS）
-    $('fcTitle').textContent=m.name;
-    $('fcNo').textContent=`#${hit.fid+1}`;
+    $('fcTitle').textContent=name ?? m.name;
+    $('fcNo').textContent=`#${hit.fid+1}${name ? ' · '+m.name : ''}`;
     $('fcLatin').textContent=m.latin;
     $('fcZone').textContent=m.zone;
     $('fcSize').textContent=m.size;
     $('fcBehavior').textContent=m.behavior;
     $('fcDiet').textContent=m.diet;
     $('fcMood').textContent=care.status();
+    $('fcTags').innerHTML=personaTags(s.persona(hit.fid), s.personaAvg())
+      .map(t=>`<span class="tag">${t}</span>`).join('');
     $('fcGrowBar').style.width=`${Math.round(grow*100)}%`;
     $('fcGrowth').textContent=grow>=1 ? '已长成' : `${Math.round(grow*100)}%`;
     cardEl.hidden=false;

@@ -108,6 +108,43 @@
   - 新预设：荷兰草缸（超白开缸）、睡莲池塘、山间溪流、林间小河。存档记录 `seeded`（已发放过的预设 id），
     老玩家升级时只补发没发过的预设，删掉的不会复活；场景上限 16。
   - 岸上植被用低面数叶片（`ribbons` 的 `segs/cols`），自然水域整场约 33–39 万三角形（玻璃缸约 24 万）。
+- 牵挂系统（v2.1，DESIGN P2 交付）：
+  - 个体身份：新增 `src/entities/fish/identity.js`（纯逻辑、有单测）——鱼名按（场景 id + 物种 + 序号）
+    确定性生成、群内去重，无需持久化、刷新不变；个性标签由 `School` 每帧累计的均速 / 转向频率 / 水层
+    滑动平均（≈12 秒时间常数；水层按全水柱 0.35..waterY 归一，底栖种的"底栖宅"名副其实）映射为
+    「急性子/慢性子 · 好动/沉稳 · 上层巡游/中层漫游/底栖宅」，观察不足 8 秒显示「观察中」；
+    识鱼卡标题改为鱼名 + 「#序号 · 物种名」+ 三个个性标签胶囊。
+  - 亲密度：`care` 存档新增 `bond`（全缸累计吃到饲料数，只增不减、离线不衰减）与 `milestones`
+    （阈值 80/200/400/700/1100/1600 颗）。主循环轮询 `milestoneDue()`（编辑器或切场景期间暂缓），
+    `grantArrival()` → `runtime.addFish()` 原地入缸：School 构造按 `FISH_MAX` 预分配容量（实例矩阵、
+    成长/咬食/个性统计数组），`addFish()` 追加一条从 0.45 长到 1 的鱼当入缸动画，**不重建鱼群**；
+    计数同步进场景文档并 `store.save` 持久化，配三音琶音提示。全部里程碑领完后 bond 转为光泽度
+    （`School.setGloss()`：envMapIntensity / clearcoat 随 k 增强）。图鉴页脚显示亲密度等级与进度。
+  - 调试钩子新增：`nameOf` / `personaOf` / `bond` / `addFish` / `restartLoop`（隐藏页面 rAF 停摆时
+    重启 three 动画循环，配合把 `window.requestAnimationFrame` 换成 setTimeout 垫片）。
+- 存档备份（v2.1）：设置弹层新增「导出 / 导入存档」。`src/ui/backup.js` 把 localStorage 里全部
+  `aquarium.*` 键（场景与缩略图、每缸饲养存档、设置）收成一份 JSON 下载；导入时校验
+  （`validateSave`：magic 头 + 只收字符串值的 aquarium.* 键）后**整体替换**（先清后写，避免新旧场景
+  混杂），两步确认（选文件后再点一次按钮，5 秒不点自动复位）避免误触，完成后自动刷新。
+  收集 / 校验 / 应用是纯函数，`tests/backup.test.js` 覆盖（含导出→导入往返一致）。
+- 自动画质 v2（v2.1）：`src/systems/quality.js` 纯状态机（有单测）——5 档阶梯
+  （高清 → 1.5 → 1.25 → 1+低配玻璃 → 关泛光），每 0.5 秒按**真实帧间隔**喂一次 FPS；
+  连续 3 秒 <32 降一级，连续 10 秒 >50 升一级（迟滞防抖）。开场 4 秒不采样；
+  页面隐藏回来的大间隔（>0.5s）只重置 FPS 窗口。门槛钟用真实时间而非模拟时间
+  （低帧率下模拟时间会被 dt clamp 拖慢）。渲染副作用集中在 main 的 onLevel 回调
+  （pixelRatio + composer.setPixelRatio + 玻璃材质切换 + bloom 开关）。
+  触屏设备（pointer:coarse）像素比上限从 2 收到 1.5（setup.js 与 quality 基准一致）。
+- PWA + 移动端（v2.1）：`public/manifest.webmanifest`（any + maskable 图标，192/512）；
+  `public/sw.js` —— 页面导航网络优先（保证更新），静态资源缓存优先 + 后台更新
+  （缓存写入必须 await 在 respondWith 内，浮动 promise 会在 SW 空闲时被丢弃）；
+  仅生产构建注册（`import.meta.env.PROD`，且直接注册不等 load——顶层 await 加载 GLB 时 load 早已触发）。
+  图标由 `scripts/gen-icons.mjs` 程序生成（纯 Node zlib 手写 PNG，`npm run icons` 重新生成）。
+  窄屏样式补 ≤420px 档（dock 收紧到 42px 按钮不再溢出 390px 视口）。
+- 鱼群转向纯逻辑抽取（v2.1）：`src/entities/fish/steering.js`——同种 Boids 累积、漫游、边界弹簧、
+  障碍推离、觅食选靶从 `School.update` 逐行原样抽出为纯函数（传入向量原地写、零分配），
+  `School` 只留编排；`tests/steering.test.js` 在 Node 里直接验证力学方向与阈值
+  （分离对推、对齐朝均值、social 只削弱对齐聚合、schoolRad 外无力、边界/障碍方向、
+  觅食跳过已吃与超感知半径）。抽取后浏览器回归：游动/喂食/敲玻璃惊吓均正常。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

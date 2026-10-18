@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createCare } from '../src/systems/care.js';
+import { createCare, MILESTONES } from '../src/systems/care.js';
 
 const KEY = 'aquarium.care';
 const SPECIES = [{ id: 'gold', count: 4 }, { id: 'tetra', count: 2 }];
@@ -100,5 +100,54 @@ describe('createCare', () => {
     const saved = JSON.parse(store.get(KEY));
     expect(saved.satiety).toBeCloseTo(care.satiety, 6);
     expect(saved.fed.gold).toHaveLength(4);
+  });
+
+  it('eat 支持新入缸个体的下标（成长数组自动扩容）', () => {
+    stubBrowser();
+    const care = createCare(SPECIES);             // gold 初始 4 条
+    care.eat('gold', 4);
+    expect(care.growthProgress('gold', 4)).toBeCloseTo(1 / 30, 5);
+    expect(care.growthArray('gold')).toHaveLength(5);
+  });
+
+  it('亲密度：bond 只增不减，里程碑到达/领取与进度', () => {
+    stubBrowser();
+    const care = createCare(SPECIES);
+    expect(care.bondLevel).toBe(0);
+    expect(care.milestoneDue()).toBe(false);
+    for (let k = 0; k < 80; k++) care.eat('gold', 0);
+    expect(care.milestoneDue()).toBe(true);
+    expect(care.bondProgress()).toBeCloseTo(1, 3);
+    expect(care.takeMilestone()).toBe(true);
+    expect(care.bondLevel).toBe(1);
+    expect(care.milestoneDue()).toBe(false);
+    expect(care.bondProgress()).toBeCloseTo(0, 3);   // (80-80)/(200-80)
+    expect(care.glossK()).toBe(0);
+  });
+
+  it('里程碑全部领完后 bond 转为光泽度', () => {
+    stubBrowser();
+    const care = createCare(SPECIES);
+    const total = MILESTONES[MILESTONES.length - 1] + 300;
+    for (let k = 0; k < total; k++) care.eat('gold', 0);
+    while (care.milestoneDue()) care.takeMilestone();
+    expect(care.bondLevel).toBe(MILESTONES.length);
+    expect(care.glossK()).toBeCloseTo(300 / 600, 3);
+    expect(care.bondProgress()).toBeCloseTo(0.5, 3);
+  });
+
+  it('亲密度与里程碑随存档持久化（离线不衰减）', () => {
+    const store = stubBrowser();
+    const care = createCare(SPECIES);
+    for (let k = 0; k < 80; k++) care.eat('gold', 0);
+    care.takeMilestone();
+    care.update(3);                               // 触发落盘
+    const saved = JSON.parse(store.get(KEY));
+    expect(saved.bond).toBe(80);
+    expect(saved.milestones).toBe(1);
+    vi.setSystemTime(new Date('2026-10-16T14:00:00Z'));   // 两小时后重开
+    const again = createCare(SPECIES);
+    expect(again.bondLevel).toBe(1);
+    expect(again.milestoneDue()).toBe(false);
   });
 });

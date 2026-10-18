@@ -8,7 +8,7 @@ import { buildItem, disposeItem } from './catalog.js';
 import { THEMES } from './themes.js';
 import { TANK_STYLES } from './tank-styles.js';
 import { careKey } from './scene-store.js';
-import { cloneDoc } from './scene-doc.js';
+import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
 
 /* ================================================================
  * 场景运行时：把场景文档落到 three 场景里，并做增量更新
@@ -118,7 +118,8 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
       const prev=old.get(spec.id);
       if(prev && !reset && prev.spec.count===spec.count){ next.push(prev); old.delete(spec.id); continue; }
       if(spec.count<=0) continue;
-      const s=new School(spec, obstacles, glbMap[spec.id], { growth:care.growthArray(spec.id) });
+      const s=new School(spec, obstacles, glbMap[spec.id],
+        { growth:care.growthArray(spec.id), capacity:FISH_MAX[spec.id] ?? spec.count, gloss:care.glossK() });
       tankGroup.add(s.group);
       next.push(s);
     }
@@ -153,10 +154,24 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     moveItem(item){
       const e=live.get(item.id);
       if(!e) return;
-      e.item={ ...e.item, x:item.x, z:item.z, rot:item.rot, s:item.s };
+      e.item={ ...item, x:item.x, z:item.z, rot:item.rot, s:item.s };
       place(e);
       refreshDerived();
     },
     fishTotal: () => schools.reduce((a,s)=>a+s.spec.count, 0),
+    /** 亲密度发鱼：原地给该物种加一条（不重建鱼群），并同步文档计数；
+     * 调用方负责 store.save 持久化。返回命中的鱼群，失败返回 null */
+    addFish(speciesId){
+      const s=schools.find(x=>x.spec.id===speciesId);
+      if(!s || doc.fish[speciesId]==null) return null;
+      if(s.spec.count>=s.capacity || fishTotalOf(doc)>=FISH_TOTAL_MAX) return null;
+      const i=s.addFish();
+      if(i<0) return null;
+      doc.fish[speciesId]=s.spec.count;
+      return s;
+    },
+    /** 光泽度变化时刷新全部鱼群（School 内部去重，同值不重设材质） */
+    setGloss(k){ for(const s of schools) s.setGloss(k); },
   };
 }
+const fishTotalOf=d=>Object.values(d.fish).reduce((a,n)=>a+n,0);

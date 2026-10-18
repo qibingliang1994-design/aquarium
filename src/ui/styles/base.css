@@ -119,9 +119,16 @@ button{font-family:inherit}
   #hud{top:16px;left:16px}
   .brand-sub{display:none}
   #care{top:14px;right:14px;padding-right:12px}
-  #dock{bottom:14px;padding:5px}
+  #dock{bottom:14px;padding:5px;gap:0}
   .dock-btn{min-width:46px;height:46px;padding:0 6px}
   .dock-btn span{display:none}
   #hint{bottom:76px;font-size:11px;letter-spacing:.06em}
   #stats{display:none}
+}
+@media (max-width:420px){                      /* 手机竖屏：dock 进一步收紧 */
+  #dock{gap:0;padding:4px}
+  .dock-btn{min-width:42px;height:44px;padding:0 3px}
+  .dock-btn.primary{margin-right:2px}
+  .dock-sep{margin:0 2px}
+  #hint{bottom:68px}
 }

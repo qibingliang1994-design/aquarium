@@ -10,7 +10,9 @@ import { createGradePass } from './grading.js';
 export function createWorld(){
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// 触屏设备（手机/平板）GPU 余量小：像素比上限从 2 收到 1.5，交给自动画质阶梯细调
+const coarse = matchMedia?.('(pointer:coarse)').matches ?? false;
+renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;

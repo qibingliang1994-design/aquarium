@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { causticsTex, causticsOn } from '../scene/caustics.js';
@@ -61,17 +62,17 @@ const CREASE = THREE.MathUtils.degToRad(55);
 // 逆光轮廓：全部鱼共享，昼夜切换时由 applyNight 调节
 export const fishRim = { k:{ value:0.42 }, color:{ value:new THREE.Color(0.42,0.74,0.9) } };
 
-const srgb = hex => new THREE.Color(hex);
+const srgb = (/** @type {any} */ hex) => new THREE.Color(hex);
 
 // toCreasedNormals 以 0.01 精度哈希顶点位置；Quaternius 网格本地尺寸仅 ~0.02（节点缩放 100），
 // 直接用会把不相干的顶点并到一起——先放大到 ~1000 单位再算，算完缩回
-function smoothNormals(geo){
+function smoothNormals(/** @type {any} */ geo){
   geo.computeBoundingBox();
   const k = 1000/(geo.boundingBox.getSize(new THREE.Vector3()).length() || 1);
   return toCreasedNormals(geo.clone().scale(k,k,k), CREASE).scale(1/k,1/k,1/k);
 }
 
-function makeSkin(old, look){
+function makeSkin(/** @type {any} */ old, /** @type {any} */ look){
   const m = new THREE.MeshPhysicalMaterial({
     name: old.name,
     color: look.color ? srgb(look.color) : old.color.clone(),
@@ -93,11 +94,11 @@ function makeSkin(old, look){
 }
 
 // 计算模型"世界向上"在网格局部坐标中的方向与范围（用于腹→背渐变）
-function verticalFrame(root){
+function verticalFrame(/** @type {any} */ root){
   root.updateMatrixWorld(true);
-  let lo = Infinity, hi = -Infinity, up = null;
+  /** @type {any} */ let up = null; let lo = Infinity, hi = -Infinity;
   const q = new THREE.Quaternion(), v = new THREE.Vector3();
-  root.traverse(o=>{
+  root.traverse((/** @type {any} */ o)=>{
     if(!o.isMesh || /Eyes/i.test(o.material?.name ?? '')) return;
     if(!up){ o.matrixWorld.decompose(v,q,v); up = new THREE.Vector3(0,1,0).applyQuaternion(q.invert()); }
     const p = o.geometry.attributes.position;
@@ -107,12 +108,12 @@ function verticalFrame(root){
 }
 
 // 加载后调用一次（模板上），克隆体共享几何、复制材质与 userData
-export function prepareFishModel(root, speciesId){
+export function prepareFishModel(/** @type {any} */ root, /** @type {string} */ speciesId){
   if(root.userData.fishStyled) return root;
   root.userData.fishStyled = true;
-  const palette = PALETTES[speciesId];
+  const palette = (/** @type {Record<string, any>} */ (PALETTES))[speciesId];
   if(!palette){                           // 贴图模型（锦鲤）：压住原模型过强的镜面，保留贴图细节
-    root.traverse(o=>{
+    root.traverse((/** @type {any} */ o)=>{
       if(!o.isMesh || !o.material?.isMeshStandardMaterial) return;
       const old = o.material;
       const m = old.isMeshPhysicalMaterial ? old : new THREE.MeshPhysicalMaterial({
@@ -131,12 +132,12 @@ export function prepareFishModel(root, speciesId){
   }
   const frame = verticalFrame(root);
   const done = new Map();
-  root.traverse(o=>{
+  root.traverse((/** @type {any} */ o)=>{
     if(!o.isMesh) return;
     if(!done.has(o.geometry)) done.set(o.geometry, smoothNormals(o.geometry));
     o.geometry = done.get(o.geometry);
     const old = o.material, name = old.name ?? '';
-    const look = /Eyes/i.test(name) ? EYE : (palette.find(([re])=>re.test(name))?.[1] ?? {});
+    const look = /Eyes/i.test(name) ? EYE : (palette.find((/** @type {any} */ entry)=>entry[0].test(name))?.[1] ?? {});
     const m = makeSkin(old, look);
     if(/Eyes/i.test(name)){ m.clearcoat = 1; m.clearcoatRoughness = 0.02; m.iridescence = 0; }
     m.userData.frame = { up:frame.up.toArray(), lo:frame.lo, hi:frame.hi };
@@ -147,12 +148,13 @@ export function prepareFishModel(root, speciesId){
 
 /* ---------- 着色器装饰：渐变 / 霓虹 / 焦散 / 逆光 / （无动画模型）尾摆 ----------
  * opts: { causticK?:{value}, sway?:{ phaseU, L, amp, waveK } } */
+/** @param {any} mat @param {any} [opts] */
 export function decorateFishMaterial(mat, opts={}){
-  const paint = mat.userData.paint, frame = mat.userData.frame;
+  const ud=(/** @type {any} */ (mat.userData)); const paint = ud.paint, frame = ud.frame;
   const { causticK, sway } = opts;
   const flags = `${paint?'g':''}${causticK?'c':''}${sway?'s':''}`;
   mat.customProgramCacheKey = ()=> `fishfx_${flags}`;
-  mat.onBeforeCompile = sh=>{
+  mat.onBeforeCompile = (/** @type {any} */ sh)=>{
     Object.assign(sh.uniforms, { uRimK:fishRim.k, uRimColor:fishRim.color });
     let vHead = 'varying float vYN;\n', vBody = '';
     let fHead = 'uniform float uRimK; uniform vec3 uRimColor; varying float vYN;\n';

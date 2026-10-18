@@ -145,6 +145,31 @@
   `School` 只留编排；`tests/steering.test.js` 在 Node 里直接验证力学方向与阈值
   （分离对推、对齐朝均值、social 只削弱对齐聚合、schoolRad 外无力、边界/障碍方向、
   觅食跳过已吃与超感知半径）。抽取后浏览器回归：游动/喂食/敲玻璃惊吓均正常。
+- 锦鲤骨骼动画：用户提供的 `锦鲤.glb`（81 MB / 150 万三角面 / 无骨骼）
+  在 Blender 里减面到 33k 三角面、贴图压到 2048² 基础色与法线 + 1024² 金属-粗糙度，
+  并绑定 9 根骨骼（`root`→`spine1..3`→`caudal`→`tail` + 左右胸鳍 `finR/finL` + 下颌 `jaw`），
+  烘焙 `Swimming_Normal`（2.3 s）/`Swimming_Fast`（1.07 s）/`Attack`（0.63 s）三段动画，
+  幅度与相位先实测 Quaternius 鱼的 Main1..Main6 通道（巡游尾摆 ±17.8°、头部反摆 ±4.2°、
+  头→尾行波每骨滞后 ~35°；冲刺尾摆 ±27.5°），再按锦鲤骨骼映射重烘焙，观感与其他鱼一致；
+  导出为 2.5 MB 的 `public/fish-models/species/species-koi.glb`（朝向 +Z，与 Quaternius 模型一致）。
+  School 只按现有 `swim/fast/bite` 片段名取用，无需改行为；额外加了同贴图锦鲤的冷暖微调
+  （避免两条完全一样）和 `prepareFishModel` 里对 `KHR_materials_specular=2.0` 的压高光处理，
+  否则 ACES + 环境光会把白斑冲成高光。图鉴预览原本就会播放第一段游动动画，锦鲤现在也能动。
+  原 81 MB 源文件移出 `public/`，构建产物不再携带。
+- 鱼群统一网格（v2.1.1）：`steering.js` 新增 `createFishGrid`/`rebuildFishGrid`——全体鱼共享的
+  统一网格（0.7 单元格，条目对象与单元格数组全复用），主循环每帧重建并注入 `ctx.grid`；
+  同种 Boids 与异种分离提供线性（默认/单测参照）与网格两条等价路径（单测验证输出一致，
+  含贴近场景与查询半径边界），pair 距离全部改用平方比较（分离/贴近时才开根号）。
+- 启动渐进加载（v2.1.1）：`loadSpeciesModels` 支持 `only/skip`——启动只等"当前场景用到的物种"
+  GLB（空缸/少物种场景秒开），其余后台补载进同一个 map，后续建 School 自然用上；
+  调试钩子 `glbLoaded`。
+- 类型检查转正（v2.1.1，分五批）：src 全部模块补 `// @ts-check` + JSDoc（唯一例外
+  `fish/glb-style.js`，留待锦鲤调色改动合入后转正）；安装 `@types/three@0.180`（否则
+  checkJs 会直接去检查 three 的 JS 源码）与 `@types/chai`；`species.js` 导出 `FishSpec`
+  typedef、`encyclopedia.js` 导出 `SpeciesMeta`；UI 层 `$` 取元素改为缺失即抛错（启动期
+  快速失败）；tests 不参与类型检查（由 vitest 运行时验证）。中途一次自动标注脚本事故
+  （双括号/坏默认参）以回退到提交点 + 纯手工重做收场，教训：JSDoc 参数标注的正确形式是
+  `f(/** @type {X} */ x)`，带默认值的参数不能写成 `[x=v]`（那是解构）。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

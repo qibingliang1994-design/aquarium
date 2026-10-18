@@ -1,6 +1,9 @@
 # 依赖
 node_modules/
 
+# 锦鲤骨骼动画的 Blender 构建中间文件（源模型 + 脚本 + 预览帧）
+_koi_build/
+
 # 构建产物
 dist/
 dist-ssr/

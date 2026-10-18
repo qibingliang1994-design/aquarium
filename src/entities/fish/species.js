@@ -1,7 +1,39 @@
+// @ts-check
 import * as THREE from 'three';
 import { sstep, vnoise } from '../../utils.js';
 
 /* ---------- 鱼种定义 ---------- */
+
+/** 一条鱼种的数据形状（School/编辑器/图鉴共用；count 只是默认值，实况数量来自场景文档）
+ * @typedef {Object} FishSpec
+ * @property {string} id
+ * @property {number} count 默认条数
+ * @property {number} L 目标体长（米）
+ * @property {number} H 目标体高
+ * @property {string} [glb] GLB 路径（species-models 的 FILES 才是加载真源）
+ * @property {[number,number][]} profileH 侧视轮廓 [位置0..1, 高度0..1]
+ * @property {[number,number][]} profileW 顶视轮廓
+ * @property {number} topK @property {number} botK 背/腹缩放
+ * @property {number} tailLen @property {number} tailSpread @property {number} tailFork
+ * @property {boolean} [tailVeil]
+ * @property {number} dorsalH @property {number} dorsalL @property {number} analH
+ * @property {number} analL @property {number} pectL
+ * @property {number} finOpacity @property {number} finColor
+ * @property {number} rough @property {number} metal @property {number} scaleI
+ * @property {number} irid @property {number} scaleTiles @property {number} eyeSize
+ * @property {number} amp @property {number} beat @property {number} waveK 游动摆尾参数
+ * @property {number} schoolRad @property {number} wSep @property {number} wAli @property {number} wCoh Boids 权重
+ * @property {number} minSpeed @property {number} maxSpeed @property {number} wander
+ * @property {number} [turn] 转向平滑系数
+ * @property {[number,number]} band 活动水层 y 范围
+ * @property {number} senseR 觅食感知半径
+ * @property {boolean} [hunts] 是否参与抢食
+ * @property {boolean} [bottomRest] 底栖趴沙停顿
+ * @property {[number,number,number,number]} [territory] 领地 [x,y,z,半径]
+ * @property {(u:number,c:number,y:number,z:number,out:THREE.Color)=>void} [paint] 程序化体色
+ */
+
+/** @type {FishSpec[]} */
 export const SPECIES = [
   { // 霓虹脂鲤：银色 + 霓虹蓝条纹 + 红色后腹
     id:'tetra', count:24, L:0.17, H:0.052, glb:'fish-models/species/species-tetra.glb',

@@ -1,3 +1,4 @@
+// @ts-check
 import { THEMES, THEME_IDS } from '../scenes/themes.js';
 import { fishTotal } from '../scenes/scene-doc.js';
 import { TANK_STYLES } from '../scenes/tank-styles.js';
@@ -7,18 +8,20 @@ import { TANK_STYLES } from '../scenes/tank-styles.js';
  * 所有写操作经 store；切换/编辑交给 main 提供的回调
  * ================================================================ */
 
-const $=id=>document.getElementById(id);
+const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
+/** @param {{ store:any, onSwitch:any, onEdit:any, toast:any }} opts */
 export function createScenePicker({ store, onSwitch, onEdit, toast }){
   const modal=$('scenes'), grid=$('sceneGrid');
-  let confirmId=null, renameId=null;
+  /** @type {string|null} */ let confirmId=null;
+  /** @type {string|null} */ let renameId=null;
 
   const open=()=>{ confirmId=null; renameId=null; render(); modal.hidden=false; };
   const close=()=>{ modal.hidden=true; };
   $('scenesClose').addEventListener('click', close);
   modal.addEventListener('click',e=>{ if(e.target===modal) close(); });
 
-  const btn=(label, cls, fn, title)=>{
+  const btn=(/** @type {string} */ label, /** @type {string} */ cls, /** @type {()=>void} */ fn, /** @type {string} */ title)=>{
     const b=document.createElement('button');
     b.type='button'; b.className=`chip-btn ${cls}`; b.textContent=label;
     if(title) b.title=title;
@@ -26,7 +29,7 @@ export function createScenePicker({ store, onSwitch, onEdit, toast }){
     return b;
   };
 
-  function card(doc){
+  function card(/** @type {any} */ doc){
     const active=doc.id===store.activeId, theme=THEMES[doc.theme] ?? THEMES.fresh;
     const el=document.createElement('article');
     el.className=`scene-card${active?' active':''}`;
@@ -48,7 +51,7 @@ export function createScenePicker({ store, onSwitch, onEdit, toast }){
     if(renameId===doc.id){
       const input=document.createElement('input');
       input.maxLength=16; input.value=doc.name;
-      const done=ok=>{
+      const done=(/** @type {boolean} */ ok)=>{
         if(ok && store.rename(doc.id, input.value)) onRenamed(doc.id);
         renameId=null; render();
       };
@@ -106,7 +109,7 @@ export function createScenePicker({ store, onSwitch, onEdit, toast }){
     return el;
   }
 
-  let onRenamed=()=>{};
+  /** @type {(id:string)=>void} */ let onRenamed=()=>{};
   function render(){
     grid.replaceChildren(...store.list().map(card), newCard());
   }
@@ -114,7 +117,7 @@ export function createScenePicker({ store, onSwitch, onEdit, toast }){
   return {
     open, close,
     get isOpen(){ return !modal.hidden; },
-    /** 当前场景改名后让 HUD 同步 */
+    /** 当前场景改名后让 HUD 同步 @param {(id:string)=>void} fn */
     set onRenamed(fn){ onRenamed=fn; },
   };
 }

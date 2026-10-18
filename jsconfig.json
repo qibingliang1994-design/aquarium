@@ -1,5 +1,5 @@
 {
-  // 渐进式类型检查：全局 checkJs 关闭，文件顶部写 `// @ts-check` 的模块才参与检查
+  // 类型检查：按文件 opt-in（// @ts-check + JSDoc），已转正的文件见 CLAUDE.md；tests 由 vitest 验证
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -10,7 +10,7 @@
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": []
+    "types": ["vite/client"]
   },
   "include": ["src/**/*.js", "tests/**/*.js"]
 }

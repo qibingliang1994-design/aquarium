@@ -6,7 +6,13 @@ import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, hu
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { sandHeight, TANK } from '../../scene/tank.js';
+// @ts-check
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+/** @typedef {import('./species.js').FishSpec} FishSpec */
+/** @typedef {{ c:THREE.Vector3, r:number }} Obstacle */
+/** @typedef {{ template:THREE.Object3D, animations:any[] }} GlbData */
+/** @typedef {{ growth?:number[], capacity?:number, gloss?:number }} SchoolOpts */
 
 /* ---------- 鱼群（Boids + 转弯侧倾） ---------- */
 const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
@@ -19,7 +25,24 @@ const REGROUP_SECS=6;               // 惊散后向鱼群中心回聚的时长
 const _center=new THREE.Vector3();
 
 export class School {
+  /** GLB 模式与程序化模式的实例字段在两个分支里分别赋值，统一声明避免模式耦合的类型纠缠 */
+  /** @type {any} */ mesh;          // 程序化：体网格 InstancedMesh
+  /** @type {any} */ finMesh;
+  /** @type {any} */ eyeMesh;
+  /** @type {any} */ template;      // GLB 模板与动画片段（GLB 模式）
+  /** @type {any} */ swimClip=null;
+  /** @type {any} */ fastClip=null;
+  /** @type {any} */ biteClip=null;
+  /** @type {any[]} */ swimUniforms=[];
+  /** @type {{ value:number }} */ phaseU={ value:0 };
+  /** @type {any} */ causticK=null;
+  /** @type {any} */ rest=null;
+  /** @type {THREE.Object3D[]} */ fishes=[];
+  /** @type {THREE.AnimationMixer[]} */ mixers=[];
+  /** @type {{ swim:any, fast:any, bite:any }[]} */ actions=[];
+
   // capacity：可容纳的最大条数（预分配实例/状态数组，addFish 原地入缸不用重建）
+  /** @param {FishSpec} spec @param {Obstacle[]} obstacles @param {GlbData|null} glbData @param {SchoolOpts} [opts] */
   constructor(spec, obstacles, glbData, { growth, capacity, gloss }={}){
     this.spec=spec;
     this.glbMode=!!glbData;
@@ -30,13 +53,13 @@ export class School {
     this.causticK=null;
     if(this.glbMode){
       // —— 骨骼动画模型模式 ——
-      const clips=glbData.animations||[];
+      const clips=(/** @type {GlbData} */ (glbData)).animations||[];
       // 无动画模型（如静态雕塑）也能跑：仅靠 Boids 位移
-      this.template=glbData.template;
-      this.swimClip=clips.find(c=>/Swimming_Normal/i.test(c.name))
-        ||clips.find(c=>/swim/i.test(c.name))||clips[0]||null;
-      this.fastClip=clips.find(c=>/Swimming_Fast/i.test(c.name))||null;   // 受惊冲刺
-      this.biteClip=clips.find(c=>/Attack/i.test(c.name))||null;          // 咬食
+      this.template=(/** @type {GlbData} */ (glbData)).template;
+      this.swimClip=clips.find((/** @type {any} */ c)=>/Swimming_Normal/i.test(c.name))
+        ||clips.find((/** @type {any} */ c)=>/swim/i.test(c.name))||clips[0]||null;
+      this.fastClip=clips.find((/** @type {any} */ c)=>/Swimming_Fast/i.test(c.name))||null;   // 受惊冲刺
+      this.biteClip=clips.find((/** @type {any} */ c)=>/Attack/i.test(c.name))||null;          // 咬食
       this.fishes=[]; this.mixers=[]; this.actions=[]; this.swimUniforms=[];
       this.phaseU={ value: rand(10) };
       this.causticK={ value:0.22 };            // 鱼体焦散强度（applyNight 调节）
@@ -67,7 +90,7 @@ export class School {
     const swimCompile=matBody.onBeforeCompile;
     injectCaustics(matBody, 0.22, 'fish_'+spec.id);
     const causticCompile=matBody.onBeforeCompile;
-    matBody.onBeforeCompile=(sh)=>{ causticCompile(sh); swimCompile(sh); };
+    matBody.onBeforeCompile=(/** @type {any} */ sh)=>{ (/** @type {any} */ (causticCompile))(sh); (/** @type {any} */ (swimCompile))(sh); };
     matBody.customProgramCacheKey=()=> 'swimcau_'+spec.id;
     const depthMat=new THREE.MeshDepthMaterial({ depthPacking:THREE.RGBADepthPacking });
     injectSwim(depthMat, spec, this.phaseU, spec.id, false);
@@ -128,17 +151,17 @@ export class School {
   }
 
   // 克隆一条 GLB 鱼并接好动画（构造与 addFish 共用）
-  _glbFish(i){
+  _glbFish(/** @type {number} */ i){
     const spec=this.spec;
     const obj=SkeletonUtils.clone(this.template);
     obj.userData.fishIndex=i;
     // 无骨骼动画的静态模型才做程序化尾摆，每条鱼独立相位
     const ph={ value:0 };
     const sway=this.swimClip ? null : { phaseU:ph, L:spec.L, amp:spec.amp, waveK:spec.waveK };
-    obj.traverse(o=>{
+    obj.traverse((/** @type {any} */ o)=>{
       if(!o.isMesh) return;
       o.castShadow=true; o.frustumCulled=false;
-      const deco=m=>{
+      const deco=(/** @type {any} */ m)=>{
         const c=m.clone();
         c.side=THREE.DoubleSide;               // 鳍片是单面几何：双面渲染，避免背向时整片消失
         if(spec.id==='koi'){                   // 同一张贴图克隆出多条锦鲤：冷暖微调，避免"复制粘贴"
@@ -193,14 +216,14 @@ export class School {
   }
 
   // 亲密度的"光泽度"加成：环境反射与水膜清漆随 k 增强（0..1）
-  setGloss(k){
+  setGloss(/** @type {number} */ k){
     k=clamp(k,0,1);
     if(k===this.glossK) return;
     this.glossK=k;
     if(this.glbMode){
-      this.group.traverse(o=>{
+      this.group.traverse((/** @type {any} */ o)=>{
         if(!o.isMesh) return;
-        (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{
+        (Array.isArray(o.material)?o.material:[o.material]).forEach((/** @type {any} */ m)=>{
           if(!m || !('envMapIntensity' in m)) return;
           m.userData._g0??={ env:m.envMapIntensity, cc:m.clearcoat??0 };
           const g0=m.userData._g0;
@@ -215,7 +238,7 @@ export class School {
   }
 
   /** 个体行为统计（归一化） @param {number} i */
-  persona(i){ return { spd:this.pSpd[i], turn:this.pTurn[i], layer:this.pY[i], obs:this.obsT }; }
+  persona(/** @type {number} */ i){ return { spd:this.pSpd[i], turn:this.pTurn[i], layer:this.pY[i], obs:this.obsT }; }
   /** 全群平均（个性标签的相对基准） */
   personaAvg(){
     const n=this.spec.count;
@@ -225,16 +248,16 @@ export class School {
     return { spd:s/n, turn:t/n };
   }
 
-  setGrowth(i,g){ this.growthTarget[i]=g; }
+  setGrowth(/** @type {number} */ i,/** @type {number} */ g){ this.growthTarget[i]=g; }
 
   // 场景切换/改鱼群时释放：GLB 模式只释放克隆出来的材质（几何与模板共享），程序化模式全部释放
   dispose(){
     this.group.removeFromParent();
     if(this.glbMode){
       for(const m of this.mixers) m.stopAllAction();
-      for(const f of this.fishes) f.traverse(o=>{
+      for(const f of this.fishes) f.traverse((/** @type {any} */ o)=>{
         if(!o.isMesh) return;
-        (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());
+        (Array.isArray(o.material)?o.material:[o.material]).forEach((/** @type {any} */ m)=>m.dispose());
       });
       return;
     }
@@ -244,7 +267,7 @@ export class School {
   }
 
   // 敲玻璃惊吓：背离敲击点的冲量（越近越猛），趴底的鱼一并惊醒
-  startle(point){
+  startle(/** @type {THREE.Vector3} */ point){
     const spec=this.spec;
     this.regroupT=REGROUP_SECS;
     for(let i=0;i<spec.count;i++){
@@ -259,14 +282,14 @@ export class School {
   }
 
   // 咬食：向前小冲刺 + （GLB）Attack 动作单次播放
-  _bite(i){
+  _bite(/** @type {number} */ i){
     this.biteT[i]=BITE_DUR;
     this.gulpCool[i]=rand(1.4,2.4);
     this.vel[i].addScaledVector(this.smv[i], this.spec.maxSpeed*0.5);
     this.actions?.[i]?.bite?.reset().play();
   }
 
-  update(dt, ctx){
+  update(/** @type {number} */ dt, /** @type {any} */ ctx){
     const spec=this.spec, N=spec.count;
     this.obsT+=dt;
     const fear=ctx.fear??0, sleep=ctx.sleep??0, appetite=ctx.appetite??1, flow=ctx.current??0;
@@ -329,7 +352,7 @@ export class School {
       obstacleAcc(p, ctx.obstacles, _acc);        // 障碍
       if(resting){                                // 趴底：忽略社交力，弹簧锚定沙面
         _acc.set(0,0,0);
-        _acc.add(_v1.subVectors(R.p,p).multiplyScalar(3));
+        _acc.add(_v1.subVectors((/** @type {any} */ R).p,p).multiplyScalar(3));
       }
       if(this.gulpCool[i]>0) this.gulpCool[i]-=dt;
       if(hunting && !resting && this.gulpCool[i]<=0){   // 觅食
@@ -392,8 +415,9 @@ export class School {
       this.finMesh.setMatrixAt(i,_dummy.matrix);
       for(let ei=0;ei<2;ei++){
         const side=ei===0?1:-1;
-        _eyeLocal.makeTranslation(side*this.eyeInfo.x,this.eyeInfo.y,this.eyeInfo.z);
-        _eyeLocal.scale(_v3.set(this.eyeInfo.re*0.74,this.eyeInfo.re*0.74,this.eyeInfo.re*0.74));
+        const eye=(/** @type {any} */ (this.eyeInfo));
+        _eyeLocal.makeTranslation(side*eye.x,eye.y,eye.z);
+        _eyeLocal.scale(_v3.set(eye.re*0.74,eye.re*0.74,eye.re*0.74));
         _eyeM.multiplyMatrices(_dummy.matrix,_eyeLocal);
         this.eyeMesh.setMatrixAt(i*2+ei,_eyeM);
       }
@@ -412,7 +436,7 @@ export class School {
         a.bite?.setEffectiveWeight(b);
         const m=this.mixers[i]; m.timeScale=ts; m.update(dt);
       }
-      for(const s of this.swimUniforms) s.u.value=this.phaseU.value+s.off;
+      for(const s of /** @type {any[]} */ (this.swimUniforms)) s.u.value=this.phaseU.value+s.off;
       return;
     }
     this.mesh.instanceMatrix.needsUpdate=true;

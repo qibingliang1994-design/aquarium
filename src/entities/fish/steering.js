@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from 'three';
 
 /* ================================================================
@@ -24,7 +25,10 @@ export function createFishGrid(cell=0.7){
   const cells=Array.from({length:nx*ny*nz},()=>[]);
   /** @type {{ school:any, i:number, p:THREE.Vector3 }[]} */
   const entries=[];
-  const ci=(p,axis,n)=>Math.min(n-1,Math.max(0,Math.floor((p[axis]-GRID_MIN[axis])/cell)));
+  const clampI=(/** @type {number} */ v,/** @type {number} */ n)=>Math.min(n-1,Math.max(0,v));
+  const cx=(/** @type {number} */ v)=>clampI(Math.floor((v-GRID_MIN.x)/cell),nx);
+  const cy=(/** @type {number} */ v)=>clampI(Math.floor((v-GRID_MIN.y)/cell),ny);
+  const cz=(/** @type {number} */ v)=>clampI(Math.floor((v-GRID_MIN.z)/cell),nz);
   return {
     clear(){ for(const c of cells) c.length=0; entries.length=0; },
     /** @param {any} school @param {number} i @param {THREE.Vector3} p */
@@ -32,15 +36,15 @@ export function createFishGrid(cell=0.7){
       const k=entries.length;
       let e=entries[k];
       if(e){ e.school=school; e.i=i; e.p=p; } else entries.push(e={ school, i, p });
-      cells[(ci(p,'x',nx)*ny+ci(p,'y',ny))*nz+ci(p,'z',nz)].push(k);
+      cells[(cx(p.x)*ny+cy(p.y))*nz+cz(p.z)].push(k);
     },
     /** 遍历以 p 为球心、半径 r 内的条目；fn(entry, d2) 返回 false 时提前终止
      * @param {THREE.Vector3} p @param {number} r @param {(e:{school:any,i:number,p:THREE.Vector3}, d2:number)=>boolean|void} fn */
     forNeighbors(p, r, fn){
       const r2=r*r;
-      const x0=ci({x:p.x-r},'x',nx), x1=ci({x:p.x+r},'x',nx);
-      const y0=ci({y:p.y-r},'y',ny), y1=ci({y:p.y+r},'y',ny);
-      const z0=ci({z:p.z-r},'z',nz), z1=ci({z:p.z+r},'z',nz);
+      const x0=cx(p.x-r), x1=cx(p.x+r);
+      const y0=cy(p.y-r), y1=cy(p.y+r);
+      const z0=cz(p.z-r), z1=cz(p.z+r);
       for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++) for(let z=z0;z<=z1;z++){
         const list=cells[(x*ny+y)*nz+z];
         for(let k=0;k<list.length;k++){
@@ -62,7 +66,10 @@ export function rebuildFishGrid(grid, schools){
 
 /* ---------- 同种 Boids：分离 / 对齐 / 聚合 ---------- */
 /** 网格查询的共享状态（单线程 + 同步查询，无重入，避免每鱼每帧建闭包） */
-const _bq={ school:null, i:0, p:null, v:null, rad2:0, sep:null, ali:null, coh:null, cnt:0 };
+/** @type {{ school:any, i:number, p:THREE.Vector3, v:THREE.Vector3, rad2:number, sep:THREE.Vector3, ali:THREE.Vector3, coh:THREE.Vector3, cnt:number }} */
+const _bq={ school:null, i:0, p:new THREE.Vector3(), v:new THREE.Vector3(), rad2:0,
+  sep:new THREE.Vector3(), ali:new THREE.Vector3(), coh:new THREE.Vector3(), cnt:0 };
+/** @param {{school:any,i:number,p:THREE.Vector3}} e @param {number} d2 */
 const _boidsGridCb=(e,d2)=>{
   const q=_bq;
   if(e.school!==q.school || e.i===q.i) return;
@@ -110,7 +117,9 @@ export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, g
 }
 
 /* ---------- 异种分离：只推小鱼（体型悬殊时小鱼推不动大鱼） ---------- */
-const _xq={ school:null, p:null, bigL:0, acc:null };
+/** @type {{ school:any, p:THREE.Vector3, bigL:number, acc:THREE.Vector3 }} */
+const _xq={ school:null, p:new THREE.Vector3(), bigL:0, acc:new THREE.Vector3() };
+/** @param {{school:any,i:number,p:THREE.Vector3}} e @param {number} d2 */
 const _crossGridCb=(e,d2)=>{
   if(e.school===_xq.school || e.school.spec.L<_xq.bigL) return;
   if(d2<0.04 && d2>1e-8) _xq.acc.addScaledVector(_v.subVectors(_xq.p,e.p), 3.0/Math.sqrt(d2));

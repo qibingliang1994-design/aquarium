@@ -109,3 +109,4 @@ body.is-editing #hud{opacity:0;pointer-events:none;transition:opacity .25s}
 .tank-opt[data-tank=rimless]{--frame:rgba(160,230,210,.6);--cab:#b88b5a}
 .tank-opt[data-tank=reef]{--frame:#0d0f12;--cab:#e6e8eb}
 .tank-opt[data-tank=zen]{--frame:#6e4a2e;--cab:#4e321e}
+.tank-opt[data-tank=ming]{--frame:#4a1e12;--cab:#5c2a18}

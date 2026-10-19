@@ -53,7 +53,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
     tank.setSandColors(t.sand[0], t.sand[1]);
-    tank.setBackdrop(t.backdrop);
+    tank.setBackdrop(t.backdrop, t.art);
     for(let i=0;i<GRAVEL_N;i++) gravel.setColorAt(i, c.setHex(t.gravel[(i*7)%t.gravel.length]));
     if(gravel.instanceColor) gravel.instanceColor.needsUpdate=true;
     onTheme?.(t);

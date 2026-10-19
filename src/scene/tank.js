@@ -217,9 +217,10 @@ sandParts.push(sand);
 // 水景缸常见的"背光幕"：缸体正后方柔和青色辉光，四周压暗，鱼与水草在其上形成剪影层次
 const bgCanvas=document.createElement('canvas'); bgCanvas.width=512; bgCanvas.height=256;
 const bgTex=new THREE.CanvasTexture(bgCanvas); bgTex.colorSpace=THREE.SRGBColorSpace;
-// 背光幕重绘（主题色 'r,g,b'）：外圈辉光取主题色的 45% 亮度
-function setBackdrop(/** @type {string} */ rgb){
+// 背光幕重绘（主题色 'r,g,b'）：外圈辉光取主题色的 45% 亮度；art='ink' 画水墨远山（inkMountains）
+function setBackdrop(/** @type {string} */ rgb, /** @type {string} */ art=''){
   const ctx=/** @type {CanvasRenderingContext2D} */ (bgCanvas.getContext('2d'));
+  if(art==='ink'){ inkMountains(ctx, rgb); bgTex.needsUpdate=true; return; }
   const g=ctx.createLinearGradient(0,0,0,256);
   g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
   ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
@@ -228,6 +229,47 @@ function setBackdrop(/** @type {string} */ rgb){
   r.addColorStop(0,`rgba(${rgb},0.55)`); r.addColorStop(0.45,`rgba(${dim},0.28)`); r.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
   bgTex.needsUpdate=true;
+}
+/** 水墨远山：雾色天光底 + 三重山（由远及近墨色渐浓，山脚化入雾里留白）+ 一轮淡日。
+ * 透过水体与缸壁看过去是一幅压暗的山水立轴；四周仍压暗，与其他主题的"背光幕"同一个亮度结构
+ * @param {CanvasRenderingContext2D} ctx @param {string} rgb */
+function inkMountains(ctx, rgb){
+  const [r,g,b]=rgb.split(',').map(Number);
+  const sky=ctx.createLinearGradient(0,0,0,256);
+  sky.addColorStop(0,`rgb(${r*0.42|0},${g*0.42|0},${b*0.42|0})`); sky.addColorStop(0.62,`rgb(${r*0.7|0},${g*0.7|0},${b*0.7|0})`);
+  sky.addColorStop(1,`rgb(${r*0.5|0},${g*0.5|0},${b*0.5|0})`);
+  ctx.fillStyle=sky; ctx.fillRect(0,0,512,256);
+  ctx.fillStyle=`rgba(${Math.min(255,r+70)},${Math.min(255,g+60)},${Math.min(255,b+40)},0.35)`;   // 淡日
+  ctx.beginPath(); ctx.arc(352,70,20,0,Math.PI*2); ctx.fill();
+  const ridge=(/** @type {number} */ x, /** @type {number} */ base, /** @type {number} */ hgt, /** @type {number} */ f, /** @type {number} */ o)=>
+    base - hgt*(0.55*vnoise(x*f+o, o)+0.3*vnoise(x*f*2.3+o, o*1.7)+0.15*vnoise(x*f*6+o, o*2.3))
+      - hgt*0.6*Math.max(0, 1-Math.abs(x-o*37%512)/140)**2;     // 每重山一座主峰
+  const layers=[
+    { base:170, hgt:110, f:0.012, o:3.1, ink:0.32, mist:0.55 },
+    { base:200, hgt:95,  f:0.017, o:8.7, ink:0.5,  mist:0.5 },
+    { base:236, hgt:70,  f:0.024, o:15.3, ink:0.72, mist:0.45 },
+  ];
+  for(const L of layers){
+    // 山体：墨色自山脊向下渐淡（山腰起雾），山脊一道略深的皴线
+    const top=L.base-L.hgt*1.2;
+    const grad=ctx.createLinearGradient(0,top,0,L.base+10);
+    const d=1-L.ink;
+    grad.addColorStop(0,`rgba(${r*d*0.35|0},${g*d*0.4|0},${b*d*0.4|0},${0.55+L.ink*0.4})`);
+    grad.addColorStop(L.mist,`rgba(${r*d*0.5|0},${g*d*0.55|0},${b*d*0.55|0},${0.25+L.ink*0.3})`);
+    grad.addColorStop(1,`rgba(${r*0.7|0},${g*0.7|0},${b*0.7|0},0)`);
+    ctx.fillStyle=grad;
+    ctx.beginPath(); ctx.moveTo(0,256);
+    for(let x=0;x<=512;x+=4) ctx.lineTo(x, ridge(x, L.base, L.hgt, L.f, L.o));
+    ctx.lineTo(512,256); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=`rgba(${r*0.12|0},${g*0.15|0},${b*0.15|0},${0.18+L.ink*0.3})`; ctx.lineWidth=1.2;
+    ctx.beginPath();
+    for(let x=0;x<=512;x+=4) x ? ctx.lineTo(x, ridge(x, L.base, L.hgt, L.f, L.o)) : ctx.moveTo(x, ridge(x, L.base, L.hgt, L.f, L.o));
+    ctx.stroke();
+  }
+  // 四周压暗（与其他主题同样的暗角，避免整面墙发亮抢戏）
+  const v=ctx.createRadialGradient(256,140,60,256,140,300);
+  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,0.75)');
+  ctx.fillStyle=v; ctx.fillRect(0,0,512,256);
 }
 setBackdrop('58,138,160');
 const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(8.6,4.6),

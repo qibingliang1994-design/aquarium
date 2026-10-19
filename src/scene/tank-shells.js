@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { vnoise } from '../utils.js';
 import { isNatural } from '../scenes/tank-styles.js';
 import { buildNaturalShell } from './natural-shells.js';
+import { buildMing } from './ming-shell.js';
 
 /* ================================================================
  * 缸体外壳（随场景切换）：框 / 玻璃边 / 灯具 / 底柜
@@ -183,6 +184,11 @@ const BUILDERS={
     for(let i=0;i<n;i++) box(wood, gap*0.55, CAB_H-0.2, 0.03, -CW/2+0.06+gap*(i+0.5), CAB_Y+0.03, CD/2+0.016);
     box(new THREE.MeshStandardMaterial({ color:0x6f6a62, roughness:0.95 }), CW+0.08, 0.05, CD+0.08, 0, CAB_Y-CAB_H/2+0.02, 0);   // 石材底座
     return lightMat;
+  },
+
+  // 明式红木：紫檀推光漆框 + 翘头灯檐 + 宫灯 + 回纹牙板、团花门心、马蹄足的明式柜（ming-shell.js）
+  ming(/** @type {any} */ group){
+    return buildMing(group, { W, H, D, CAB_H, CAB_Y, box:kit(group).box, woodTexture, lightPanel });
   },
 };
 

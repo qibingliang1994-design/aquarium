@@ -5,7 +5,8 @@
  * ================================================================ */
 
 /** @typedef {{ label:string, fog:number, glow:number, sky:[number,number,number], deep:[number,number,number],
- *   sand:[number,number], backdrop:string, gravel:number[], hint?:string }} Theme */
+ *   sand:[number,number], backdrop:string, gravel:number[], hint?:string, art?:'ink' }} Theme */
+/* art：背光幕画面（缺省 = 纯色辉光；'ink' = 水墨远山） */
 
 /** @type {Record<string, Theme>} */
 export const THEMES = {
@@ -38,6 +39,12 @@ export const THEMES = {
     fog:0x1d2a1c, glow:0x8a9a5a, sky:[0.58,0.6,0.46], deep:[0.07,0.08,0.04],
     sand:[0x9c8461,0x76603f], backdrop:'130,140,90',
     gravel:[0xa08a6a,0x86704f,0xb8a585,0x6f5c40,0x958165],
+  },
+  garden: {
+    label:'园林墨韵', hint:'灰白细沙 · 水墨远山 · 碧玉池水', art:'ink',
+    fog:0x12302a, glow:0x6fb39a, sky:[0.56,0.7,0.64], deep:[0.03,0.1,0.09],
+    sand:[0xa29e92,0x7f7c73], backdrop:'150,185,170',
+    gravel:[0xb3b0a6,0x8f8c83,0xcfccc2,0x6e6c66,0x9c968a],
   },
 };
 

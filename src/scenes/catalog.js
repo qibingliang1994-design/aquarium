@@ -4,6 +4,9 @@ import { buildPlant, PLANT_TYPES } from './items/plants.js';
 import { buildRock, buildRockTall, buildLiveRock, buildWood, buildMossBall, buildAirstone } from './items/decor.js';
 import { buildLily, buildReeds, buildPebbles } from './items/wetland.js';
 import { buildCoralBranch, buildCoralFan, buildCoralBrain, buildAnemone } from './items/corals.js';
+import { buildTaihu } from './items/taihu.js';
+import { buildBridge } from './items/bridge.js';
+import { buildPorcelain } from './items/porcelain.js';
 import { ITEM_TYPES } from './item-meta.js';
 
 /* ================================================================
@@ -14,6 +17,7 @@ import { ITEM_TYPES } from './item-meta.js';
 const BUILDERS = {
   rock: buildRock, rockTall: buildRockTall, liveRock: buildLiveRock, wood: buildWood, mossBall: buildMossBall, airstone: buildAirstone,
   lily: buildLily, reeds: buildReeds, pebbles: buildPebbles,
+  taihu: buildTaihu, bridge: buildBridge, porcelain: buildPorcelain,
   coralBranch: buildCoralBranch, coralFan: buildCoralFan, coralBrain: buildCoralBrain, anemone: buildAnemone,
 };
 for(const t of PLANT_TYPES) BUILDERS[t] = (/** @type {any} */ rng) => buildPlant(t, rng);

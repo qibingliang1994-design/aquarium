@@ -12,7 +12,7 @@ import { ITEM_META } from './item-meta.js';
 const SKIP=new Set(['lily', 'carpet', 'pebbles']);
 /** 暗斑半径 = 占地半径 × 缩放 × SPREAD；浓度按类型（实心岩石最深，细叶水草最浅） */
 const SPREAD=1.35;
-const STRENGTH={ stone:0.55, coral:0.42, plant:0.32, wet:0.3, gear:0.3 };
+const STRENGTH={ stone:0.55, coral:0.42, plant:0.32, wet:0.3, gear:0.3, cn:0.5 };
 const SEG=12;                         // 网格细分：半径 1 左右时足够贴合沙面
 
 let _tex=/** @type {THREE.Texture|null} */ (null);

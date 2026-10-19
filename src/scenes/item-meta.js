@@ -11,6 +11,7 @@ export const ITEM_GROUPS = [
   { id:'plant', label:'水草' },
   { id:'wet',   label:'池塘湿地' },
   { id:'coral', label:'珊瑚' },
+  { id:'cn',    label:'中式园林' },
   { id:'gear',  label:'设备' },
 ];
 
@@ -34,6 +35,9 @@ export const ITEM_META = {
   coralBrain:  { label:'脑珊瑚',   group:'coral', radius:0.19, scale:[0.5,1.8] },
   coralFan:    { label:'海扇',     group:'coral', radius:0.26, scale:[0.5,1.6] },
   anemone:     { label:'海葵',     group:'coral', radius:0.15, scale:[0.6,1.8] },
+  taihu:       { label:'太湖石',   group:'cn',    radius:0.18, scale:[0.5,1.8], hint:'瘦皱漏透，孔洞相通' },
+  bridge:      { label:'石拱桥',   group:'cn',    radius:0.55, scale:[0.6,1.4], hint:'驼峰单孔桥，鱼可穿过桥洞' },
+  porcelain:   { label:'青花瓷罐', group:'cn',    radius:0.2,  scale:[0.6,1.6], hint:'倾倒半埋，鱼可钻进罐口' },
   airstone:    { label:'气石',     group:'gear',  radius:0.07, scale:[1,1], hint:'气泡从第一个气石冒出' },
 };
 

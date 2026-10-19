@@ -66,7 +66,8 @@ export function injectCaustics(mat, strength, key){
         float c1 = texture2D( uCausticMap, cuv*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
         float c2 = texture2D( uCausticMap, cuv*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
         float ca = pow( min( c1, c2 ), 1.4 ) * smoothstep( 1.75, 1.0, vWPos.y ) * ${CAUSTIC_FACING};
-        diffuseColor.rgb += vec3( 0.62, 0.85, 0.95 ) * ca * uCausticK * uOn;
+        // 按表面本色提亮（光透过水打在上面），而不是叠一层白——白色网纹会盖住沙粒、像画上去的，显得不通透
+        diffuseColor.rgb += diffuseColor.rgb * vec3( 0.78, 0.94, 1.0 ) * ca * uCausticK * 1.8 * uOn;
       }`);
   };
 }

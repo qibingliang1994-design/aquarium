@@ -160,7 +160,7 @@ const sandTex=(()=>{
   return tex;
 })();
 const sandMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95, metalness:0, map:sandTex, bumpMap:sandTex, bumpScale:0.12});
-injectCaustics(sandMat, 0.7, 'sand');
+injectCaustics(sandMat, 0.38, 'sand');   // 日间强度由 daynight 的 SAND_CAUSTIC 接管
 const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.glass-0.02, 72, 32).rotateX(-Math.PI/2);
 {
   const p=sandGeo.attributes.position;

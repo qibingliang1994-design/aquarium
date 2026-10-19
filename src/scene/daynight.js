@@ -11,6 +11,8 @@ const CYCLE_SECS=180;
 
 /** 自然水域的太阳位置（指向缸心 spotTarget） */
 const SUN={ x:-3.2, y:7.6, z:-2.6 };
+/** 缸底沙面的日间焦散强度（夜间降到 0.07）：0.7 时网纹太抢眼，压到一半左右更通透 */
+const SAND_CAUSTIC=0.38;
 
 /** @param {any} opts */
 export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, floorGlowMat, rays, schools, fishRim }){
@@ -39,7 +41,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     waterUniforms.uSky.value.lerpColors(DAY.sky,NIGHT.sky,k);
     waterUniforms.uDeep.value.lerpColors(DAY.deep,NIGHT.deep,k);
     rays.setNight(k);
-    if(sandMat.userData.causticK) sandMat.userData.causticK.value=lerp(0.7,0.12,k);
+    if(sandMat.userData.causticK) sandMat.userData.causticK.value=lerp(SAND_CAUSTIC,0.07,k);
     for(const s of schools){ if(s.causticK) s.causticK.value=lerp(0.22,0.06,k); }
     fishRim.k.value=lerp(0.42,0.22,k);                          // 鱼体逆光轮廓夜间减弱
     rim.intensity=lerp(0.35,0.15,k);

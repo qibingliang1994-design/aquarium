@@ -2,6 +2,7 @@
 import { clockNight } from './light-timer.js';
 import { createTurbidity } from './turbidity.js';
 import { canWrite } from './write-lock.js';
+import { U } from '../uniforms.js';
 
 /* ================================================================
  * 氛围接线（main 每帧只调一次 update）：
@@ -23,10 +24,12 @@ function loadSeen(){
 
 /**
  * @param {{ settings:Record<string, any>, dayNight:any, lens:any, snow:any, scene:any, waterUniforms:any,
- *   isNatural:()=>boolean, knownIds:string[], onFlip?:()=>void }} opts
+ *   isNatural:()=>boolean, knownIds:string[], onFlip?:()=>void, weather:any,
+ *   murkBase?:()=>number, onWeather?:(st:any)=>void }} opts
  *   onFlip：定时器让昼夜跨过半程时回调（同步 Dock 日/夜按钮）
+ *   onWeather：自动轮换切到下一种天气时回调（落盘，不要每帧写）
  */
-export function createAmbience({ settings, dayNight, lens, snow, scene, waterUniforms, isNatural, knownIds, onFlip }){
+export function createAmbience({ settings, dayNight, lens, snow, scene, waterUniforms, isNatural, knownIds, onFlip, weather, murkBase, onWeather }){
   const turb=createTurbidity();
   let seen=loadSeen();
   const saveSeen=()=>{ if(!canWrite() || !seen) return;
@@ -54,6 +57,11 @@ export function createAmbience({ settings, dayNight, lens, snow, scene, waterUni
     setClock(d){ clockOverride=d; clockAcc=CLOCK_EVERY; },
     /** @param {number} dt @param {number} t */
     update(dt, t){
+      const st=weather.step(dt);
+      dayNight.setWeather(st);
+      U.wet.value=st.wet;
+      if(waterUniforms.uMurk) waterUniforms.uMurk.value=(murkBase?.() ?? 0)+st.rain*0.5;
+      if(st.changed) onWeather?.(st);
       if(settings.clock && (clockAcc+=dt)>=CLOCK_EVERY){ clockAcc=0; dayNight.target=clockNight(now()); }
       dayNight.update(dt, t, settings.cycle);
       if((dayNight.target>0.5)!==side){ side=!side; onFlip?.(); }

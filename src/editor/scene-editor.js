@@ -1,7 +1,8 @@
 // @ts-check
 import * as THREE from 'three';
 import { clamp } from '../utils.js';
-import { sandHeight } from '../scene/tank.js';
+import { groundY } from '../scene/ground.js';
+import { boundsFor } from '../scenes/tank-bounds.js';
 import { ITEM_META, placeLimits, MAX_ITEMS } from '../scenes/item-meta.js';
 import { FISH_MAX, FISH_TOTAL_MAX, fishTotal, newId, cloneDoc } from '../scenes/scene-doc.js';
 import { createHistory } from './history.js';
@@ -55,7 +56,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     ring.visible=!!it;
     if(!it) return;
     const r=Math.max(0.12, ITEM_META[it.type].radius*it.s+0.05);
-    ring.position.set(it.x, sandHeight(it.x,it.z)+0.012, it.z);
+    ring.position.set(it.x, groundY(it.x,it.z)+0.012, it.z);
     ring.scale.setScalar(r);
   }
   /** 一次离散改动：记快照 → 改文档 → 应用 */
@@ -106,7 +107,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     const facing=FACING.has(type), jitter=(Math.random()*2-1)*0.4;
     const rot=type==='airstone' ? 0 : facing ? (jitter+TAU)%TAU : Math.random()*TAU;
     const s=clamp(1,m.scale[0],m.scale[1]);
-    const lim=placeLimits(type, s);   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
+    const lim=placeLimits(type, s, boundsFor(doc.tank));   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
     const it={ id:newId('it'), type, x:clamp(p.x,-lim.x,lim.x), z:clamp(p.z,-lim.z,lim.z), rot,
       s, seed:Math.floor(Math.random()*1e9) };
     commit(d=>d.items.push(it));
@@ -132,7 +133,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   const rotate=(/** @type {number} */ dir)=>edit(it=>{ it.rot=((it.rot+dir*ROT_STEP)%TAU+TAU)%TAU; });
   const rescale=(/** @type {number} */ k)=>edit(it=>{
     const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3);
-    const lim=placeLimits(it.type, it.s);       // 放大后按占地半径回钳，别让包络探出玻璃
+    const lim=placeLimits(it.type, it.s, boundsFor(doc.tank));   // 放大后按占地半径回钳，别让包络探出玻璃
     it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
   });
   const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{
@@ -187,7 +188,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(!id) return;
     select(id);
     const it=selItem();
-    plane.set(new THREE.Vector3(0,1,0), -sandHeight(it.x,it.z));
+    plane.set(new THREE.Vector3(0,1,0), -groundY(it.x,it.z));
     if(!raycaster.ray.intersectPlane(plane, hitP)) return;
     drag={ dx:it.x-hitP.x, dz:it.z-hitP.z, pointer:e.pointerId };
     controls.enabled=false;

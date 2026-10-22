@@ -21,9 +21,9 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 /** WAVE_GLSL 的解析梯度（与 water-wave.js 的 waterWave 完全一致，浮叶也贴在同一波面上） */
 const GRAD_GLSL = `
 vec2 waterGrad(vec2 xz, float t, float flow){
-  float qx=xz.x-flow*t*0.9, y=xz.y;
-  return vec2( 0.006*( 7.0*cos(qx*7.0+t*1.3) + 5.0*cos((qx+y)*5.0+t*0.9) ),
-               0.006*( 9.0*cos(y*9.0+t*1.7) + 5.0*cos((qx+y)*5.0+t*0.9) ) );
+  float qx=xz.x-flow*t*0.9, y=xz.y, a=0.006*uChop;
+  return vec2( a*( 7.0*cos(qx*7.0+t*1.3) + 5.0*cos((qx+y)*5.0+t*0.9) ),
+               a*( 9.0*cos(y*9.0+t*1.7) + 5.0*cos((qx+y)*5.0+t*0.9) ) );
 }`;
 
 /** 学习项目的焦散网纹（解析式，2 次调用作光柱调制；MIT） */
@@ -54,7 +54,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     uProjInv:{value:new THREE.Matrix4()}, uViewInv:{value:new THREE.Matrix4()},
     uRes:{value:new THREE.Vector2(1,1)}, uCam:{value:new THREE.Vector3()}, uFrame:{value:0},
     // —— 与场景水面共享的 uniform 对象（daynight / setShell / ambience 更新即生效）——
-    uTime:waterUniforms.uTime, uFlow:waterUniforms.uFlow,
+    uTime:waterUniforms.uTime, uFlow:waterUniforms.uFlow, uChop:waterUniforms.uChop,
     uSky:waterUniforms.uSky, uDeep:waterUniforms.uDeep,
     uLampY:waterUniforms.uLampY, uLampHalf:waterUniforms.uLampHalf,
     uLampXZ:waterUniforms.uLampXZ, uLampXZ2:waterUniforms.uLampXZ2,
@@ -80,7 +80,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       uniform mat4 uProjInv, uViewInv;
       uniform vec2 uRes, uLampHalf, uLampXZ, uLampXZ2;
       uniform vec3 uCam, uSky, uDeep, uLampCol, uSigma, uShaftCol, uLightDir, uMin, uMax;
-      uniform float uFrame, uTime, uFlow, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb,
+      uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb,
                     uMirrorOn, uSideOn;
       uniform mat4 uShadowM, uMirrorVP, uMirrorLVP, uMirrorRVP;
       uniform sampler2D tShadow, tMirror, tMirrorL, tMirrorR;

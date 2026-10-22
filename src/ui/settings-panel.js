@@ -9,10 +9,15 @@ const TOGGLES = [
   ['setSound','sound'], ['setCycle','cycle'], ['setClock','clock'],
   ['setDof','dof'], ['setHaze','haze'],
   ['setBubbles','bubbles'], ['setSnow','snow'], ['setCaustics','caustics'],
+  ['setWeatherAuto','weatherAuto'],
 ];
 /** 滑杆行：onChange(key, 数值)，值显示在行内 <b> 里（百分比） */
 const SLIDERS = [
-  ['setLamp','lamp'], ['setAbsorb','absorb'], ['setShafts','shafts'],
+  ['setLamp','lamp'], ['setAbsorb','absorb'], ['setShafts','shafts'], ['setWeatherI','weatherI'],
+];
+/** 下拉：onChange(key, 字符串) */
+const SELECTS = [
+  ['setWeather','weatherMode'],
 ];
 /** 互斥的开关：打开一个时另一个自动关掉（自动昼夜循环 ↔ 跟随本地时间） */
 const EXCLUSIVE = /** @type {Record<string, string>} */ ({ cycle:'clock', clock:'cycle' });
@@ -20,7 +25,7 @@ const GAP = 12;
 // 取必有元素：缺失说明 index.html 与代码脱节，启动即失败好过静默坏掉
 const $ = (/** @type {string} */ id) => { const el = document.getElementById(id); if (!el) throw new Error(`missing #${id}`); return el; };
 
-/** @param {{ settings:Record<string, any>, onChange:(key:string,value:boolean|number)=>void }} opts */
+/** @param {{ settings:Record<string, any>, onChange:(key:string,value:boolean|number|string)=>void }} opts */
 export function createSettingsPanel({ settings, onChange }){
   const pop = $('settingsPop');
   const btn = /** @type {HTMLButtonElement} */ ($('bSettings'));
@@ -38,8 +43,11 @@ export function createSettingsPanel({ settings, onChange }){
   }
   /** @type {Record<string, HTMLElement>} */
   const readouts = {};
+  /** @type {Record<string, HTMLInputElement>} */
+  const sliderEls = {};
   for(const [id,key] of SLIDERS){
     const slider = /** @type {HTMLInputElement} */ ($(id));
+    sliderEls[key] = slider;
     const out = slider.parentElement?.querySelector('b') ?? null;
     if(out) readouts[key] = out;
     const show = (/** @type {number} */ v)=>{ if(out) out.textContent = `${Math.round(v*100)}%`; };
@@ -50,6 +58,15 @@ export function createSettingsPanel({ settings, onChange }){
       show(v);
       onChange(key, v);
     });
+  }
+  /** @type {Record<string, HTMLSelectElement>} */
+  const selects = {};
+  for(const [id,key] of SELECTS){
+    const sel = /** @type {HTMLSelectElement} */ ($(id));
+    selects[key] = sel;
+    const want = String(settings[key] ?? '');
+    if([...sel.options].some(o => o.value===want)) sel.value = want;
+    sel.addEventListener('change',()=>onChange(key, sel.value));
   }
 
   function place(){
@@ -73,5 +90,14 @@ export function createSettingsPanel({ settings, onChange }){
   return {
     close:()=>setOpen(false),
     set:(/** @type {string} */ key,/** @type {boolean} */ on)=>{ if(boxes[key]) boxes[key].checked = on; },
+    /** 自动轮换改了天气时同步控件，不再次触发 onChange @param {string} key @param {boolean|number|string} value */
+    sync(key, value){
+      if(typeof value==='boolean' && boxes[key]) boxes[key].checked = value;
+      if(typeof value==='number' && sliderEls[key]){
+        sliderEls[key].value = String(value);
+        if(readouts[key]) readouts[key].textContent = `${Math.round(value*100)}%`;
+      }
+      if(selects[key]) selects[key].value = String(value);
+    },
   };
 }

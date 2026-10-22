@@ -8,6 +8,8 @@ import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX } from './natural-shells.js';
 import { createSkirtMaterial } from './substrate.js';
 import { surfacePair, onTexPair } from '../scenes/items/surface-tex.js';
+import { boundsFor } from '../scenes/tank-bounds.js';
+import { setGround, setGroundBase } from './ground.js';
 
 /* ================================================================
  * 水族箱尺寸
@@ -22,6 +24,7 @@ export const TANK = {
 export function sandHeight(/** @type {number} */ x, /** @type {number} */ z){
   return 0.20 + vnoise(x*1.5+3.7, z*1.5+7.2)*0.10 + (z*0.5+0.5)*0.10;
 }
+setGroundBase(sandHeight);
 
 export function createTank(/** @type {any} */ scene){
 /* ================================================================
@@ -66,6 +69,8 @@ const waterUniforms={
   uCMap:{value:causticsTex},
   uClear:{value:0},          // 0 = 缸（水面近乎不透明，主要从侧面看）；1 = 自然水域（俯视时清澈见底，掠射角才反光）
   uFlow:U.flow,              // 水流速度：波纹沿 +x 漂移（与水草倒伏、浮叶共用）
+  uChop:U.chop,              // 波浪倍率（晴天 = 1）。水体合成 pass 共用同一个对象
+  uMurk:{value:0},           // 额外茶色 0 = 不改水色；只在网格水面（自然水域）里混
   uDepthTex:{value:/** @type {THREE.Texture|null} */ (null)},   // 自然水域的水深贴图（natural-shells bakeDepth）
   uDepthBox:{value:new THREE.Vector4(0,0,1,1)},  // 贴图覆盖范围：x0, z0, 1/宽, 1/深
   uDepthOn:{value:0},
@@ -93,7 +98,7 @@ const waterMesh=new THREE.Mesh(
     uniforms:waterUniforms, transparent:true, opacity:0.55, side:THREE.DoubleSide,
     depthWrite:false,          // 不写深度：镜头 pass（景深/水体纵深）要的是水面下物体的深度，俯视自然水域时尤其如此
     vertexShader:`
-      uniform float uTime, uFlow;
+      uniform float uTime, uFlow, uChop;
       varying vec3 vW; varying vec2 vXZ;
       ${WAVE_GLSL}
       void main(){
@@ -105,7 +110,7 @@ const waterMesh=new THREE.Mesh(
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,
     fragmentShader:`
-      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn;
+      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn, uChop, uMurk;
       uniform vec3 uSky, uDeep, uLightColor, uLampCol;
       uniform sampler2D uCMap, uDepthTex;
       uniform vec4 uDepthBox;
@@ -115,7 +120,7 @@ const waterMesh=new THREE.Mesh(
         float depth=1.0;                                   // 水深（自然水域按贴图，缸里视为很深）
         if(uDepthOn>0.5) depth=texture2D(uDepthTex, (vW.xz-uDepthBox.xy)*uDepthBox.zw).r*${DEPTH_MAX.toFixed(2)};
         float t=uTime;
-        vec2 g=vec2(
+        vec2 g=uChop*vec2(
           7.0*cos(vXZ.x*7.0+t*1.3)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006,
           9.0*cos(vXZ.y*9.0+t*1.7)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006);
         // 法线 y 分量太小（此前缸模式 0.02，而波斜率可达 0.07）会让法线几乎水平，俯视时菲涅尔变成大块条纹
@@ -172,6 +177,9 @@ const waterMesh=new THREE.Mesh(
         }
         vec3 r=reflect(normalize(vec3(-0.05,-1.0,-0.22)),n);
         col+=uLightColor*pow(max(dot(r,v),0.0),90.0)*2.2;
+        float mk=clamp(uMurk, 0.0, 0.85);          // 0 时 mix 的系数是 0，水色与改前逐值相同
+        col=mix(col, vec3(0.42, 0.50, 0.38), mk);
+        alpha=mix(alpha, min(alpha+0.12, 0.96), mk);
         gl_FragColor=vec4(col,alpha);
       }`,
   }));
@@ -344,7 +352,10 @@ const shell={ id:'', group:null, lightMat:null };
 function setShell(/** @type {string} */ id){
   if(shell.id===id) return;
   if(shell.group){ tankGroup.remove(shell.group); disposeShell(shell.group); }
-  const built=buildShell(id, TANK, { waterY:TANK.waterY, sandHeight });
+  const vol=boundsFor(id).volume;
+  const built=buildShell(id, vol, { waterY:vol.waterY, sandHeight });
+  setGround(typeof built.group.userData.bed==='function' ? built.group.userData.bed : null);
+  waterMesh.position.y=vol.waterY;
   Object.assign(shell, { id, ...built });
   tankGroup.add(built.group);
   const nat=built.natural;

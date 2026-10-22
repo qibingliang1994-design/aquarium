@@ -58,6 +58,29 @@ describe('dayNight 灯光亮度', () => {
     expect(dn.lamp).toBe(1);
   });
 
+  it('晴天天气是恒等；中雨压暗太阳，回到晴天就还原', () => {
+    const { dn, hoodSpot, hemi } = makeDayNight();
+    dn.jump(0);
+    dn.setWeather({ sunMul:1, hemiMul:1, fogMul:1, chop:1, grey:0, rain:0, fogAmt:0 });
+    expect(hoodSpot.intensity).toBeCloseTo(16, 5);
+    const hemi0 = hemi.intensity;
+    dn.setWeather({ sunMul:0.22, hemiMul:0.65, fogMul:1.8, chop:2, grey:0.65, rain:1, fogAmt:0.35 });
+    expect(hoodSpot.intensity).toBeCloseTo(16*0.22, 5);
+    expect(hemi.intensity).toBeCloseTo(hemi0*0.65, 5);
+    dn.setWeather({ sunMul:1, hemiMul:1, fogMul:1, chop:1, grey:0, rain:0, fogAmt:0 });
+    expect(hoodSpot.intensity).toBeCloseTo(16, 5);
+    expect(hemi.intensity).toBeCloseTo(hemi0, 5);
+  });
+
+  it('大场景太阳不按灯高做平方衰减', () => {
+    const { dn, hoodSpot } = makeDayNight();
+    dn.setTank({ kind:'natural', light:{ spotCol:0xfff0d4, spotK:0.32, spotY:18, strip:0,
+      sun:{ pos:[-18,26,-14], angle:0.72, penumbra:0.75, decay:0, distance:0, near:8, far:90 } } });
+    dn.jump(0);
+    expect(hoodSpot.intensity).toBeCloseTo(16*0.32, 5);
+    expect(hoodSpot.position.y).toBeCloseTo(26, 5);
+  });
+
   it('环境光/补光/鱼体轮廓不受灯光倍率影响（那是昼夜与主题的领域）', () => {
     const { dn, hemi, fillLight, rim } = makeDayNight();
     dn.jump(0);

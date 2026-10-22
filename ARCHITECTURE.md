@@ -346,6 +346,15 @@
   三处 css 强调色。无 PALETTES 条目 → 走锦鲤同款"保留照片贴图+压镜面"路径；无动画片段 →
   走 decorateFishMaterial 顶点尾摆（amp/beat/waveK 来自物种表）。classic 预设测试改为
   "旧九种保持默认、新物种不入旧预设"。与 tetra（霓虹脂鲤=红绿灯）同种的源项目 neon 模型未收录。
+- 大户外池塘（场景存档 v4）：水体边界收到 `scenes/tank-bounds.js`。不带 `volume` 的缸型仍是
+  4.6×2.2×1.8，默认边界吸附回历史字面量（swim 2.13×0.74、摆放 2.05×0.75、玻璃内壁 2.265×0.865、
+  饲料 2.2×0.8）。`outdoor` 的活动矩形内接在不规则岸线里（硬钳制角 pondD&lt;0.93），视觉水面约 17×12
+  （`scene/pond-shape.js` + `natural-shells.js` 的 `buildOutdoor`：石缘、碗形底、`userData.bed`）。
+  地面查询走 `scene/ground.js`，沙床公式不动。预设「大户外池塘」用现有锦鲤 / 睡莲 / 香蒲。
+  旧 v3 存档按 seeded 补发一次。天气是 `systems/weather.js` 的纯逻辑（晴 / 多云 / 小雨 / 中雨 /
+  薄雾 / 小雪 + 强度 + 28 秒自动），晴天或强度 0 不改变灯光、雾和波浪；粒子在 `effects.js`，
+  数量跟着现有五档画质走；潮湿度 `U.wet` 只压暗地面和石头。eco-pond 的水质分数不移植，只把
+  相对清澈的茶色差写进自然水域网格水面的 `uMurk`。阴影仍由主循环按画质档刷新，不在天气里开关投影。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

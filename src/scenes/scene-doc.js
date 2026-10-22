@@ -3,6 +3,7 @@ import { clamp } from '../utils.js';
 import { ITEM_META, placeLimits, MAX_ITEMS } from './item-meta.js';
 import { THEMES } from './themes.js';
 import { resolveTank } from './tank-styles.js';
+import { boundsFor } from './tank-bounds.js';
 
 /* ================================================================
  * 场景文档：{ id, name, presetId?, theme, tank, fish:{物种:数量}, items:[物件] }
@@ -28,8 +29,8 @@ export function newId(prefix){
 /** @param {unknown} v @param {number} fallback */
 const num = (v, fallback) => (typeof v==='number' && Number.isFinite(v) ? v : fallback);
 
-/** @param {unknown} raw @returns {SceneItem|null} */
-export function sanitizeItem(raw){
+/** @param {unknown} raw @param {import('./tank-bounds.js').TankBounds} [bounds] @returns {SceneItem|null} */
+export function sanitizeItem(raw, bounds){
   if(!raw || typeof raw!=='object') return null;
   const r = /** @type {Record<string, unknown>} */ (raw);
   const type = typeof r.type==='string' ? r.type : '';
@@ -37,7 +38,7 @@ export function sanitizeItem(raw){
   if(!meta) return null;
   const rot = num(r.rot, 0) % (Math.PI*2);
   const s = clamp(num(r.s,1), meta.scale[0], meta.scale[1]);
-  const lim = placeLimits(type, s);   // 占地半径×缩放 → 中心点收进玻璃内壁（旧存档靠这里拉回缸内）
+  const lim = placeLimits(type, s, bounds);   // 按这份文档自己的缸型收进内壁（大池塘不按小缸钳）
   return {
     id: typeof r.id==='string' && r.id ? r.id.slice(0,40) : newId('it'),
     type,
@@ -68,17 +69,19 @@ export function sanitizeDoc(raw){
   if(!raw || typeof raw!=='object') return null;
   const r = /** @type {Record<string, unknown>} */ (raw);
   if(typeof r.id!=='string' || !r.id) return null;
-  const items = (Array.isArray(r.items) ? r.items : []).map(sanitizeItem)
+  const theme = typeof r.theme==='string' && Object.hasOwn(THEMES, r.theme) ? r.theme : 'fresh';
+  const tank = resolveTank(r.tank, theme, typeof r.presetId==='string' ? r.presetId : undefined);
+  const bounds = boundsFor(tank);               // 先定缸型再钳物件：清洗大池塘时不能用当前激活的小缸
+  const items = (Array.isArray(r.items) ? r.items : []).map(it => sanitizeItem(it, bounds))
     .filter(/** @returns {it is SceneItem} */ it => it!==null).slice(0, MAX_ITEMS);
   const seen = new Set();                       // 物件 id 去重（复制粘贴的坏存档）
   for(const it of items){ if(seen.has(it.id)) it.id = newId('it'); seen.add(it.id); }
-  const theme = typeof r.theme==='string' && Object.hasOwn(THEMES, r.theme) ? r.theme : 'fresh';
   /** @type {SceneDoc} */
   const doc = {
     id: r.id.slice(0,40),
     name: (typeof r.name==='string' && r.name.trim() ? r.name.trim() : '未命名水景').slice(0, NAME_MAX),
     theme,
-    tank: resolveTank(r.tank, theme, typeof r.presetId==='string' ? r.presetId : undefined),
+    tank,
     fish: sanitizeFish(r.fish),
     items,
   };

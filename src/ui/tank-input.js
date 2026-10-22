@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { rand, clamp } from '../utils.js';
 import { TANK, sandHeight } from '../scene/tank.js';
+import { groundY } from '../scene/ground.js';
 
 /* ================================================================
  * 观赏模式下的画布交互：单击喂食/识鱼，快速双击敲玻璃（惊吓度 2 秒衰减 + 镜头轻震）
@@ -9,12 +10,13 @@ import { TANK, sandHeight } from '../scene/tank.js';
  * ================================================================ */
 
 const TAP_GAP_MS=300, TAP_SLOP_PX=30, FEAR_SECS=2, SHAKE_SECS=0.18;
-const FEED_REACH={ x:6, z:3 };       // 点到这个范围内的水面才算"点水"（覆盖自然水域可见的水面），再收进投喂范围
+// 默认缸的字面量。大场景由 setBounds 换成该缸的边界（随机落点、点击钳制、敲击盒一起换）
+const feedBox={ reachX:6, reachZ:3, clickX:2.15, clickZ:0.78, scatX:1.1, scatZ:0.38, waterY:TANK.waterY };
 const TANK_BOX=new THREE.Box3(
   new THREE.Vector3(-TANK.W/2+TANK.glass, sandHeight(0,0), -TANK.D/2+TANK.glass),
   new THREE.Vector3( TANK.W/2-TANK.glass, TANK.waterY,      TANK.D/2-TANK.glass));
 
-export const randomFeedPoint=()=>new THREE.Vector3(rand(-1.1,1.1),TANK.waterY,rand(-0.38,0.38));
+export const randomFeedPoint=()=>new THREE.Vector3(rand(-feedBox.scatX,feedBox.scatX), feedBox.waterY, rand(-feedBox.scatZ,feedBox.scatZ));
 
 /** @param {{ camera:any, canvas:any, schools:any[], fishCard:any, feeder:any, sound:any, isBlocked:()=>boolean }} opts */
 export function createTankInput({ camera, canvas, schools, fishCard, feeder, sound, isBlocked }){
@@ -36,13 +38,13 @@ export function createTankInput({ camera, canvas, schools, fishCard, feeder, sou
     const o=raycaster.ray.origin, d=raycaster.ray.direction;
     // 命中点收进投喂范围（鱼的活动区）：点在自然水域的岸边水面、或缸的边缘外一点，饲料落在离点击最近的位置
     // （此前只认 |x|<2.15、|z|<0.78 的命中，其余一律随机落点：池塘/溪流里点哪都像没反应）
-    const near=(/** @type {number} */ x,/** @type {number} */ z)=>Math.abs(x)<FEED_REACH.x && Math.abs(z)<FEED_REACH.z;
+    const near=(/** @type {number} */ x,/** @type {number} */ z)=>Math.abs(x)<feedBox.reachX && Math.abs(z)<feedBox.reachZ;
     if(Math.abs(d.y)>1e-4){
-      for(const y of [TANK.waterY, 0.5]){            // 先打水面，兜底打沙面上方
+      for(const y of [feedBox.waterY, 0.5]){            // 先打水面，兜底打沙面上方
         const t=(y-o.y)/d.y;
         if(t<=0) continue;
         const x=o.x+d.x*t, z=o.z+d.z*t;
-        if(near(x,z)) return new THREE.Vector3(clamp(x,-2.15,2.15),TANK.waterY,clamp(z,-0.78,0.78));
+        if(near(x,z)) return new THREE.Vector3(clamp(x,-feedBox.clickX,feedBox.clickX), feedBox.waterY, clamp(z,-feedBox.clickZ,feedBox.clickZ));
       }
     }
     return randomFeedPoint();
@@ -66,6 +68,16 @@ export function createTankInput({ camera, canvas, schools, fishCard, feeder, sou
 
   return {
     feedAt, tapGlass,
+    /** @param {import('../scenes/tank-bounds.js').TankBounds} b */
+    setBounds(b){
+      feedBox.reachX=b.feedReach.x; feedBox.reachZ=b.feedReach.z;
+      feedBox.clickX=b.feedClick.x; feedBox.clickZ=b.feedClick.z;
+      feedBox.scatX=b.feedScatter.x; feedBox.scatZ=b.feedScatter.z;
+      feedBox.waterY=b.waterY;
+      const v=b.volume;
+      TANK_BOX.min.set(-v.W/2+v.glass, groundY(0,0), -v.D/2+v.glass);
+      TANK_BOX.max.set( v.W/2-v.glass, v.waterY,      v.D/2-v.glass);
+    },
     get fear(){ return fear; },
     /** 每帧：惊吓衰减；返回本帧镜头震动偏移（无震动时为 null） */
     update(/** @type {number} */ dt, /** @type {number} */ t){

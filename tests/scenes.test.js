@@ -147,7 +147,7 @@ describe('缸体款式', () => {
     expect(TANK_STYLES.stream.env.current).toBeGreaterThan(0);
     expect(TANK_STYLES.pond.env.current).toBe(0);
     const natural = PRESETS.filter(p => isNatural(p.tank)).map(p => p.id);
-    expect(natural).toEqual(['lotus', 'stream', 'river']);
+    expect(natural).toEqual(['lotus', 'stream', 'river', 'outdoor']);
   });
 });
 
@@ -221,6 +221,19 @@ describe('createSceneStore', () => {
     expect(store.list()).toHaveLength(PRESETS.length);
     expect(store.recovered).toBe(true);
     expect(mem.get(BACKUP_KEY)).toBe('{oops');
+  });
+
+  it('v3 存档升级：补发大户外池塘一次，经典缸型不动', () => {
+    const old = PRESETS.filter(p => p.id !== 'outdoor');
+    mem.set('aquarium.scenes', JSON.stringify({ version: 3, activeId: 'classic', scenes: old, seeded: old.map(p => p.id) }));
+    const store = createSceneStore();
+    expect(store.list().map(s => s.id)).toEqual(PRESETS.map(p => p.id));
+    expect(store.get('classic').tank).toBe('classic');
+    expect(store.get('outdoor').tank).toBe('outdoor');
+    expect(store.get('outdoor').items.some(it => it.type === 'lily' && it.x < -3)).toBe(true);
+    expect(JSON.parse(mem.get('aquarium.scenes')).version).toBe(VERSION);
+    store.remove('outdoor');
+    expect(createSceneStore().list().map(s => s.id)).not.toContain('outdoor');
   });
 
   it('来自更新版本的存档只读：启动与保存都不回写', () => {

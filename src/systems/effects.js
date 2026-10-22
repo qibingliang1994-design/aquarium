@@ -1,6 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
-import { rand } from '../utils.js';
+import { rand, makeRng } from '../utils.js';
+import { precipBudget } from './weather.js';
 import { U } from '../uniforms.js';
 
 class Bubbles {
@@ -161,10 +162,126 @@ class Ripples {
   }
 }
 
+/** 雨丝 / 雪花。数量按现有五档画质缩（precipBudget），只模拟 drawRange 里的那一部分。
+ *  不写深度、不投影。落在水面上的涟漪每秒几圈，不按每一滴去生成（涟漪池只有 10 个）。
+ * @param {THREE.Scene} scene @param {{ spawn:(x:number,z:number)=>void }} ripples */
+function createPrecip(scene, ripples){
+  const RAIN_N=1600, SNOW_N=700, rng=makeRng(91);
+  const rPos=new Float32Array(RAIN_N*3), rVel=new Float32Array(RAIN_N);
+  for(let i=0;i<RAIN_N;i++){
+    rPos[i*3]=(rng()*2-1)*16; rPos[i*3+1]=rng()*14+1; rPos[i*3+2]=(rng()*2-1)*12;
+    rVel[i]=8+rng()*6;
+  }
+  const rGeo=new THREE.BufferGeometry();
+  rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
+  rGeo.setAttribute('aVel', new THREE.BufferAttribute(rVel, 1));
+  const drop=(()=>{
+    const c=document.createElement('canvas'); c.width=16; c.height=64;
+    const g=/** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    const grd=g.createLinearGradient(8,0,8,64);
+    grd.addColorStop(0,'rgba(200,220,255,0)'); grd.addColorStop(0.2,'rgba(210,230,255,0.85)');
+    grd.addColorStop(1,'rgba(220,235,255,0)');
+    g.fillStyle=grd; g.fillRect(4,0,8,64);
+    const t=new THREE.CanvasTexture(c); t.needsUpdate=true; return t;
+  })();
+  const rain=new THREE.Points(rGeo, new THREE.ShaderMaterial({
+    uniforms:{ uOpacity:{value:0}, uSize:{value:90}, uMap:{value:drop} },
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`attribute float aVel; uniform float uSize;
+      void main(){ vec4 mv=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mv;
+        gl_PointSize=clamp(uSize*aVel*0.08/max(-mv.z,0.25), 2.0, 48.0); }`,
+    fragmentShader:`uniform float uOpacity; uniform sampler2D uMap;
+      void main(){ vec4 t=texture2D(uMap, gl_PointCoord); float a=t.a*uOpacity;
+        if(a<0.02) discard; gl_FragColor=vec4(mix(vec3(0.75,0.84,0.95), t.rgb, 0.45), a); }`,
+  }));
+  rain.frustumCulled=false; rain.visible=false; scene.add(rain);
+
+  const nPos=new Float32Array(SNOW_N*3), nPh=new Float32Array(SNOW_N);
+  for(let i=0;i<SNOW_N;i++){
+    nPos[i*3]=(rng()*2-1)*18; nPos[i*3+1]=rng()*12+1; nPos[i*3+2]=(rng()*2-1)*14;
+    nPh[i]=rng()*6.283;
+  }
+  const nGeo=new THREE.BufferGeometry();
+  nGeo.setAttribute('position', new THREE.BufferAttribute(nPos, 3));
+  nGeo.setAttribute('aPh', new THREE.BufferAttribute(nPh, 1));
+  const flake=(()=>{
+    const c=document.createElement('canvas'); c.width=32; c.height=32;
+    const g=/** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+    const grd=g.createRadialGradient(16,16,0,16,16,14);
+    grd.addColorStop(0,'rgba(255,255,255,1)'); grd.addColorStop(0.5,'rgba(255,255,255,0.55)');
+    grd.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=grd; g.fillRect(0,0,32,32);
+    const t=new THREE.CanvasTexture(c); t.needsUpdate=true; return t;
+  })();
+  const snow=new THREE.Points(nGeo, new THREE.ShaderMaterial({
+    uniforms:{ uOpacity:{value:0}, uSize:{value:28}, uMap:{value:flake}, uTime:{value:0} },
+    transparent:true, depthWrite:false,
+    vertexShader:`attribute float aPh; uniform float uSize, uTime;
+      void main(){ vec3 p=position; p.x+=sin(uTime*0.6+aPh)*0.35; p.z+=cos(uTime*0.45+aPh)*0.35;
+        vec4 mv=modelViewMatrix*vec4(p,1.0); gl_Position=projectionMatrix*mv;
+        gl_PointSize=clamp(uSize/max(-mv.z,0.25), 2.0, 18.0); }`,
+    fragmentShader:`uniform float uOpacity; uniform sampler2D uMap;
+      void main(){ vec4 t=texture2D(uMap, gl_PointCoord); float a=t.a*uOpacity;
+        if(a<0.03) discard; gl_FragColor=vec4(1.0,1.0,1.0,a); }`,
+  }));
+  snow.frustumCulled=false; snow.visible=false; scene.add(snow);
+
+  let rainN=RAIN_N, snowN=SNOW_N, rippleAcc=0;
+  rGeo.setDrawRange(0, rainN); nGeo.setDrawRange(0, snowN);
+  return {
+    /** @param {number} level */
+    setLevel(level){
+      const b=precipBudget(level);
+      rainN=b.rain; snowN=b.snow;
+      rGeo.setDrawRange(0, rainN); nGeo.setDrawRange(0, snowN);
+    },
+    /** @param {number} dt @param {{ rain:number, snow:number, wind:number }} st @param {number} time */
+    update(dt, st, time){
+      const rainK=st.rain>0.02 ? Math.min(1, 0.35+st.rain) : 0;
+      const snowK=st.snow>0.02 ? Math.min(1, 0.4+st.snow) : 0;
+      const rCount=Math.max(0, Math.round(rainN*rainK));
+      const sCount=Math.max(0, Math.round(snowN*snowK));
+      rain.visible=rCount>0; snow.visible=sCount>0;
+      rGeo.setDrawRange(0, rCount); nGeo.setDrawRange(0, sCount);
+      /** @type {any} */ (rain.material).uniforms.uOpacity.value=Math.min(1, st.rain*1.15);
+      /** @type {any} */ (snow.material).uniforms.uOpacity.value=Math.min(1, st.snow*0.95);
+      /** @type {any} */ (snow.material).uniforms.uTime.value=time;
+      if(rCount){
+        const pos=/** @type {Float32Array} */ (rGeo.attributes.position.array);
+        for(let i=0;i<rCount;i++){
+          let y=pos[i*3+1]-rVel[i]*dt*(0.85+st.rain*0.4);
+          let x=pos[i*3]+st.wind*dt*2.2;
+          let z=pos[i*3+2];
+          if(!Number.isFinite(y) || y<0.15){
+            x=(Math.random()*2-1)*16; z=(Math.random()*2-1)*12; y=10+Math.random()*8;
+          }
+          pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+        }
+        rGeo.attributes.position.needsUpdate=true;
+        rippleAcc+=dt*st.rain*3.5;
+        let n=0;
+        while(rippleAcc>=1 && n<3){ rippleAcc-=1; n++; ripples.spawn((Math.random()*2-1)*6, (Math.random()*2-1)*4); }
+      }else rippleAcc=0;
+      if(sCount){
+        const pos=/** @type {Float32Array} */ (nGeo.attributes.position.array);
+        for(let i=0;i<sCount;i++){
+          let y=pos[i*3+1]-(1.1+(i%5)*0.12)*dt;
+          if(!Number.isFinite(y) || y<0.2){
+            pos[i*3]=(Math.random()*2-1)*18; pos[i*3+2]=(Math.random()*2-1)*14; y=8+Math.random()*8;
+          }
+          pos[i*3+1]=y;
+        }
+        nGeo.attributes.position.needsUpdate=true;
+      }
+    },
+  };
+}
+
 /** @param {any} opts */
-export function createEffects({ tankGroup, air, sandHeight, waterY }){
+export function createEffects({ tankGroup, air, sandHeight, waterY, scene }){
   const bubbles=new Bubbles({ tankGroup, air, sandHeight, waterY });
   const snow=new MarineSnow({ tankGroup });
   const ripples=new Ripples({ tankGroup, waterY });
-  return { bubbles, snow, ripples };   // 旧的光柱网格（LightRays）已删：光柱由水体合成 pass 按阴影 march
+  const precip=createPrecip(scene, ripples);
+  return { bubbles, snow, ripples, precip };   // 旧的光柱网格（LightRays）已删：光柱由水体合成 pass 按阴影 march
 }

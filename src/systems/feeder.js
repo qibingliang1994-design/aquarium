@@ -12,6 +12,7 @@ export class Feeder {
   /** @param {{ tankGroup:any, sandHeight:any, waterY:number, ripples:any }} opts */
   constructor({ tankGroup, sandHeight, waterY, ripples }){
     this.ripples=ripples; this.sandHeight=sandHeight; this.waterY=waterY;
+    this.hx=FEED_X; this.hz=FEED_Z;   // 默认缸的硬边界；大场景由 setHalf 放大
     this.flow=0;                 // 水流速度（+x），溪流/小河场景由 main 每帧设置
     this.wafers=0;               // 每次投喂附带的底栖沉底片数（缸里有底栖鱼时由 main 设置）
     this.N=90;
@@ -33,6 +34,8 @@ export class Feeder {
     /** @type {any[]} */ this.crumbs=new Array(this.CN).fill(null);
     this.crumbHead=0;
   }
+  /** 当前缸的饲料硬边界（半宽）。默认 2.2×0.8，和改前的字面量一致 @param {number} x @param {number} z */
+  setHalf(x, z){ this.hx=x; this.hz=z; }
   // 切换场景时清空水中饲料与碎屑
   clear(){ this.items.fill(null); this.crumbs.fill(null); }
   get pellets(){ return this.items.filter(it=>it && !it.eaten && it.age<28); }
@@ -43,8 +46,8 @@ export class Feeder {
     for(let k=0;k<10+this.wafers;k++){
       const bottom=k>=10;
       this.items[this.head]={
-        p:new THREE.Vector3(clamp(center.x+rand(-0.14,0.14),-FEED_X+0.05,FEED_X-0.05), this.waterY-0.03,
-                            clamp(center.z+rand(-0.12,0.12),-FEED_Z+0.02,FEED_Z-0.02)),
+        p:new THREE.Vector3(clamp(center.x+rand(-0.14,0.14),-this.hx+0.05,this.hx-0.05), this.waterY-0.03,
+                            clamp(center.z+rand(-0.12,0.12),-this.hz+0.02,this.hz-0.02)),
         v:new THREE.Vector3(rand(-0.03,0.03),-0.05,rand(-0.03,0.03)),
         age:0, eaten:0, ph:rand(6.283), bottom,
       };
@@ -75,7 +78,7 @@ export class Feeder {
         c.v.y+=(-0.07-c.v.y)*Math.min(1,dt*3);
         c.p.addScaledVector(c.v,dt);
         c.p.y=Math.max(c.p.y, this.sandHeight(c.p.x,c.p.z)+0.006);
-        c.p.x=clamp(c.p.x,-FEED_X,FEED_X); c.p.z=clamp(c.p.z,-FEED_Z,FEED_Z);   // 碎屑同样不出缸
+        c.p.x=clamp(c.p.x,-this.hx,this.hx); c.p.z=clamp(c.p.z,-this.hz,this.hz);   // 碎屑同样不出缸
         if(c.life>=LIFE) this.crumbs[i]=null;
       }
       const s=c && c.life<LIFE ? 1-c.life/LIFE : 0;
@@ -104,8 +107,8 @@ export class Feeder {
           it.v.y+=((it.bottom?-WAFER_SINK:-0.1)-it.v.y)*dt*2.2;
           it.p.x+=Math.sin(t*1.7+it.ph)*dt*0.02+this.flow*dt*0.8;   // 下沉途中顺流漂走
           it.p.addScaledVector(it.v,dt);
-          it.p.x=clamp(it.p.x,-FEED_X,FEED_X);                   // 撞玻璃就停：饲料留在缸内，
-          it.p.z=clamp(it.p.z,-FEED_Z,FEED_Z);                   // 底栖鱼才一定吃得到
+          it.p.x=clamp(it.p.x,-this.hx,this.hx);                 // 撞玻璃就停：饲料留在缸内，
+          it.p.z=clamp(it.p.z,-this.hz,this.hz);                 // 底栖鱼才一定吃得到
         } else it.p.y=this.sandHeight(it.p.x,it.p.z)+0.018;      // 落底
       }
       const s=scale;

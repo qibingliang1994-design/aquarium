@@ -44,21 +44,22 @@ export const ITEM_META = {
 
 export const ITEM_TYPES = Object.keys(ITEM_META);
 
-/** 物件可摆放范围（缸内沙面，留出玻璃边距） */
-export const PLACE_BOUNDS = { x:2.05, z:0.75 };
-/** 玻璃内壁坐标（对应 scene/tank.js 的 TANK：外尺寸/2 − 玻璃厚 = ±2.265 / ±0.865）。
- *  物件与饲料都不许越过这条线 */
-export const GLASS_INNER = { x:2.265, z:0.865 };
+/** 默认缸的摆放半宽 / 玻璃内壁（大场景由 boundsFor 另算，见 tank-bounds.js） */
+import { PLACE_BOUNDS, GLASS_INNER } from './tank-bounds.js';
+export { PLACE_BOUNDS, GLASS_INNER };
 const LIMIT_FLOOR=0.15;            // 超大物件向缸心收的下限，保证任何物件都还有摆放余地
 
 /**
- * 物件中心点允许范围：玻璃内壁 − 占地半径×缩放（再留 2cm 余量），并夹在 PLACE_BOUNDS 内。
+ * 物件中心点允许范围：玻璃内壁 − 占地半径×缩放（再留 2cm 余量），并夹在摆放半宽内。
+ * bounds 缺省是默认缸；清洗某个场景时传入该场景缸型的边界，避免大池塘的物件被收进小缸。
  * radius 是数据侧的估算；运行时 place() 会按真实几何包络再钳一次（见 scene-runtime.js）
+ * @param {string} type @param {number} s @param {{ place:{x:number,z:number}, glassInner:{x:number,z:number} }} [bounds]
  */
-export function placeLimits(/** @type {string} */ type, /** @type {number} */ s){
+export function placeLimits(type, s, bounds){
+  const place=bounds?.place ?? PLACE_BOUNDS, glass=bounds?.glassInner ?? GLASS_INNER;
   const r=(ITEM_META[type]?.radius ?? 0.2)*Math.max(0.1, s);
-  return { x:Math.max(LIMIT_FLOOR, Math.min(PLACE_BOUNDS.x, GLASS_INNER.x-0.02-r)),
-           z:Math.max(LIMIT_FLOOR, Math.min(PLACE_BOUNDS.z, GLASS_INNER.z-0.02-r)) };
+  return { x:Math.max(LIMIT_FLOOR, Math.min(place.x, glass.x-0.02-r)),
+           z:Math.max(LIMIT_FLOOR, Math.min(place.z, glass.z-0.02-r)) };
 }
 
 export const MAX_ITEMS = 80;

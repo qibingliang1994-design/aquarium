@@ -2,17 +2,18 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
-import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, swimLimits } from './steering.js';
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, swimLimits, SWIM } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
-import { sandHeight, TANK } from '../../scene/tank.js';
+import { TANK } from '../../scene/tank.js';
+import { groundY } from '../../scene/ground.js';
 // @ts-check
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 /** @typedef {import('./species.js').FishSpec} FishSpec */
 /** @typedef {{ c:THREE.Vector3, r:number }} Obstacle */
 /** @typedef {{ template:THREE.Object3D, animations:any[] }} GlbData */
-/** @typedef {{ growth?:number[], capacity?:number, gloss?:number }} SchoolOpts */
+/** @typedef {{ growth?:number[], capacity?:number, gloss?:number, swim?:{x:number,z:number}, yCeil?:number, waterY?:number }} SchoolOpts */
 
 /* ---------- 鱼群（Boids + 转弯侧倾） ---------- */
 const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
@@ -61,13 +62,16 @@ export class School {
 
   // capacity：可容纳的最大条数（预分配实例/状态数组，addFish 原地入缸不用重建）
   /** @param {FishSpec} spec @param {Obstacle[]} obstacles @param {GlbData|null} glbData @param {SchoolOpts} [opts] */
-  constructor(spec, obstacles, glbData, { growth, capacity, gloss }={}){
+  constructor(spec, obstacles, glbData, { growth, capacity, gloss, swim, yCeil, waterY }={}){
     this.spec=spec;
     this.glbMode=!!glbData;
     const N=spec.count;
     this.capacity=Math.max(N, Math.floor(capacity??N), 1);
     this.spawnObstacles=obstacles;               // addFish 出生避让岩石时复用
-    this.lim=swimLimits(spec.L);                 // 水平活动半宽（按体长离玻璃留距）
+    this.yCeil=yCeil ?? 1.66;                    // 硬高度上限（默认缸 = 水面下 0.18）
+    this.waterY=waterY ?? TANK.waterY;
+    this.lim=swimLimits(spec.L, swim ?? SWIM);   // 水平活动半宽（按体长离玻璃留距）
+    this._refreshSpawn();
     this.group=new THREE.Group();
     this.causticK=null;
     if(this.glbMode){
@@ -137,10 +141,12 @@ export class School {
     this.avgSpeed=spec.minSpeed*2;
     this.pos=[]; this.vel=[]; this.yaw=[]; this.bank=[]; this.smv=[];
     for(let i=0;i<N;i++){
-      const p=new THREE.Vector3(rand(-1.7,1.7), rand(spec.band[0]+0.05,spec.band[1]-0.05), rand(-0.5,0.5));
+      // 默认缸保持 ±1.7/±0.5（lim.x 最大 2.13，不跨过 2.2）。更大的水体才按活动范围铺开
+      const wide=this.lim.x>2.2, h=this.spawnHalf;
+      const p=new THREE.Vector3(wide?rand(-h.x,h.x):rand(-1.7,1.7), rand(spec.band[0]+0.05,spec.band[1]-0.05), wide?rand(-h.z,h.z):rand(-0.5,0.5));
       for(let k=0;k<8;k++){                       // 避免出生在岩石里
         if(!obstacles.some(o=>p.distanceTo(o.c)<o.r+0.12)) break;
-        p.set(rand(-1.3,1.3), rand(spec.band[0]+0.05,spec.band[1]-0.05), rand(-0.4,0.4));
+        p.set(wide?rand(-h.rx,h.rx):rand(-1.3,1.3), rand(spec.band[0]+0.05,spec.band[1]-0.05), wide?rand(-h.rz,h.rz):rand(-0.4,0.4));
       }
       this.pos.push(p);
       const a=rand(6.283);
@@ -210,15 +216,31 @@ export class School {
     this.group.add(obj);
   }
 
+  // 大水体才放宽出生点；默认缸的 lim.x≤2.13，仍是原来的中心一小片
+  _refreshSpawn(){
+    const x=this.lim.x, z=this.lim.z;
+    this.spawnHalf = x>2.2
+      ? { x:x*0.82, z:z*0.72, rx:x*0.82*0.76, rz:z*0.72*0.8 }
+      : { x:1.7, z:0.5, rx:1.3, rz:0.4 };
+  }
+  /** 换缸但不重建鱼群时更新活动范围 @param {{x:number,z:number}} swim @param {number} yCeil @param {number} waterY */
+  setLimits(swim, yCeil, waterY){
+    this.lim=swimLimits(this.spec.L, swim);
+    this.yCeil=yCeil;
+    this.waterY=waterY;
+    this._refreshSpawn();
+  }
+
   // 亲密度入缸：原地追加一条（容量内），从小长大完成"入缸动画"；返回新鱼下标，满了返回 -1
   addFish(){
     const spec=this.spec, i=spec.count;
     if(i>=this.capacity) return -1;
     spec.count=i+1;
-    const p=new THREE.Vector3(rand(-0.6,0.6), spec.band[1]-0.18, rand(-0.3,0.3));
+    const wide=this.lim.x>2.2, h=this.spawnHalf;
+    const p=new THREE.Vector3(wide?rand(-h.x,h.x):rand(-0.6,0.6), spec.band[1]-0.18, wide?rand(-h.z,h.z):rand(-0.3,0.3));
     for(let k=0;k<8;k++){                       // 与出生时一样避开岩石
       if(!this.spawnObstacles.some(o=>p.distanceTo(o.c)<o.r+0.12)) break;
-      p.set(rand(-1.3,1.3), spec.band[1]-0.18, rand(-0.4,0.4));
+      p.set(wide?rand(-h.rx,h.rx):rand(-1.3,1.3), spec.band[1]-0.18, wide?rand(-h.rz,h.rz):rand(-0.4,0.4));
     }
     const a=rand(6.283);
     this.pos.push(p);
@@ -229,7 +251,7 @@ export class School {
     this.growth[i]=0.45; this.growthTarget[i]=1;   // 0.45 → 1：几秒内长大
     this.biteT[i]=0; this.gulpCool[i]=rand(0.5,1.5);
     this.pSpd[i]=0.5; this.pTurn[i]=0.3;
-    this.pY[i]=(p.y-0.35)/(TANK.waterY-0.35);
+    this.pY[i]=(p.y-0.35)/(this.waterY-0.35);
     if(this.glbMode) this._glbFish(i);
     else { this.mesh.count=i+1; this.finMesh.count=i+1; this.eyeMesh.count=(i+1)*2; }
     return i;
@@ -343,13 +365,13 @@ export class School {
       // 底栖贴底停顿：定时趴沙 2~3 秒
       const R=this.rest?this.rest[i]:null;
       // 水层下界：底栖种（hug）贴着沙面起伏，其余按 band
-      const floorY=spec.hug!=null ? sandHeight(p.x,p.z)+spec.hug+spec.H*0.5 : spec.band[0];
+      const floorY=spec.hug!=null ? groundY(p.x,p.z)+spec.hug+spec.H*0.5 : spec.band[0];
       let resting=false;
       if(R){
         R.t-=dt;
         if(!R.on){
           if(R.t<=0 && p.y<floorY+0.25){ R.on=1; R.dur=rand(2,3.2);
-            R.p.set(p.x,0,p.z); R.p.y=sandHeight(p.x,p.z)+0.03; }
+            R.p.set(p.x,0,p.z); R.p.y=groundY(p.x,p.z)+0.03; }
           else if(R.t<=0){ R.t=2; }
         }
         if(R.on){ R.dur-=dt; resting=R.dur>0; if(!resting){ R.on=0; R.t=rand(9,18); } }
@@ -405,9 +427,9 @@ export class School {
       if(flow && !resting) p.x+=flow*dt*FLOW_PUSH; // 水流推送（鱼要一直逆游才能保持位置）
       if(resting) v.multiplyScalar(1-Math.min(1,dt*3));   // 趴底阻尼
       // 硬约束：不出玻璃、不钻沙（沙面按高度场，趴底时可以贴近）
-      const sandY=sandHeight(p.x,p.z);
+      const sandY=groundY(p.x,p.z);
       p.x=clamp(p.x,-this.lim.x-0.06,this.lim.x+0.06);
-      p.y=clamp(p.y, resting ? sandY+0.03 : Math.max(sandY+spec.H*0.5+0.02, spec.hug!=null ? 0 : 0.4), 1.66);
+      p.y=clamp(p.y, resting ? sandY+0.03 : Math.max(sandY+spec.H*0.5+0.02, spec.hug!=null ? 0 : 0.4), this.yCeil);
       p.z=clamp(p.z,-this.lim.z-0.06,this.lim.z+0.06);
       speedSum+=v.length();
 
@@ -428,7 +450,7 @@ export class School {
       const pk=1-Math.exp(-dt*0.085);
       this.pSpd[i]+=(Math.min(s/spec.maxSpeed,1.5)-this.pSpd[i])*pk;
       this.pTurn[i]+=(Math.min(Math.abs(yawRate),8)/8-this.pTurn[i])*pk;
-      this.pY[i]+=((p.y-0.35)/(TANK.waterY-0.35)-this.pY[i])*pk;
+      this.pY[i]+=((p.y-0.35)/(this.waterY-0.35)-this.pY[i])*pk;
       this.growth[i]+=(this.growthTarget[i]-this.growth[i])*Math.min(1,dt*1.5);
       if(this.biteT[i]>0) this.biteT[i]=Math.max(0,this.biteT[i]-dt);
 

@@ -235,6 +235,7 @@ function createPrecip(scene, ripples){
       rainN=b.rain; snowN=b.snow;
       rGeo.setDrawRange(0, rainN); nGeo.setDrawRange(0, snowN);
     },
+    parts:[rain, snow],
     /** @param {number} dt @param {{ rain:number, snow:number, wind:number }} st @param {number} time */
     update(dt, st, time){
       const rainK=st.rain>0.02 ? Math.min(1, 0.35+st.rain) : 0;

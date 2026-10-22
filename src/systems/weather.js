@@ -30,7 +30,7 @@ const PRESETS = {
 };
 
 /** @typedef {{ mode:WeatherId, intensity:number, sunMul:number, hemiMul:number, fogMul:number, chop:number,
- *   grey:number, rain:number, snow:number, wind:number, wetTarget:number, fogAmt:number }} WeatherFrame */
+ *   grey:number, rain:number, snow:number, wind:number, wetTarget:number, fogAmt:number, cloud:number }} WeatherFrame */
 
 /** 本帧要叠到昼夜上的倍率。晴天或强度 0 → 恒等
  * @param {string} mode @param {number} intensity @returns {WeatherFrame} */
@@ -51,6 +51,7 @@ export function weatherFrame(mode, intensity){
     wind:id==='sunny' ? 0 : p.wind*I,
     wetTarget:id==='sunny' ? 0 : p.wetTarget*I,
     fogAmt:p.fog*k,
+    cloud:id==='sunny' || k===0 ? PRESETS.sunny.cloud : lerp(PRESETS.sunny.cloud, p.cloud, k),
   };
 }
 

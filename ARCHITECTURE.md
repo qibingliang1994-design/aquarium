@@ -355,6 +355,10 @@
   薄雾 / 小雪 + 强度 + 28 秒自动），晴天或强度 0 不改变灯光、雾和波浪；粒子在 `effects.js`，
   数量跟着现有五档画质走；潮湿度 `U.wet` 只压暗地面和石头。eco-pond 的水质分数不移植，只把
   相对清澈的茶色差写进自然水域网格水面的 `uMurk`。阴影仍由主循环按画质档刷新，不在天气里开关投影。
+  自然水域另有天空穹顶（`scene/sky-dome.js`，色键在 `systems/sky.js`）和平面反射（`scene/water-reflect.js`）。
+  反射只贴在网格水面上，不进玻璃缸的 water-pass；水面仍不写深度。贴图按五档画质缩放，最低档关闭，
+  开着就每帧渲（隔帧会闪）。鱼群在反射 pass 里关掉。环境贴图用同一天空渲 PMREM，签名变了才重建，至少隔 0.4 秒。
+  大池塘的聚光阴影用 `systems/shadow-fit.js` 收到岸线内，纹素吸附防爬行，灯光张角不动。清澈度滑杆只改碗形池塘的 `uMurk`。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

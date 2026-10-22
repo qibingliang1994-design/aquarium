@@ -13,7 +13,7 @@ const TOGGLES = [
 ];
 /** 滑杆行：onChange(key, 数值)，值显示在行内 <b> 里（百分比） */
 const SLIDERS = [
-  ['setLamp','lamp'], ['setAbsorb','absorb'], ['setShafts','shafts'], ['setWeatherI','weatherI'],
+  ['setLamp','lamp'], ['setAbsorb','absorb'], ['setShafts','shafts'], ['setWeatherI','weatherI'], ['setClarity','clarity'],
 ];
 /** 下拉：onChange(key, 字符串) */
 const SELECTS = [

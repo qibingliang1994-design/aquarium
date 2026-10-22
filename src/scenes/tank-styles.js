@@ -12,7 +12,7 @@
  * ================================================================ */
 
 /** @typedef {{ bg:number, fog:number, fogD:number, hemi:number, fill:number, env:number, clear:number, current:number, clarity?:number }} WaterEnv */
-/** @typedef {{ pos:[number,number,number], angle:number, penumbra:number, decay:number, distance:number, near:number, far:number }} SunRig */
+/** @typedef {{ pos:[number,number,number], angle:number, penumbra:number, decay:number, distance:number, near:number, far:number, fit?:number }} SunRig */
 /** @typedef {{ W:number, H:number, D:number, glass:number, waterY:number }} TankVolume */
 /** @typedef {{ min:number, max:number, near:number, far:number }} CamRig */
 /** @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean,
@@ -44,7 +44,7 @@ export const TANK_STYLES = {
   // 鱼的活动矩形内接在不规则岸线里（pondD<0.92）；视觉水面约 17×12，见 scene/pond-shape.js
   outdoor: { label:'大户外池塘', hint:'不规则石岸 · 开阔水面 · 晴雨雾雪', kind:'natural', bowl:true,
     light:{ spotCol:0xfff0d4, spotK:0.32, spotY:18, strip:0,
-      sun:{ pos:[-18,26,-14], angle:0.72, penumbra:0.75, decay:0, distance:0, near:8, far:90 } },
+      sun:{ pos:[-18,26,-14], angle:0.72, penumbra:0.75, decay:0, distance:0, near:8, far:90, fit:12 } },
     env:{ bg:0x8fbfdc, fog:0xb7d0dc, fogD:0.012, hemi:0.7, fill:0.4, env:0.62, clear:1, current:0, clarity:0.88 },
     volume:{ W:11.11, H:2.2, D:6.45, glass:0, waterY:1.84 },
     rig:{ min:1.6, max:32, near:0.08, far:180 },

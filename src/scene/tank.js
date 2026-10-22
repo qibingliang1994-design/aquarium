@@ -71,6 +71,10 @@ const waterUniforms={
   uFlow:U.flow,              // 水流速度：波纹沿 +x 漂移（与水草倒伏、浮叶共用）
   uChop:U.chop,              // 波浪倍率（晴天 = 1）。水体合成 pass 共用同一个对象
   uMurk:{value:0},           // 额外茶色 0 = 不改水色；只在网格水面（自然水域）里混
+  uReflectOn:{value:0},      // 1 = 采样平面反射（自然水域、画质档开着）。0 时下面的分支不走
+  uReflectDim:{value:1},     // 雨 / 雾 / 夜把反射压暗
+  uReflectMap:{value:(()=>{ const t=new THREE.DataTexture(new Uint8Array([190,210,220,255]),1,1); t.needsUpdate=true; return t; })()},
+  uReflectMtx:{value:new THREE.Matrix4()},
   uDepthTex:{value:/** @type {THREE.Texture|null} */ (null)},   // 自然水域的水深贴图（natural-shells bakeDepth）
   uDepthBox:{value:new THREE.Vector4(0,0,1,1)},  // 贴图覆盖范围：x0, z0, 1/宽, 1/深
   uDepthOn:{value:0},
@@ -110,9 +114,10 @@ const waterMesh=new THREE.Mesh(
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,
     fragmentShader:`
-      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn, uChop, uMurk;
+      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn, uChop, uMurk, uReflectOn, uReflectDim;
       uniform vec3 uSky, uDeep, uLightColor, uLampCol;
-      uniform sampler2D uCMap, uDepthTex;
+      uniform sampler2D uCMap, uDepthTex, uReflectMap;
+      uniform mat4 uReflectMtx;
       uniform vec4 uDepthBox;
       uniform vec2 uLampHalf, uLampXZ, uLampXZ2;
       varying vec3 vW; varying vec2 vXZ;
@@ -133,6 +138,15 @@ const waterMesh=new THREE.Mesh(
         float alpha=0.93;
         if(gl_FrontFacing){
           col = mix(uDeep, uSky, fres*0.95);
+          // 平面反射：掠射角更强。uReflectOn=0（玻璃缸、最低画质）整段跳过，水色与改前相同
+          if(uReflectOn>0.5){
+            vec4 rc = uReflectMtx*vec4(vW, 1.0);
+            rc.xy += clamp(g, vec2(-0.05), vec2(0.05))*10.0*rc.w;
+            vec3 refl = texture2DProj(uReflectMap, rc).rgb;
+            if(!(refl.r<=4.0 && refl.g<=4.0 && refl.b<=4.0)) refl = uSky;
+            float fmix = clamp(fres, 0.0, 1.0)*clamp(uReflectDim, 0.0, 1.0)*0.86;
+            col = mix(col, min(refl, vec3(3.0)), fmix);
+          }
           // 按视角：侧看（掠射）仍是反光的水面，俯视时透出缸里（此前缸模式恒 0.93，俯视机位和编辑器都被一块深色板挡住）
           alpha = mix(mix(0.32, 0.93, pow(fres,0.7)), mix(0.2, 0.92, pow(fres,0.8)), uClear);
           if(uDepthOn>0.5){

@@ -79,6 +79,17 @@ describe('dayNight 灯光亮度', () => {
     dn.jump(0);
     expect(hoodSpot.intensity).toBeCloseTo(16*0.32, 5);
     expect(hoodSpot.position.y).toBeCloseTo(26, 5);
+    expect(hoodSpot.shadow.focus).toBe(1);                 // 没给 fit 时不收阴影锥
+  });
+
+  it('带 fit 的太阳只收紧阴影相机，照射张角不动', () => {
+    const { dn, hoodSpot } = makeDayNight();
+    dn.setTank({ kind:'natural', light:{ spotCol:0xfff0d4, spotK:0.32, spotY:18, strip:0,
+      sun:{ pos:[-18,26,-14], angle:0.72, penumbra:0.75, decay:0, distance:0, near:8, far:90, fit:12 } } });
+    expect(hoodSpot.angle).toBeCloseTo(0.72, 5);
+    expect(hoodSpot.shadow.focus).toBeGreaterThan(0.2);
+    expect(hoodSpot.shadow.focus).toBeLessThan(0.85);
+    expect(hoodSpot.shadow.camera.far).toBeGreaterThan(hoodSpot.shadow.camera.near);
   });
 
   it('环境光/补光/鱼体轮廓不受灯光倍率影响（那是昼夜与主题的领域）', () => {

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { lerp } from '../utils.js';
 import { U } from '../uniforms.js';
+import { shadowFit } from '../systems/shadow-fit.js';
 
 /* ================================================================
  * 昼夜：nightK 向 target 缓动；apply(k) 驱动所有灯光、雾、水色、焦散强度
@@ -28,6 +29,30 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     fog:new THREE.Color(0x061420), sky:new THREE.Color(0.1,0.16,0.28), deep:new THREE.Color(0.005,0.03,0.06) };
   let k=0, target=0;
   let lampK=1;                 // 用户灯光亮度倍率（0~1.5，1=默认）：昼夜调光之上再乘
+  // 大池塘把阴影纹素吸到格上。0 = 不吸附（玻璃缸 / 小自然水域）
+  let snapTexel=0;
+  const snapRight=new THREE.Vector3(), snapUp=new THREE.Vector3(), snapProj=new THREE.Matrix4();
+  const shadow=/** @type {any} */ (hoodSpot.shadow), origMatrices=shadow.updateMatrices.bind(shadow);
+  shadow.updateMatrices=function(/** @type {any} */ light){
+    origMatrices(light);
+    if(!(snapTexel>0)) return;
+    const cam=shadow.camera;
+    snapRight.setFromMatrixColumn(cam.matrixWorld, 0);
+    snapUp.setFromMatrixColumn(cam.matrixWorld, 1);
+    const ox=cam.position.dot(snapRight), oy=cam.position.dot(snapUp);
+    const sx=Math.round(ox/snapTexel)*snapTexel, sy=Math.round(oy/snapTexel)*snapTexel;
+    if(sx===ox && sy===oy) return;
+    cam.position.addScaledVector(snapRight, sx-ox).addScaledVector(snapUp, sy-oy);
+    cam.updateMatrixWorld();
+    snapProj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    shadow._frustum.setFromProjectionMatrix(snapProj, cam.coordinateSystem, cam.reversedDepth);
+    shadow.matrix.set(
+      0.5, 0.0, 0.0, 0.5,
+      0.0, 0.5, 0.0, 0.5,
+      0.0, 0.0, 0.5, 0.5,
+      0.0, 0.0, 0.0, 1.0);
+    shadow.matrix.multiply(snapProj);
+  };
   // 天气倍率：晴天全是 1 / 0，apply 每次从昼夜表重算再乘一次，不会越乘越暗
   const wx={ sunMul:1, hemiMul:1, fogMul:1, chop:1, grey:0, rain:0, fogAmt:0 };
   const greyCol=new THREE.Color();
@@ -96,6 +121,8 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     setTank(/** @type {any} */ t){
       DAY.spotCol.setHex(t.light.spotCol); DAY.spot=16*t.light.spotK;
       const nat=t.kind==='natural', sh=hoodSpot.shadow.camera, sun=t.light.sun;
+      snapTexel=0;
+      hoodSpot.shadow.focus=1;
       if(sun){
         // 大场景的太阳自己带位置和张角。不能再除 (spotY-0.7)²——灯一抬高亮度就没了
         hoodSpot.position.set(sun.pos[0], sun.pos[1], sun.pos[2]);
@@ -103,6 +130,15 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
         sh.near=sun.near; sh.far=sun.far;
         hoodSpot.shadow.bias=-0.0012; hoodSpot.shadow.normalBias=0.05;
         hoodSpot.target.position.set(0, 0.35, 0);
+        if(sun.fit){
+          // 照射张角不动，只把阴影相机收到池塘上，并按纹素吸附
+          const fit=shadowFit(
+            { x:sun.pos[0], y:sun.pos[1], z:sun.pos[2] },
+            { x:0, y:0.35, z:0 }, sun.fit, hoodSpot.shadow.mapSize.width || 1024);
+          hoodSpot.shadow.focus=Math.min(1, fit.angle/Math.max(0.05, hoodSpot.angle));
+          sh.near=fit.near; sh.far=fit.far;
+          snapTexel=fit.texel;
+        }
       }else if(nat){
         // 自然水域：太阳斜照（后左上方约 30°），近似平行光、不随距离衰减——鱼影斜落在河床上，
         // 而不是正下方被鱼身挡住；也没有"舞台追光"那样的一圈亮斑。亮度按原先正上方灯在河床处的照度折算

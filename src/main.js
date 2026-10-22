@@ -13,6 +13,9 @@ import { SoundEngine } from './systems/sound.js';
 import { createQuality, budgetRatio } from './systems/quality.js';
 import { createAmbience } from './systems/ambience.js';
 import { createWeather, sanitizeWeather, pondTint } from './systems/weather.js';
+import { reflectDim } from './systems/reflect.js';
+import { createSky } from './scene/sky-dome.js';
+import { createWaterReflect } from './scene/water-reflect.js';
 import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
 import { SPECIES_META } from './ui/encyclopedia.js';
@@ -86,10 +89,12 @@ loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
 /** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true,
-  weatherMode:'sunny', weatherI:0.7, weatherAuto:false, weatherWet:0 };
+  weatherMode:'sunny', weatherI:0.7, weatherAuto:false, weatherWet:0, clarity:0.88 };
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
 settings.lamp=Math.min(1.5, Math.max(0, +settings.lamp||1));   // 旧存档/坏值兜底：0~1.5，1=默认
 Object.assign(settings, sanitizeWeather(settings));
+if(typeof settings.clarity!=='number' || !Number.isFinite(settings.clarity)) settings.clarity=0.88;
+else settings.clarity=Math.min(1, Math.max(0.35, settings.clarity));
 const weather=createWeather(settings);
 const saveSettings=()=>{ if(!canWrite()) return; try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
@@ -135,7 +140,7 @@ U.wet.value=weather.wet;
 const murkBase=()=>{
   const st=TANK_STYLES[runtime.doc?.tank];
   if(!st?.bowl) return 0;                      // 玻璃缸与旧自然水域：晴天 uMurk=0
-  const q=st.env?.clarity ?? 0.88;
+  const q=Math.min(1, Math.max(0.35, Number(settings.clarity) || 0.88));
   return pondTint(q, q);
 };
 // 灯光定时器 + 开缸浊度（跟随本地时间开着时，启动直接对上当前时刻）
@@ -365,6 +370,11 @@ const statsEl=$('stats'), careFill=$('careFill'), careText=$('careText');
 let fpsFrames=0, fpsTime=0, realT=0;
 renderer.info.autoReset=false;                    // 整帧统计（含阴影/后期）由主循环手动重置（__aqDebug.perf 用）
 
+/* ---------- 自然水域：天空穹顶 + 平面反射（玻璃缸不走这里） ---------- */
+const sky=createSky({ renderer, scene, hemi });
+const reflect=createWaterReflect({ renderer, scene, camera, waterMesh, waterUniforms, sky,
+  hideRoots:()=>[...schools.map(s=>s.group), ...precip.parts] });
+
 /* ---------- 自动画质：阶梯降级（像素预算+像素比上限 → 1.25/1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
 const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
 let shadowHz=30, shadowAcc=1/30;                // 阴影贴图刷新率（随画质档变化）与累计器；首帧就画一次
@@ -386,6 +396,7 @@ const quality=createQuality({
     setMSAA(ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);
+    reflect.setLevel(q.level);
   },
 });
 
@@ -461,8 +472,14 @@ function frame(){
   sound.update(dt, settings.bubbles && air.on);
   snow.update(dt,t);
   ripples.update(dt);
-  precip.update(dt, weather.frame(), t);
+  const wxNow=weather.frame();
+  precip.update(dt, wxNow, t);
   editor.update(t);
+  const natural=isNatural(runtime.doc.tank);
+  sky.update(dt, dayNight.k, wxNow, hoodSpot.position, natural);
+  sky.place(camera.position);
+  reflect.setDim(reflectDim(dayNight.k, wxNow));
+  reflect.render(natural && !editor.active && waterMesh.visible);
 
   // 阴影贴图限频：鱼游得慢，降频更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）；
   // 频率随画质档走（高清 30 Hz → 极速 10 Hz，学自 aquarium-editor 的分级阴影）
@@ -507,6 +524,7 @@ addEventListener('resize',()=>{
 
 installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass,
   bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
+  sky, reflect,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
   setCycle:(/** @type {boolean} */ on)=>{ settings.cycle=on; },   // 只改本次运行，不落盘
   settingsPanel,

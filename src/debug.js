@@ -27,6 +27,10 @@ export function installDebug(/** @type {any} */  d){
     night:()=>dayNight.k,
     setNight:(/** @type {number} */ k)=>{ d.setCycle?.(false); dayNight.jump(k); },   // 固定昼夜（截图对比用，关自动循环、不落盘）
     setWeather:(/** @type {string} */ mode, /** @type {number} */ intensity)=>d.setWeather?.(mode, intensity) ?? null,   // 本次运行的天气，不落盘
+    sky:(/** @type {boolean|null} */ on)=>d.sky?.setForce(on),
+    reflect:(/** @type {boolean|null} */ on)=>d.reflect?.setForce(on),
+    reflectOn:()=>d.reflect?.on ?? 0,
+    skyOn:()=>!!d.sky?.dome?.visible,
     weather:()=>d.weather?.() ?? null,
     modelStatus:()=>modelPreviewStats(),
     pickAt:(/** @type {number} */ x,/** @type {number} */ y)=>{ const h=fishCard.pick(x,y); return h?{ id:h.school.spec.id, n:h.fid, glb:h.school.glbMode }:null; },

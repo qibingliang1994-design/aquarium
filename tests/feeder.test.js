@@ -59,4 +59,29 @@ describe('Feeder', () => {
     expect(x1 - x0).toBeGreaterThan(feeder.pellets.length * 0.08);
     vi.useRealTimers();
   });
+
+  it('强水流下饲料贴玻璃停住，不会漂出缸外', () => {
+    const { feeder } = makeFeeder();
+    feeder.flow = 0.5;
+    feeder.spawn(new THREE.Vector3(2.0, WATER_Y, 0));   // 贴近右玻璃投放
+    for (let i = 0; i < 60 * 10; i++) feeder.update(1 / 60, i / 60);
+    for (const p of feeder.pellets) {
+      expect(Math.abs(p.p.x)).toBeLessThanOrEqual(2.2 + 1e-6);
+      expect(Math.abs(p.p.z)).toBeLessThanOrEqual(0.8 + 1e-6);
+    }
+    vi.useRealTimers();
+  });
+
+  it('碎屑也不会漂出缸外', () => {
+    const { feeder } = makeFeeder();
+    feeder.flow = 0.5;
+    feeder.spawn(new THREE.Vector3(2.15, WATER_Y, 0));
+    feeder.consume(feeder.pellets[0]);
+    for (let i = 0; i < 90; i++) feeder.update(1 / 60, i / 60);   // 1.5 秒（碎屑寿命 1.6 秒内）
+    for (const c of feeder.crumbs.filter(Boolean)) {
+      expect(Math.abs(c.p.x)).toBeLessThanOrEqual(2.2 + 1e-6);
+      expect(Math.abs(c.p.z)).toBeLessThanOrEqual(0.8 + 1e-6);
+    }
+    vi.useRealTimers();
+  });
 });

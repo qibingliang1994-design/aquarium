@@ -1,6 +1,6 @@
 // @ts-check
 import { clamp } from '../utils.js';
-import { ITEM_META, PLACE_BOUNDS, MAX_ITEMS } from './item-meta.js';
+import { ITEM_META, placeLimits, MAX_ITEMS } from './item-meta.js';
 import { THEMES } from './themes.js';
 import { resolveTank } from './tank-styles.js';
 
@@ -14,9 +14,9 @@ import { resolveTank } from './tank-styles.js';
  *   items:SceneItem[], updatedAt?:number }} SceneDoc */
 
 // 与 entities/fish/species.js 的 SPECIES 顺序一致（单测校验）
-export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot'];
+export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot','guppy','betta','harlequin'];
 /** @type {Record<string, number>} */
-export const FISH_MAX = { tetra:40, gold:10, angel:8, cory:12, koi:6, clown:10, lion:4, mandarin:6, parrot:8 };
+export const FISH_MAX = { tetra:40, gold:10, angel:8, cory:12, koi:6, clown:10, lion:4, mandarin:6, parrot:8, guppy:10, betta:2, harlequin:24 };
 export const FISH_TOTAL_MAX = 90;
 export const NAME_MAX = 16;
 
@@ -36,13 +36,15 @@ export function sanitizeItem(raw){
   const meta = Object.hasOwn(ITEM_META, type) ? ITEM_META[type] : null;   // 自有键：坏存档里的 "constructor"/"__proto__" 不能查到原型链上
   if(!meta) return null;
   const rot = num(r.rot, 0) % (Math.PI*2);
+  const s = clamp(num(r.s,1), meta.scale[0], meta.scale[1]);
+  const lim = placeLimits(type, s);   // 占地半径×缩放 → 中心点收进玻璃内壁（旧存档靠这里拉回缸内）
   return {
     id: typeof r.id==='string' && r.id ? r.id.slice(0,40) : newId('it'),
     type,
-    x: clamp(num(r.x,0), -PLACE_BOUNDS.x, PLACE_BOUNDS.x),
-    z: clamp(num(r.z,0), -PLACE_BOUNDS.z, PLACE_BOUNDS.z),
+    x: clamp(num(r.x,0), -lim.x, lim.x),
+    z: clamp(num(r.z,0), -lim.z, lim.z),
     rot: rot<0 ? rot+Math.PI*2 : rot,
-    s: clamp(num(r.s,1), meta.scale[0], meta.scale[1]),
+    s,
     seed: Math.abs(Math.floor(num(r.seed,1))) % 1e9,
   };
 }

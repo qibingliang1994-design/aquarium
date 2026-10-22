@@ -227,4 +227,67 @@ export const SPECIES = [
       if(c<-0.4) out.lerp(new THREE.Color(0.75,0.85,0.8), sstep(-0.4,-1,c)*0.5);
     },
   },
+  { // 孔雀鱼（雄）：虹彩蓝绿小身 + 大红尾，上层松散小群（模型：aquarium-editor，MIT）
+    id:'guppy', count:6, L:0.14, H:0.055, glb:'fish-models/species/species-guppy.glb',
+    profileH:[[0,0.08],[0.12,0.6],[0.3,1],[0.5,0.9],[0.7,0.6],[0.88,0.36],[1,0.2]],
+    profileW:[[0,0.5],[0.12,0.76],[0.32,0.62],[0.52,0.46],[0.78,0.28],[1,0.22]],
+    topK:1.06, botK:0.96,
+    tailLen:0.6, tailSpread:1.5, tailFork:0.1, tailVeil:true,
+    dorsalH:0.6, dorsalL:0.22, analH:0.4, analL:0.16, pectL:0.14,
+    finOpacity:0.62, finColor:0xff8a70,
+    rough:0.4, metal:0.24, scaleI:0.5, irid:0.45, scaleTiles:26, eyeSize:0.07,
+    amp:0.115, beat:10, waveK:6.0,
+    schoolRad:0.9, wSep:2.0, wAli:0.5, wCoh:0.4,
+    minSpeed:0.08, maxSpeed:0.42, wander:0.24, turn:2.6,
+    band:[0.92,1.68], senseR:2.2, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.42,0.62,0.6);                       // 虹彩蓝绿身
+      out.lerp(new THREE.Color(0.1,0.2,0.24), sstep(0.25,0.9,c)*0.7);
+      if(c<-0.45) out.lerp(new THREE.Color(0.9,0.94,0.92), sstep(-0.45,-1,c)*0.6);
+      const n=vnoise(u*2.6+7.7, y*2.2+3.3);
+      if(n>0.58) out.lerp(new THREE.Color(0.85,0.4,0.3), sstep(0.58,0.78,n)*0.6);   // 身侧红斑
+    },
+  },
+  { // 半月斗鱼：宽大绯鳍缓游独行，一缸一两尾刚刚好（模型：aquarium-editor，MIT）
+    id:'betta', count:1, L:0.2, H:0.095, glb:'fish-models/species/species-betta.glb',
+    profileH:[[0,0.1],[0.14,0.62],[0.34,1],[0.52,0.92],[0.7,0.68],[0.86,0.42],[1,0.24]],
+    profileW:[[0,0.46],[0.14,0.7],[0.34,0.56],[0.54,0.42],[0.78,0.26],[1,0.2]],
+    topK:1.1, botK:1.02,
+    tailLen:0.66, tailSpread:1.65, tailFork:0.08, tailVeil:true,
+    dorsalH:1.25, dorsalL:0.5, analH:1.4, analL:0.55, pectL:0.2,
+    finOpacity:0.66, finColor:0xc23a5a,
+    rough:0.38, metal:0.2, scaleI:0.52, irid:0.4, scaleTiles:24, eyeSize:0.06,
+    amp:0.06, beat:3.6, waveK:4.0,
+    schoolRad:1.6, wSep:2.8, wAli:0.1, wCoh:0.1,
+    minSpeed:0.02, maxSpeed:0.2, wander:0.12, turn:2.0,
+    band:[0.85,1.62], senseR:2.2, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.42,0.2,0.6);                        // 紫蓝身
+      out.lerp(new THREE.Color(0.1,0.06,0.3), sstep(0.2,0.9,c)*0.7);
+      if(c<-0.4) out.lerp(new THREE.Color(0.85,0.4,0.4), sstep(-0.4,-1,c)*0.5);     // 腹侧绯红
+      const n=vnoise(u*2.2+2.9, y*2.0+8.8);
+      if(n>0.6) out.lerp(new THREE.Color(0.9,0.3,0.35), sstep(0.6,0.8,n)*0.55);
+    },
+  },
+  { // 金三角灯：铜粉底 + 后半黑三角斑，队形最整齐的群游鱼（模型：aquarium-editor，MIT）
+    id:'harlequin', count:16, L:0.15, H:0.055, glb:'fish-models/species/species-harlequin.glb',
+    profileH:[[0,0.07],[0.12,0.62],[0.32,1],[0.5,0.92],[0.7,0.6],[0.88,0.32],[1,0.16]],
+    profileW:[[0,0.5],[0.12,0.74],[0.32,0.6],[0.52,0.46],[0.78,0.28],[1,0.18]],
+    topK:1.06, botK:0.96,
+    tailLen:0.4, tailSpread:0.95, tailFork:0.45,
+    dorsalH:0.6, dorsalL:0.22, analH:0.5, analL:0.2, pectL:0.15,
+    finOpacity:0.6, finColor:0xe8a88a,
+    rough:0.42, metal:0.3, scaleI:0.5, irid:0.4, scaleTiles:28, eyeSize:0.066,
+    amp:0.1, beat:9, waveK:5.6,
+    schoolRad:0.55, wSep:2.3, wAli:1.3, wCoh:1.0,
+    minSpeed:0.14, maxSpeed:0.55, wander:0.26,
+    band:[0.78,1.55], senseR:2.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.85,0.62,0.44);                      // 铜粉底
+      out.lerp(new THREE.Color(0.3,0.16,0.1), sstep(0.25,0.9,c)*0.7);
+      if(c<-0.5) out.lerp(new THREE.Color(0.95,0.9,0.85), sstep(-0.5,-1,c)*0.7);
+      const tri=sstep(0.42,0.5,u)*(1-sstep(0.78,0.86,u))*sstep(-0.05,0.15,c);       // 后半黑三角
+      if(tri>0) out.lerp(new THREE.Color(0.08,0.06,0.06), tri*0.92);
+    },
+  },
 ];

@@ -88,8 +88,13 @@
   <p class="pop-title">设置</p>
   <label class="switch-row"><span>环境音效</span><input type="checkbox" id="setSound" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>自动昼夜循环</span><input type="checkbox" id="setCycle" role="switch"/><i class="switch"></i></label>
+  <label class="switch-row"><span>跟随本地时间<small>8:00 开灯 · 21:30 关灯</small></span><input type="checkbox" id="setClock" role="switch"/><i class="switch"></i></label>
   <p class="pop-title">画面</p>
-  <label class="switch-row"><span>光柱</span><input type="checkbox" id="setRays" role="switch"/><i class="switch"></i></label>
+  <label class="slider-row"><span class="sr-head"><em>灯光亮度<small>缸灯强弱 · 100% 为默认</small></em><b></b></span><input type="range" id="setLamp" min="0" max="1.5" step="0.01"/></label>
+  <label class="slider-row"><span class="sr-head"><em>水色浓淡<small>水体吸收 · 越高越浓</small></em><b></b></span><input type="range" id="setAbsorb" min="0.1" max="1" step="0.01"/></label>
+  <label class="slider-row"><span class="sr-head"><em>光柱<small>水中光束 · 随造景剪影</small></em><b></b></span><input type="range" id="setShafts" min="0" max="1" step="0.01"/></label>
+  <label class="switch-row"><span>景深<small>拉近看鱼时背景虚化</small></span><input type="checkbox" id="setDof" role="switch"/><i class="switch"></i></label>
+  <label class="switch-row"><span>水体雾化<small>远景沉入水色 · 关=通透</small></span><input type="checkbox" id="setHaze" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>气泡</span><input type="checkbox" id="setBubbles" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>悬浮颗粒</span><input type="checkbox" id="setSnow" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>水面焦散</span><input type="checkbox" id="setCaustics" role="switch"/><i class="switch"></i></label>
@@ -118,6 +123,7 @@
   </dl>
   <div class="fc-foot">
     <span class="fc-chip" id="fcMood"></span>
+    <span class="fc-chip" id="fcDays"></span>
     <div class="fc-grow"><span>成长</span><i><b id="fcGrowBar"></b></i><em id="fcGrowth"></em></div>
   </div>
 </div>
@@ -154,6 +160,7 @@
     <footer class="encyclopedia-foot">
       <span>当前水族箱已收录 <strong id="speciesCount">4</strong> 个鱼种</span>
       <span id="bondText"></span>
+      <span id="mixNote" class="mix-note" hidden></span>
       <span class="guide-tip">提示：点击“喂食”观察不同鱼类的觅食反应</span>
     </footer>
   </section>

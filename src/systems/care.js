@@ -3,7 +3,7 @@ import { clamp, sstep } from '../utils.js';
 import { canWrite } from './write-lock.js';
 
 /** @typedef {{ id:string, count:number }} SpeciesLike */
-/** @typedef {{ satiety?:unknown, t?:unknown, fed?:Record<string, unknown>, bond?:unknown, milestones?:unknown }} CareSave */
+/** @typedef {{ satiety?:unknown, t?:unknown, fed?:Record<string, unknown>, since?:Record<string, unknown>, bond?:unknown, milestones?:unknown }} CareSave */
 
 /* ================================================================
  * 饲养状态：全缸饱食度 + 个体成长 + 亲密度（localStorage 持久化）
@@ -12,6 +12,7 @@ import { canWrite } from './write-lock.js';
  * 成长：每条鱼累计吃到的饲料数 → 体型 1.0 ~ 1+GROW_MAX。
  * 亲密度 bond：全缸累计吃到的饲料数，只增不减；每跨过一个 MILESTONES 阈值
  * 发一条新鱼（scene-runtime.addFish），全部里程碑之后转为"光泽度"。
+ * 在缸时长 since：每条鱼入缸的时间戳；旧存档没有记录的鱼从升级当天算起（无法追溯，所以只显示"第 N 天"）。
  * ================================================================ */
 const DEFAULT_KEY='aquarium.care';
 const DECAY_PER_SEC=1/180;       // 吃饱后约 3 分钟饿回来
@@ -25,6 +26,14 @@ const GLOSS_SPAN=600;            // 最后一个里程碑之后再吃 600 颗，
 
 /** @type {[number, string][]} */
 const STATUS=[ [0.75,'饥肠辘辘'], [0.45,'觅食中'], [0.15,'半饱'], [-1,'酒足饭饱'] ];
+
+const DAY_MS=86400000;
+/** 在缸第几天（按本地日历日，入缸当天 = 第 1 天） @param {number} since @param {number} [now] */
+export function daysInTank(since, now=Date.now()){
+  const d0=new Date(since), d1=new Date(now);
+  const a=Date.UTC(d0.getFullYear(), d0.getMonth(), d0.getDate()), b=Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
+  return Math.max(1, Math.round((b-a)/DAY_MS)+1);
+}
 
 /** @param {string} key @returns {CareSave} */
 function loadState(key){
@@ -41,19 +50,30 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
   let satiety=clamp((Number.isFinite(savedSatiety)?savedSatiety:0.3)-elapsed*DECAY_PER_SEC, 0, 1);
   /** @type {Record<string, number[]>} */
   const fed={};
+  /** @type {Record<string, number[]>} */
+  const since={};
   /** @type {Record<string, number>} */
   const counts={};
+  const now0=Date.now();
+  let dirty=false;
   for(const s of species){
     counts[s.id]=s.count;
     const raw=saved.fed?.[s.id];
     const arr=Array.isArray(raw) ? raw : [];
     // 保留存档里多出来的个体：编辑器里临时减鱼再取消，不丢成长
     fed[s.id]=Array.from({length:Math.min(64,Math.max(s.count,arr.length))},(_,i)=>Math.max(0,Number(arr[i])||0));
+    const rawS=saved.since?.[s.id], arrS=Array.isArray(rawS) ? rawS : [];
+    since[s.id]=Array.from({length:fed[s.id].length},(_,i)=>{
+      const v=Number(arrS[i]);
+      if(Number.isFinite(v) && v>0 && v<=now0) return v;
+      if(i<s.count) dirty=true;                   // 补上的记录要落盘，刷新后天数才不变
+      return now0;
+    });
   }
   // 亲密度只增不减，离线不衰减
   let bond=Math.max(0, Math.floor(Number(saved.bond)||0));
   let milestonesDone=clamp(Math.floor(Number(saved.milestones)||0), 0, MILESTONES.length);
-  let dirty=false, saveTimer=SAVE_INTERVAL;
+  let saveTimer=SAVE_INTERVAL;
   // 最近一次把饱食度结算到"现在"的墙钟时间：标签页在后台时 rAF 停摆、dt 被钳，
   // 回来后（或后台直接关页）按墙钟补扣，和关掉重开的离线衰减一致
   let lastT=Date.now();
@@ -67,6 +87,13 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
     return step;
   }
 
+  /** 入缸时间戳（没有记录的个体此刻补记） @param {string} id @param {number} i */
+  function sinceOf(id,i){
+    const arr=since[id] ?? (since[id]=[]);
+    if(!(arr[i]>0)){ const t=Date.now(); for(let k=arr.length;k<=i;k++) arr[k]=t; arr[i]=t; dirty=true; }
+    return arr[i];
+  }
+
   /** @type {(id:string, i:number)=>number} */
   const growthProgress=(id,i)=>Math.min(1,(fed[id]?.[i]??0)/GROW_PELLETS);
   /** @type {(id:string, i:number)=>number} */
@@ -75,7 +102,7 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
   function save(){
     if(Date.now()-lastT>STALL_SECS*1000) settle(0);   // 后台挂着直接关页：先补扣再落盘，否则这段时间永久丢失
     if(!canWrite()) return;                       // 另一个窗口持有写锁：只读
-    try{ localStorage.setItem(key, JSON.stringify({ satiety, t:Date.now(), fed, bond, milestones:milestonesDone })); dirty=false; }
+    try{ localStorage.setItem(key, JSON.stringify({ satiety, t:Date.now(), fed, since, bond, milestones:milestonesDone })); dirty=false; }
     catch(err){ console.warn('[care] 保存饲养存档失败', err); }
   }
   addEventListener('pagehide', save);
@@ -89,6 +116,10 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
     status:()=>(STATUS.find(([k])=>1-satiety>k) ?? STATUS[STATUS.length-1])[1],
     growthOf,
     growthProgress,
+    /** 在缸第几天（入缸当天 = 1） @param {string} id @param {number} i */
+    daysOf:(id,i)=>daysInTank(sinceOf(id,i)),
+    /** 新鱼入缸（里程碑 / 原地加鱼）：从现在算起 @param {string} id @param {number} i */
+    arrive(id,i){ sinceOf(id,i); since[id][i]=Date.now(); counts[id]=Math.max(counts[id]??0, i+1); dirty=true; },
     growthArray:(/** @type {string} */ id)=>Array.from({length:counts[id]??0},(_,i)=>growthOf(id,i)),
     // 一颗饲料被吃：饱食度↑、个体成长、亲密度 +1；返回该鱼新的体型系数
     /** @param {string} id @param {number} i */
@@ -98,6 +129,7 @@ export function createCare(species, { key=DEFAULT_KEY }={}){
       const arr=fed[id] ?? (fed[id]=[]);
       while(arr.length<=i) arr.push(0);        // 新入缸的鱼也能记成长
       arr[i]+=1;
+      sinceOf(id,i);
       counts[id]=Math.max(counts[id]??0, i+1);
       dirty=true;
       return growthOf(id,i);

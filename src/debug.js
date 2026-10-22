@@ -2,6 +2,7 @@
 import { U } from './uniforms.js';
 import { sstep } from './utils.js';
 import { schoolNames, personaTags } from './entities/fish/identity.js';
+import { mixNoteFor } from './ui/encyclopedia.js';
 
 /* ================================================================
  * window.__aqDebug：自动化验证用的调试钩子
@@ -58,6 +59,18 @@ export function installDebug(/** @type {any} */  d){
     projectFish:(/** @type {number} */ si,/** @type {number} */ ii)=>{ const p=schools[si].pos[ii].clone(); p.project(camera);
       return { x:Math.round((p.x+1)/2*innerWidth), y:Math.round((1-p.y)/2*innerHeight) }; },
     look:(/** @type {any} */ pos,/** @type {any} */ tgt)=>{ camera.position.set(...pos); controls.target.set(...tgt); stopCamTween(); },
+    // —— 常识与时间：灯光定时器 / 开缸浊度 / 混养提示 / 在缸时长 ——
+    // clockAt('21:50')：本次运行打开"跟随本地时间"并把"现在"钉在该时刻（不落盘）；clockAt(null) 恢复真实时间并关掉
+    clockAt:(/** @type {string|null} */ hhmm)=>{
+      const m=hhmm ? /^(\d{1,2}):(\d{2})$/.exec(hhmm) : null;
+      if(m){ const dt=new Date(); dt.setHours(+m[1], +m[2], 0, 0); d.settings.clock=true; d.settings.cycle=false; d.ambience.setClock(dt); }
+      else { d.settings.clock=false; d.ambience.setClock(null); }
+      return { clock:d.settings.clock, target:+dayNight.target.toFixed(3) };
+    },
+    turbidity:()=>+d.ambience.turbidity.toFixed(3),
+    kickTurbid:(/** @type {number} */ s=1)=>d.ambience.kick(s),
+    mixNote:()=>mixNoteFor(runtime.doc.fish),
+    daysOf:(/** @type {number} */ si,/** @type {number} */ ii)=>care().daysOf(schools[si].spec.id, ii),
     // —— 场景系统 ——
     schoolIds:()=>schools.map((/** @type {any} */ s)=>`${s.spec.id}:${s.spec.count}`),
     sceneId:()=>store.activeId,
@@ -69,5 +82,20 @@ export function installDebug(/** @type {any} */  d){
     editor:()=>editor,
     projectItem:(/** @type {string} */ id)=>{ const r=runtime.rootOf(id); if(!r) return null; const p=r.position.clone(); p.y+=0.05; p.project(camera);
       return { x:Math.round((p.x+1)/2*innerWidth), y:Math.round((1-p.y)/2*innerHeight) }; },
+    // —— 性能与批处理（优化验证用） ——
+    // perf() 取上一完整帧的整帧统计（主场景+阴影+后期；main 每帧手动 reset renderer.info）
+    perf:()=>{ const i=renderer.info; return { calls:i.render.calls, triangles:i.render.triangles,
+      points:i.render.points, lines:i.render.lines, geometries:i.memory.geometries, textures:i.memory.textures,
+      programs:i.programs?.length ?? null, pixelRatio:renderer.getPixelRatio(),
+      drawSize:[renderer.domElement.width, renderer.domElement.height] }; },
+    // 物件绘制批：每桶一次多绘制；sources = 桶内合批的原网格数（对比 setBatching(false) 前后 perf().calls 可量化收益）
+    itemBatches:()=>runtime.batchStats(),
+    setBatching:(/** @type {boolean} */ on)=>runtime.setBatching(on),
+    // —— 水体合成（water-pass.js）：water(false) 回退网格水面做 A/B；absorb(k) 吸收强度；shafts(k) 光柱 ——
+    water:(/** @type {boolean} */ on=true)=>{ d.setWaterOn?.(on); return { composite:on }; },
+    absorb:(/** @type {number} */ k=0.4)=>{ d.waterPass.uniforms.uSigmaK.value=k; return k; },
+    shafts:(/** @type {number} */ k=0.1)=>{ d.waterPass.setShafts(k); return k; },
+    // —— 灯光：lamp(k) 临时调缸灯亮度（0~1.5，1=默认；不落盘，截图对比用） ——
+    lamp:(/** @type {number} */ k=1)=>{ dayNight.setLamp(k); return k; },
   };
 }

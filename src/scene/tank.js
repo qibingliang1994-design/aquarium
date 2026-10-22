@@ -7,6 +7,7 @@ import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX } from './natural-shells.js';
 import { createSkirtMaterial } from './substrate.js';
+import { surfacePair, onTexPair } from '../scenes/items/surface-tex.js';
 
 /* ================================================================
  * 水族箱尺寸
@@ -68,6 +69,23 @@ const waterUniforms={
   uDepthTex:{value:/** @type {THREE.Texture|null} */ (null)},   // 自然水域的水深贴图（natural-shells bakeDepth）
   uDepthBox:{value:new THREE.Vector4(0,0,1,1)},  // 贴图覆盖范围：x0, z0, 1/宽, 1/深
   uDepthOn:{value:0},
+  // 灯带实形反射（学自 aquarium-editor 的 roomEnv）：各款式灯具发光面的矩形，水面着色器
+  // 把经波面反射的视线打到灯平面、落在矩形内才亮——反射有"形状"而不是一团解析光斑
+  uLampY:{value:2.24}, uLampHalf:{value:new THREE.Vector2(2.12,0.21)},
+  uLampXZ:{value:new THREE.Vector2(0,-0.62)},     // 灯带中心 A（reef 双灯盘用 A/B 两块）
+  uLampXZ2:{value:new THREE.Vector2(0,-0.62)},    // 灯带中心 B（单灯款式与 A 相同，max() 后等价单块）
+  uLampCol:{value:new THREE.Color(0xfff2dd)},
+  uLampK:{value:1},               // 灯带亮度（daynight 昼夜调光写，跟随灯具发光面变暗）
+  uLampOn:{value:1},              // 玻璃缸才有灯带反射；自然水域 = 0
+};
+// 各款式灯带矩形（贴合 tank-shells.js / ming-shell.js 里发光面的真实位置与尺寸）
+/** @type {Record<string, { y:number, half:[number,number], xz:[number,number], xz2?:[number,number], col:number }>} */
+const LAMP_RECT={
+  classic:{ y:2.24, half:[2.12,0.21], xz:[0,-0.62], col:0xfff2dd },   // 灯罩条 W*0.92×0.42 @H+0.039
+  rimless:{ y:2.70, half:[2.07,0.075], xz:[0,-0.05], col:0xfff8ee },  // 吊灯细条 W*0.9×0.15 @H+0.504
+  reef:{ y:2.63, half:[0.20,0.20], xz:[-1.15,-0.05], xz2:[1.15,-0.05], col:0xcfe0ff },  // 双灯盘 r0.2 @x±1.15
+  zen:{ y:2.37, half:[2.12,0.25], xz:[0,-0.60], col:0xffdcae },       // 木质灯檐条 W*0.92×0.5 @H+0.168
+  ming:{ y:2.41, half:[2.07,0.18], xz:[0,-0.55], col:0xffd6a0 },      // 翘头灯檐下的暖光条 W*0.9×0.36
 };
 const waterMesh=new THREE.Mesh(
   new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.01, TANK.D-2*TANK.glass-0.01, 48, 24).rotateX(-Math.PI/2),
@@ -87,8 +105,11 @@ const waterMesh=new THREE.Mesh(
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,
     fragmentShader:`
-      uniform float uTime, uClear, uDepthOn; uniform vec3 uSky, uDeep, uLightColor; uniform sampler2D uCMap, uDepthTex;
+      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn;
+      uniform vec3 uSky, uDeep, uLightColor, uLampCol;
+      uniform sampler2D uCMap, uDepthTex;
       uniform vec4 uDepthBox;
+      uniform vec2 uLampHalf, uLampXZ, uLampXZ2;
       varying vec3 vW; varying vec2 vXZ;
       void main(){
         float depth=1.0;                                   // 水深（自然水域按贴图，缸里视为很深）
@@ -130,6 +151,25 @@ const waterMesh=new THREE.Mesh(
           col = mix(uDeep*1.5, uSky*0.62, graze) + uLightColor*pow(s1*s2,0.7)*0.32*(1.0-graze*0.6);
           alpha = 0.82 + 0.15*graze;
         }
+        // 灯带实形反射：视线经波面反射打到灯平面，落在灯具发光面矩形内才亮（双灯盘查 A/B 两块）。
+        // 掠射角（菲涅尔高）反射强、俯视弱；距离衰减防远灯带过亮
+        if(uLampOn>0.5){
+          vec3 rr=reflect(-v,n);
+          if(rr.y>0.03){
+            float tt=(uLampY-vW.y)/rr.y;
+            vec2 q=vW.xz+rr.xz*tt;
+            vec2 e1=abs(q-uLampXZ)-uLampHalf, e2=abs(q-uLampXZ2)-uLampHalf;
+            float hit=max(1.0-smoothstep(0.0,0.04,max(e1.x,e1.y)), 1.0-smoothstep(0.0,0.04,max(e2.x,e2.y)));
+            col+=uLampCol*uLampK*hit*(gl_FrontFacing?mix(0.22,1.1,fres):0.6)*2.4*exp(-tt*0.1);
+          }
+        }
+        // 弯月线：水面贴玻璃处一条银线收边（学自 aquarium-editor 的 meniscus），亮度随灯带昼夜调光
+        if(uLampOn>0.5 && gl_FrontFacing){
+          float edge=min(${(TANK.W/2-TANK.glass-0.005).toFixed(3)}-abs(vW.x), ${(TANK.D/2-TANK.glass-0.005).toFixed(3)}-abs(vW.z));
+          float men=1.0-smoothstep(0.0,0.02,edge);
+          col+=(uLampCol*uLampK*0.8+vec3(0.22))*vec3(0.55,0.6,0.62)*men*(0.5+0.5*fres);
+          alpha=mix(alpha,0.95,men*0.8);
+        }
         vec3 r=reflect(normalize(vec3(-0.05,-1.0,-0.22)),n);
         col+=uLightColor*pow(max(dot(r,v),0.0),90.0)*2.2;
         gl_FragColor=vec4(col,alpha);
@@ -161,6 +201,25 @@ const sandTex=(()=>{
 })();
 const sandMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95, metalness:0, map:sandTex, bumpMap:sandTex, bumpScale:0.12});
 injectCaustics(sandMat, 0.38, 'sand');   // 日间强度由 daynight 的 SAND_CAUSTIC 接管
+// 照片级底砂（public/tex/，MIT · SkentSun/aquarium-editor）：上面的程序化砂粒先顶场，
+// 贴图到位后热替换 albedo+法线；沙色仍由顶点色按主题调，贴图自带明暗用 color 增益找平
+/** @type {Record<string, number>} */
+const SAND_GAIN={ s_oiso:1.8, s_aquasoil:2.2, s_white:1.25 };   // 按各贴图平均亮度补偿，平均沙面亮度回到原水平
+let sandPhotoName='';
+function setSandPhoto(/** @type {string} */ name){
+  if(name===sandPhotoName && sandMat.normalMap) return;          // 同贴图且已换装：只刷顶点色即可
+  sandPhotoName=name;
+  const p=surfacePair(name);
+  onTexPair(p,(/** @type {any} */ t)=>{
+    if(sandPhotoName!==name) return;                             // 等加载期间主题已切走：本次作废
+    t.map.repeat.set(4.6,1.75); t.nor.repeat.set(4.6,1.75);      // 沙面 4.54×1.71，一张贴图约 1m
+    sandMat.map=t.map; sandMat.bumpMap=null;
+    sandMat.normalMap=t.nor; sandMat.normalScale.set(0.55,0.55);
+    sandMat.color.setScalar(SAND_GAIN[name] ?? 1.8);
+    sandMat.needsUpdate=true;                                    // bumpMap→normalMap 是宏变化，重编译一次
+    sandTex.dispose();
+  });
+}
 const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.glass-0.02, 72, 32).rotateX(-Math.PI/2);
 {
   const p=sandGeo.attributes.position;
@@ -191,7 +250,9 @@ const skirtGeo=(()=>{
 const skirtMat=createSkirtMaterial();             // 分层底砂截面（substrate.js）
 for(const g of skirtGeo){ const m=new THREE.Mesh(g, skirtMat); m.receiveShadow=true; tankGroup.add(m); sandParts.push(m); }
 // 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合；侧壁越深越暗（湿砂 + 光线衰减）
-function setSandColors(/** @type {number} */ a, /** @type {number} */ b){
+// tex：底砂照片贴图名（public/tex/，缺省大磯沙），由主题 sandTex 传入
+function setSandColors(/** @type {number} */ a, /** @type {number} */ b, /** @type {string|undefined} */ tex){
+  setSandPhoto(tex ?? 's_oiso');
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
   for(const g of [sandGeo, ...skirtGeo]){
     const p=g.attributes.position, col=g.attributes.color, skirt=g!==sandGeo;
@@ -207,7 +268,7 @@ function setSandColors(/** @type {number} */ a, /** @type {number} */ b){
     col.needsUpdate=true;
   }
 }
-setSandColors(0xa28862, 0x7e6647);
+setSandColors(0xa28862, 0x7e6647, 's_aquasoil');
 const sand=new THREE.Mesh(sandGeo, sandMat);
 sand.receiveShadow=true;
 tankGroup.add(sand);
@@ -293,6 +354,17 @@ function setShell(/** @type {string} */ id){
   const wx=built.group.userData.water;          // 自然水域：水面铺到浅滩上（河道铺满），岸线由地形自然遮挡
   waterMesh.scale.set(nat ? wx.x*2/TANK.W : 1, 1, nat ? wx.z*2/TANK.D : 1);
   waterUniforms.uClear.value=nat ? 1 : 0;
+  // 灯带反射矩形跟随款式（几何取自各外壳的发光面；自然水域没有灯具，反射与弯月线一并关闭）
+  const lr=LAMP_RECT[id] ?? LAMP_RECT.classic;
+  waterUniforms.uLampOn.value=nat ? 0 : 1;
+  if(!nat){
+    waterUniforms.uLampY.value=lr.y;
+    waterUniforms.uLampHalf.value.set(/** @type {[number,number]} */ (lr.half)[0], /** @type {[number,number]} */ (lr.half)[1]);
+    waterUniforms.uLampXZ.value.set(/** @type {[number,number]} */ (lr.xz)[0], /** @type {[number,number]} */ (lr.xz)[1]);
+    const b=/** @type {[number,number]} */ (lr.xz2 ?? lr.xz);
+    waterUniforms.uLampXZ2.value.set(b[0], b[1]);
+    waterUniforms.uLampCol.value.set(lr.col);
+  }
   waterUniforms.uDepthTex.value?.dispose();      // 上一个自然水域的水深贴图
   const dp=built.group.userData.depth;
   waterUniforms.uDepthTex.value=dp?.tex ?? null;

@@ -7,7 +7,7 @@ import { schoolNames, personaTags } from '../entities/fish/identity.js';
  * 识鱼：射线拾取（GLB 逐条模型 / 程序化 InstancedMesh）+ 资料卡片
  * 卡片带个体身份：名字（getName，随场景确定性生成）与个性标签（真实行为统计）
  * ================================================================ */
-const CARD_W=284, CARD_H=268, CARD_MS=6000;
+const CARD_W=284, CARD_H=300, CARD_MS=6000;   // 页脚两行：心情 + 在缸天数 / 成长条
 
 /** @param {{ camera:any, schools:any[], getCare:()=>any, getSceneId?:()=>string }} opts */
 export function createFishCard({ camera, schools, getCare, getSceneId }){   // getCare/getSceneId：随场景切换
@@ -50,6 +50,8 @@ export function createFishCard({ camera, schools, getCare, getSceneId }){   // g
     $('fcBehavior').textContent=m.behavior;
     $('fcDiet').textContent=m.diet;
     $('fcMood').textContent=care.status();
+    const days=care.daysOf(s.spec.id, hit.fid);
+    $('fcDays').textContent=days<=1 ? '今天刚到' : `在缸第 ${days} 天`;
     $('fcTags').innerHTML=personaTags(s.persona(hit.fid), s.personaAvg())
       .map(t=>`<span class="tag">${t}</span>`).join('');
     const bar=/** @type {HTMLElement} */ ($('fcGrowBar'));

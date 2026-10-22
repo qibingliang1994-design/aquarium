@@ -29,6 +29,9 @@
 .species-card:has(.lion){--sp:#ef5a3c}
 .species-card:has(.mandarin){--sp:#2fd8c8}
 .species-card:has(.parrot){--sp:#3fe0b0}
+.species-card:has(.guppy){--sp:#ff6f9c}
+.species-card:has(.betta){--sp:#5a6cff}
+.species-card:has(.harlequin){--sp:#e8845a}
 
 /* 预览区：物种色聚光 + 水底渐变 + 底部沙面反光，模型居中漂浮 */
 .species-art{position:relative;height:138px;overflow:hidden;
@@ -51,7 +54,10 @@
   color:var(--sp);background:color-mix(in srgb,var(--sp) 12%,transparent)}
 .species-count.is-absent{color:var(--ink-3);background:color-mix(in srgb,var(--ink-3) 10%,transparent)}
 .species-card.is-absent .species-art{opacity:.55}                       /* 不在当前水景的物种：淡一点，仍可浏览 */
-.species-latin{margin:5px 0 12px;color:var(--ink-3);font-size:11px;font-style:italic}
+.species-latin{margin:5px 0 8px;color:var(--ink-3);font-size:11px;font-style:italic}
+.species-eco{display:flex;gap:6px;margin:0 0 12px}                      /* 生态胶囊：淡水/海水 · 冷水/温水/热带 */
+.species-eco span{padding:1px 8px;border-radius:999px;font-size:10px;letter-spacing:.1em;
+  color:var(--ink-2);border:1px solid var(--line)}
 .species-desc{min-height:40px;margin:0 0 14px;color:var(--ink-2);font-size:12px;line-height:1.7}
 .species-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;margin:0;padding-top:12px;border-top:1px solid var(--line)}
 .species-meta div{display:flex;flex-direction:column;gap:3px}
@@ -59,7 +65,10 @@
 .species-meta dd{margin:0;color:var(--ink);font-size:12px}
 .encyclopedia-foot{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 30px 22px;
   color:var(--ink-3);font-size:11px;letter-spacing:.05em}
+.encyclopedia-foot{flex-wrap:wrap}
 .encyclopedia-foot strong{color:var(--ink);font-weight:600}
+.mix-note{order:9;flex-basis:100%;color:var(--ink-2)}                  /* 混养冷知识：独占一行，轻语气 */
+.mix-note::before{content:'小知识 · ';color:var(--ink-3)}
 .guide-tip{text-align:right}
 
 @media (max-width:520px){

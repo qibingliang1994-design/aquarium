@@ -1,6 +1,6 @@
 // @ts-check
 import * as THREE from 'three';
-import { rand, lerp } from '../utils.js';
+import { rand } from '../utils.js';
 import { U } from '../uniforms.js';
 
 class Bubbles {
@@ -70,64 +70,12 @@ class Bubbles {
   }
 }
 
-class LightRays {
-  /** @param {any} opts */
-  constructor({ tankGroup }){
-    this.group=new THREE.Group();
-    this.mats=[];
-    for(let i=0;i<6;i++){
-      const mat=new THREE.ShaderMaterial({
-        transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide,
-        uniforms:{
-          uTime:U.time,
-          uPhase:{value:rand(6.283)},
-          uColor:{value:new THREE.Color(0.5,0.72,0.85)},
-          uIntensity:{value:0.34},
-        },
-        // 侧对镜头或镜头贴近时淡出，避免出现"白色板子"
-        vertexShader:`varying vec2 vUv; varying float vFade;
-          void main(){ vUv=uv;
-            vec4 mv=modelViewMatrix*vec4(position,1.0);
-            float facing=abs(dot(normalize(normalMatrix*vec3(0.0,0.0,1.0)), normalize(-mv.xyz)));
-            vFade=smoothstep(0.08,0.55,facing)*smoothstep(0.5,2.4,-mv.z);
-            gl_Position=projectionMatrix*mv; }`,
-        // 多条细光束 + 缓慢漂移，顶部亮、向下衰减
-        fragmentShader:`
-          uniform float uTime,uPhase,uIntensity; uniform vec3 uColor;
-          varying vec2 vUv; varying float vFade;
-          void main(){
-            float x=vUv.x;
-            float edge=smoothstep(0.0,0.28,x)*smoothstep(1.0,0.72,x);
-            float s1=0.5+0.5*sin(x*21.0+uPhase+sin(uTime*0.27+uPhase)*2.2);
-            float s2=0.5+0.5*sin(x*8.0-uTime*0.35+uPhase*1.7);
-            float streak=pow(s1*s2,1.6)*0.85+0.15;
-            float vert=pow(vUv.y,1.4)*smoothstep(0.0,0.2,vUv.y)*smoothstep(1.0,0.94,vUv.y);
-            float a=edge*streak*vert*(0.7+0.3*sin(uTime*0.8+uPhase));
-            gl_FragColor=vec4(uColor*a*uIntensity*vFade,1.0);
-          }`,
-      });
-      this.mats.push(mat);
-      const w=rand(0.3,0.8);
-      const m=new THREE.Mesh(new THREE.PlaneGeometry(w,1.5), mat);
-      m.position.set(rand(-1.35,1.35), 0.9, rand(-0.4,0.35));
-      m.rotation.z=rand(-0.14,-0.05);
-      this.group.add(m);
-    }
-    tankGroup.add(this.group);
-  }
-  setNight(/** @type {number} */ k){
-    for(const m of this.mats){
-      m.uniforms.uIntensity.value=lerp(0.34,0.12,k);
-      m.uniforms.uColor.value.setRGB(lerp(0.5,0.35,k),lerp(0.72,0.5,k),lerp(0.85,0.9,k));
-    }
-  }
-}
-
 class MarineSnow {
   flow=0;                        // 水流速度（+x）
   /** @param {any} opts */
   constructor({ tankGroup }){
-    this.N=300;
+    this.N=900;                    // 池子按开缸浊度的 3 倍分配；平时只画前 BASE 颗（setDensity）
+    this.BASE=300;
     const pos=new Float32Array(this.N*3), size=new Float32Array(this.N), seed=new Float32Array(this.N);
     this.sp=new Float32Array(this.N);
     for(let i=0;i<this.N;i++){
@@ -164,7 +112,10 @@ class MarineSnow {
     }));
     this.pts.frustumCulled=false;
     tankGroup.add(this.pts);
+    this.setDensity(1);
   }
+  /** 悬浮颗粒可见数量倍率 1..3（开缸浊度） @param {number} k */
+  setDensity(k){ this.geo.setDrawRange(0, Math.round(this.BASE*Math.min(3, Math.max(1, k)))); }
   update(/** @type {number} */ dt, /** @type {number} */ t){
     const p=this.geo.attributes.position.array;
     for(let i=0;i<this.N;i++){
@@ -213,8 +164,7 @@ class Ripples {
 /** @param {any} opts */
 export function createEffects({ tankGroup, air, sandHeight, waterY }){
   const bubbles=new Bubbles({ tankGroup, air, sandHeight, waterY });
-  const rays=new LightRays({ tankGroup });
   const snow=new MarineSnow({ tankGroup });
   const ripples=new Ripples({ tankGroup, waterY });
-  return { bubbles, rays, snow, ripples };
+  return { bubbles, snow, ripples };   // 旧的光柱网格（LightRays）已删：光柱由水体合成 pass 按阴影 march
 }

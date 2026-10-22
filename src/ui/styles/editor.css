@@ -49,6 +49,9 @@ body.is-editing #hud{opacity:0;pointer-events:none;transition:opacity .25s}
 .pal-item[data-group=gear]{--c:120,160,190}
 .pal-item:disabled{opacity:.4;pointer-events:none}
 
+.ed-note{margin:14px 2px 2px;padding:9px 11px;border-radius:10px;font-size:11px;line-height:1.7;
+  color:var(--ink-2);background:rgba(120,210,230,.05)}
+.ed-note::before{content:'小知识 · ';color:var(--ink-3)}
 .fish-row{--sp:var(--accent);display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:10px;
   padding:8px 6px;border-radius:var(--r-sm)}
 .fish-row:hover{background:rgba(120,210,230,.05)}
@@ -65,6 +68,7 @@ body.is-editing #hud{opacity:0;pointer-events:none;transition:opacity .25s}
 .fish-row[data-sp=tetra]{--sp:#3cc8ff} .fish-row[data-sp=gold]{--sp:#ff9a3c} .fish-row[data-sp=angel]{--sp:#ffd24a}
 .fish-row[data-sp=cory]{--sp:#cdb48e} .fish-row[data-sp=koi]{--sp:#ff6a4f} .fish-row[data-sp=clown]{--sp:#ff7a1a}
 .fish-row[data-sp=lion]{--sp:#ef5a3c} .fish-row[data-sp=mandarin]{--sp:#2fd8c8} .fish-row[data-sp=parrot]{--sp:#3fe0b0}
+.fish-row[data-sp=guppy]{--sp:#ff6f9c} .fish-row[data-sp=betta]{--sp:#5a6cff} .fish-row[data-sp=harlequin]{--sp:#e8845a}
 
 .theme-opt{--th:58,138,160;appearance:none;display:flex;align-items:center;gap:12px;width:100%;margin-bottom:8px;padding:10px;
   border-radius:var(--r-md);cursor:pointer;text-align:left;font:inherit;color:var(--ink-2);

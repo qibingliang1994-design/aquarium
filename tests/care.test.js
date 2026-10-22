@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createCare, MILESTONES } from '../src/systems/care.js';
+import { createCare, MILESTONES, daysInTank } from '../src/systems/care.js';
 
 const KEY = 'aquarium.care';
 const SPECIES = [{ id: 'gold', count: 4 }, { id: 'tetra', count: 2 }];
@@ -171,5 +171,58 @@ describe('createCare', () => {
     const saved = JSON.parse(store.get(KEY));
     expect(saved.satiety).toBeCloseTo(0.5, 2);
     expect(saved.t).toBe(Date.now());
+  });
+
+  // —— 在缸时长 ——
+  it('旧存档没有 since：从升级当天算起，并立即补记落盘', () => {
+    const store = stubBrowser({ [KEY]: JSON.stringify({ satiety: 0.5, t: Date.now(), fed: { gold: [3, 1] } }) });
+    const care = createCare(SPECIES);
+    expect(care.daysOf('gold', 0)).toBe(1);
+    care.update(3);
+    const saved = JSON.parse(store.get(KEY));
+    expect(saved.since.gold).toHaveLength(4);
+    expect(saved.since.gold.every(v => v === Date.now())).toBe(true);
+    expect(saved.since.tetra).toHaveLength(2);
+  });
+
+  it('跨天计数：刷新后天数不变，第二天 = 第 2 天', () => {
+    const store = stubBrowser();
+    const care = createCare(SPECIES);
+    care.save();
+    const t0 = JSON.parse(store.get(KEY)).since.gold[0];
+    vi.setSystemTime(new Date(Date.now() + 86_400_000));
+    const again = createCare(SPECIES);
+    expect(again.daysOf('gold', 0)).toBe(2);
+    again.save();
+    expect(JSON.parse(store.get(KEY)).since.gold[0]).toBe(t0);   // 已有记录不被覆盖
+    vi.setSystemTime(new Date(Date.now() + 9 * 86_400_000));
+    expect(createCare(SPECIES).daysOf('gold', 0)).toBe(11);
+  });
+
+  it('新鱼入缸（arrive）从此刻算起，不影响老鱼', () => {
+    const store = stubBrowser();
+    const care = createCare(SPECIES);
+    care.save();
+    vi.setSystemTime(new Date(Date.now() + 3 * 86_400_000));
+    const later = createCare(SPECIES);
+    later.arrive('gold', 4);
+    expect(later.daysOf('gold', 4)).toBe(1);
+    expect(later.daysOf('gold', 0)).toBe(4);
+    later.save();
+    expect(JSON.parse(store.get(KEY)).since.gold[4]).toBe(Date.now());
+  });
+
+  it('存档里的非法 / 未来时间戳回退为现在', () => {
+    stubBrowser({ [KEY]: JSON.stringify({ since: { gold: ['x', -5, Date.now() + 1e9, Date.now() - 86_400_000] } }) });
+    const care = createCare(SPECIES);
+    expect([0, 1, 2].map(i => care.daysOf('gold', i))).toEqual([1, 1, 1]);
+    expect(care.daysOf('gold', 3)).toBe(2);
+  });
+
+  it('daysInTank 按本地日历日：同一天 = 1，最少 1', () => {
+    const now = new Date(2026, 9, 19, 23, 50).getTime();
+    expect(daysInTank(new Date(2026, 9, 19, 0, 5).getTime(), now)).toBe(1);
+    expect(daysInTank(new Date(2026, 9, 18, 23, 59).getTime(), now)).toBe(2);
+    expect(daysInTank(now + 5e6, now)).toBe(1);
   });
 });

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { rrange, vnoise } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { shared, castAll, injectSurfaceDetail, UP } from './common.js';
+import { injectSurfaceTex } from './surface-tex.js';
 import { makeRockGeo, barkTube } from './natural-geo.js';
 
 /* ================================================================
@@ -14,6 +15,21 @@ const rockMat = () => shared('mat:rock', ()=>{
   const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9, metalness:0.02});
   injectCaustics(m, 0.55, 'rock');
   injectSurfaceDetail(m, { freq:14, k:0.45, ao:0.35, key:'rockdet' });
+  return m;
+});
+// 照片级 PBR（素材来自 aquarium-editor，MIT）：三平面贴到程序化几何上，加载完成前保持程序化外观
+const seiryuMat = () => shared('mat:rockSeiryu', ()=>{
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02});
+  injectCaustics(m, 0.55, 'rock');
+  injectSurfaceDetail(m, { freq:14, k:0.3, ao:0.3, key:'rockdet' });
+  injectSurfaceTex(m, { name:'r_seiryu', scale:3.0, k:1.2, gain:1.9, key:'seiryu' });   // 青龙石灰蓝底白筋
+  return m;
+});
+const lavaMat = () => shared('mat:rockLava', ()=>{
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9, metalness:0.02});
+  injectCaustics(m, 0.55, 'rock');
+  injectSurfaceDetail(m, { freq:14, k:0.3, ao:0.3, key:'rockdet' });
+  injectSurfaceTex(m, { name:'r_lava', scale:3.2, k:1.0, gain:2.4, key:'lava' });       // 火山岩多孔红褐
   return m;
 });
 
@@ -32,7 +48,7 @@ export function buildRockTall(/** @type {any} */ rng, /** @type {number} */ seed
   g.scale(rrange(rng,0.7,0.9), rrange(rng,2.2,2.7), rrange(rng,0.65,0.85));
   g.rotateZ(rrange(rng,-0.14,0.14));
   g.translate(0, r*0.6, 0);
-  const mesh=castAll(new THREE.Mesh(g, rockMat()));
+  const mesh=castAll(new THREE.Mesh(g, seiryuMat()));
   return { object:mesh, obstacles:[
     { c:new THREE.Vector3(0,0.12,0), r:0.13 }, { c:new THREE.Vector3(0,0.32,0), r:0.11 },
   ] };
@@ -43,7 +59,7 @@ export function buildLiveRock(/** @type {any} */ rng, /** @type {number} */ seed
   const r=0.22, g=makeRockGeo(r, seed+77, 'live');
   g.scale(rrange(rng,1.1,1.4), rrange(rng,0.6,0.8), rrange(rng,0.9,1.15));
   g.translate(0, r*0.2, 0);
-  const mesh=castAll(new THREE.Mesh(g, rockMat()));
+  const mesh=castAll(new THREE.Mesh(g, lavaMat()));
   return { object:mesh, obstacles:[{ c:new THREE.Vector3(0,r*0.4,0), r:r*1.1 }] };
 }
 
@@ -53,6 +69,7 @@ export function buildWood(/** @type {any} */ rng, /** @type {number} */ seed){
     const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02});
     injectCaustics(m, 0.4, 'wood');
     injectSurfaceDetail(m, { freq:10, k:0.3, ao:0.25, stretch:[1,0.25,1], key:'wooddet' });   // 拉长的噪声 ≈ 顺纹理的木纤维
+    injectSurfaceTex(m, { name:'w_drift', scale:1.5, k:0.9, gain:2.0, key:'drift' });         // 漂木木纹照片
     return m;
   });
   const mossMat=shared('mat:woodMoss', ()=>new THREE.MeshStandardMaterial({color:0x4a6b2f, roughness:1, flatShading:true}));

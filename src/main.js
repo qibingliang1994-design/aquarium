@@ -9,7 +9,8 @@ import { setCausticsEnabled } from './scene/caustics.js';
 import { createEffects } from './systems/effects.js';
 import { Feeder } from './systems/feeder.js';
 import { SoundEngine } from './systems/sound.js';
-import { createQuality } from './systems/quality.js';
+import { createQuality, budgetRatio } from './systems/quality.js';
+import { createAmbience } from './systems/ambience.js';
 import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
 import { SPECIES_META } from './ui/encyclopedia.js';
@@ -29,6 +30,7 @@ import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
 import { createLensPass, attachDepth } from './scene/lens-pass.js';
+import { createWaterPass } from './scene/water-pass.js';
 import { installDebug } from './debug.js';
 
 /* ================================================================
@@ -43,19 +45,27 @@ const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow,
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
 const lens=createLensPass(camera, scene);       // 景深 + 水体纵深：紧跟 RenderPass，在泛光之前（线性 HDR）
+// 水体合成 pass（学自 aquarium-editor）：折射/全内反射/掠射镜面/阴影光柱/吸收一体化，玻璃缸专用。
+// 读 composer A 的颜色+深度、写私有 rtWater（needsSwap=false）→ lens 颜色源切到 rtWater、深度仍读 A——
+// 任何被采样的目标都不在当前绘制目标上，不踩深度反馈环
+const waterPass=createWaterPass({ camera, scene, light:hoodSpot, waterY:TANK.waterY,
+  box:{ min:new THREE.Vector3(-TANK.W/2+TANK.glass, 0.02, -TANK.D/2+TANK.glass),
+        max:new THREE.Vector3(TANK.W/2-TANK.glass, TANK.waterY, TANK.D/2-TANK.glass) },
+  waterUniforms, turbUniform:lens.uniforms.uTurb });
 attachDepth(composer);
-composer.insertPass(lens, 1);
+composer.insertPass(waterPass, 1);
+composer.insertPass(lens, 2);
 const focusPt=new THREE.Vector3();
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
-const { bubbles, rays, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
+const { bubbles, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
 const feeder=new Feeder({ tankGroup, sandHeight, waterY:TANK.waterY, ripples });
 
 /* ---------- 场景基础：昼夜 / 存档 / 模型预加载 ---------- */
 /** @type {any[]} */ const schools=[];         // 两个数组都由 runtime 原地维护
 /** @type {any[]} */ const obstacles=[];
 const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
-  waterUniforms, sandMat, shell:tank.shell, floorGlowMat, rays, schools, fishRim });
+  waterUniforms, sandMat, shell:tank.shell, floorGlowMat, schools, fishRim });
 // 多窗口单写者：必须在第一次写存档（createSceneStore 启动时会回写）之前拿锁
 const isWriter=await acquireWriter();
 const store=createSceneStore();
@@ -71,17 +81,36 @@ loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
 });
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
-/** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, night:0, rays:true, bubbles:true, snow:true, caustics:true };
+/** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true };
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
+settings.lamp=Math.min(1.5, Math.max(0, +settings.lamp||1));   // 旧存档/坏值兜底：0~1.5，1=默认
 const saveSettings=()=>{ if(!canWrite()) return; try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
-rays.group.visible=settings.rays; snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
+snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
+const applyAbsorb=()=>{ waterPass.uniforms.uSigmaK.value=settings.haze===false?0:settings.absorb; };   // 水体雾化总开关（关=吸收清零，更通透）× 水色浓淡滑杆
+applyAbsorb();
+waterPass.setShafts(settings.shafts);                          // 光柱强度（画质最低档时由 onLevel 归零）
+lens.setDof(settings.dof!==false);                             // 景深（画质最低档时由 onLevel 连带关闭）
 
 /* ---------- 场景：存档 → 运行时（造景 / 鱼群 / 主题） ---------- */
-const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air,
-  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); lens.setHaze(t.kind!=='natural'); }, onSchools:()=>dayNight.refresh() });
+let waterOn=true;                                // 水体合成总开关（__aqDebug.water(false) 回退网格水面）
+/** @type {any} */ let editor=null;               // 提前声明：applyWaterMode 在 runtime.apply（编辑器创建前）就会被 onTank 调到
+function applyWaterMode(){
+  const nat=isNatural(runtime.doc.tank);
+  const on=waterOn && !nat && !editor?.active;   // 玻璃缸且非编辑态才走合成水面
+  waterPass.enabled=on;
+  lens.setSource(on ? waterPass.output : null);  // lens 颜色源：合成输出 / 直接读场景目标
+  lens.setHaze(false);                           // 水体吸收由合成 pass 接管（自然水域本就关，网格+水深贴图自管）
+  waterMesh.visible=!editor?.active && (nat || !on);   // 缸走合成时藏网格；自然水域与回退态用网格
+}
+const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, renderer,
+  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); applyWaterMode(); }, onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
+dayNight.setLamp(settings.lamp);               // 灯光亮度（设置面板滑杆），先于昼夜状态应用
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
+// 灯光定时器 + 开缸浊度（跟随本地时间开着时，启动直接对上当前时刻）
+const ambience=createAmbience({ settings, dayNight, lens, snow, scene, waterUniforms, isNatural:()=>isNatural(runtime.doc.tank),
+  knownIds:store.list().map((/** @type {any} */ d)=>d.id), onFlip:()=>syncLightButton() });
 
 /* ---------- 轻提示 ---------- */
 const toastEl=$('toast');
@@ -96,7 +125,6 @@ else if(store.recovered) toast('水景存档无法读取，已备份并恢复为
 
 /* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
 const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care, getSceneId:()=>runtime.doc.id });
-/** @type {any} */ let editor=null;
 const input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, feeder, sound,
   isBlocked:()=>editor?.active });
 $('bFeed').addEventListener('click',()=>input.feedAt(randomFeedPoint()));
@@ -129,7 +157,7 @@ function syncLightButton(){              // 按钮显示"点击后会切到"的�
 }
 syncLightButton();
 bLight.addEventListener('click',()=>{
-  settings.cycle=false; settingsPanel.set('cycle',false);   // 手动切换视为关闭自动循环
+  for(const k of ['cycle','clock']){ settings[k]=false; settingsPanel.set(k,false); }   // 手动切换视为关闭自动循环与定时器
   dayNight.target=dayNight.target>0.5?0:1;
   settings.night=dayNight.target; saveSettings();
   syncLightButton();
@@ -165,7 +193,7 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
   thumbTimer=setTimeout(()=>{
     if(store.activeId!==id || store.thumb(id)) return;
     // 页面不可见时主循环不跑，粒子等实例矩阵还没初始化，晚点再拍
-    if(!(/** @type {any} */ (window)).__aqReady || document.hidden || editor.active || photo.on){ scheduleThumb(); return; }
+    if(!(/** @type {any} */ (window)).__aqReady || document.hidden || editor.active || photo.on || ambience.turbidity>0){ scheduleThumb(); return; }
     const shot=captureThumb();
     if(shot) store.setThumb(id, shot); else scheduleThumb();
   }, 3200);
@@ -191,6 +219,7 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
     const reveal=()=>{
       fadeEl.classList.remove('on');
       switching=false;
+      ambience.enterScene(id);                  // 第一次来的水景（含新建空缸）：水由微浊转清
       if(then) then(); else { toast(`欢迎来到「${runtime.doc.name}」`); scheduleThumb(); }
     };
     // 黑场期间预编译新场景用到的着色器（并行编译扩展可用时不阻塞主线程），揭幕后第一帧不再卡顿；
@@ -203,9 +232,10 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
 
 /* ---------- 造景编辑器 / 水景选择 ---------- */
 editor=createSceneEditor({ canvas:renderer.domElement, camera, controls, runtime, store, tweenCam, toast, captureThumb,
-  onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); waterMesh.visible=false; },   // 俯视时水面会挡住造景
+  onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); runtime.setBatching(false); applyWaterMode(); },   // 俯视时水面挡造景；拆批+关水恢复逐件拾取
   onExit:(/** @type {any} */ saved)=>{
-    waterMesh.visible=true; syncHud();
+    syncHud(); runtime.setBatching(true); applyWaterMode();   // 编辑结束立即重批+重开水体（apply 已跑过，这里补同步）
+    if(saved) ambience.afterSave();
     // 新建空缸后在造景里直接放弃：这个缸从没保存过，删掉并回到原来的水景（此前会留下一个空缸，人也停在里面）
     const nw=pendingNew; pendingNew=null;
     if(nw && !saved && store.activeId===nw.id && store.remove(nw.id)){
@@ -239,12 +269,16 @@ $('guideClose').addEventListener('click',closeGuide);
 guideEl.addEventListener('click',e=>{ if(e.target===guideEl) closeGuide(); });
 
 /* ---------- 设置弹层 ---------- */
-const settingsPanel=createSettingsPanel({ settings, onChange:(/** @type {string} */ key,/** @type {boolean} */ on)=>{
-  settings[key]=on;
-  if(key==='sound'){ sound.setEnabled(on); if(on){ sound.ensure(); sound.blip(); } }
-  if(key==='rays') rays.group.visible=on;
-  if(key==='snow') snow.pts.visible=on;
-  if(key==='caustics') setCausticsEnabled(on);
+let qualityBloom=true;                           // 当前画质档是否开泛光（最低档连光柱一起停）
+const settingsPanel=createSettingsPanel({ settings, onChange:(/** @type {string} */ key,/** @type {any} */ value)=>{
+  settings[key]=value;
+  if(key==='sound'){ sound.setEnabled(value); if(value){ sound.ensure(); sound.blip(); } }
+  if(key==='snow') snow.pts.visible=value;
+  if(key==='caustics') setCausticsEnabled(value);
+  if(key==='absorb' || key==='haze') applyAbsorb();   // 雾化总开关或浓度变了都重算吸收
+  if(key==='shafts') waterPass.setShafts(qualityBloom ? value : 0);
+  if(key==='dof') lens.setDof(!!value && qualityBloom);   // 画质最低档时与光柱一致：保持关闭
+  if(key==='lamp') dayNight.setLamp(value);
   saveSettings();
 }});
 addEventListener('pointerdown',()=>sound.ensure(),{ once:true });
@@ -278,21 +312,28 @@ const clock=new THREE.Clock();
 const statsEl=$('stats'), careFill=$('careFill'), careText=$('careText');
 let fpsFrames=0, fpsTime=0, realT=0;
 const fishGrid=createFishGrid();                  // 全体鱼共享的邻域查询网格（每帧重建）
+renderer.info.autoReset=false;                    // 整帧统计（含阴影/后期）由主循环手动重置（__aqDebug.perf 用）
 
-/* ---------- 自动画质：阶梯降级（1.5 → 1.25 → 1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
+/* ---------- 自动画质：阶梯降级（像素预算+像素比上限 → 1.25/1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
 const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
+let shadowHz=30, shadowAcc=1/30;                // 阴影贴图刷新率（随画质档变化）与累计器；首帧就画一次
 const quality=createQuality({
   baseRatio:Math.min(devicePixelRatio, coarsePointer?1.5:2),
   onLevel(q){
-    renderer.setPixelRatio(q.ratio);
-    composer.setPixelRatio(q.ratio);
+    // 像素预算：大窗口（4K 全屏等）按 sqrt(预算/窗口像素) 立即缩，不等帧率阶梯；小窗口仍用基准 dpr
+    const ratio=budgetRatio(q.pixels, innerWidth, innerHeight, q.ratio);
+    renderer.setPixelRatio(ratio);
+    composer.setPixelRatio(ratio);
     composer.setSize(innerWidth,innerHeight);
     for(const g of /** @type {any[]} */ (tankGroup.children)){
       const gm=/** @type {any} */ (g);
       if(gm.material===glassHigh || gm.material===glassLow) gm.material=q.glass==='low'?glassLow:glassHigh;
     }
-    bloom.enabled=q.bloom; lens.setDof(q.bloom);      // 最低一档连景深一起关
-    setMSAA(q.ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
+    bloom.enabled=q.bloom; lens.setDof(q.bloom && settings.dof!==false);   // 最低一档连景深一起关（用户也关了才算数）
+    qualityBloom=q.bloom;
+    waterPass.setShafts(q.bloom ? settings.shafts : 0);   // 光柱 march 是最贵的逐像素步进：最低档停，其余按用户强度
+    setMSAA(ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
+    shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
   },
 });
 
@@ -322,15 +363,14 @@ function grantArrival(){
 syncHud();
 scheduleThumb();
 
-const SHADOW_DT=1/30;                          // 阴影贴图更新间隔（renderer.shadowMap.autoUpdate=false）
-let shadowAcc=SHADOW_DT;                       // 首帧就画一次
 function frame(){
+  renderer.info.reset();                          // 与 autoReset=false 配对：统计覆盖主场景+阴影+后期整帧
   const rawDt=clock.getDelta();
   const dt=Math.min(rawDt,0.05);
   U.time.value+=dt;
   const t=U.time.value;
 
-  dayNight.update(dt, t, settings.cycle);
+  ambience.update(dt, t);                       // 昼夜（自动循环 / 本地时间）+ 开缸浊度
 
   if(camTween){                                 // 相机运镜
     camTween.t+=dt;
@@ -370,9 +410,10 @@ function frame(){
   ripples.update(dt);
   editor.update(t);
 
-  // 阴影贴图限频：鱼游得慢，30 Hz 更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）
+  // 阴影贴图限频：鱼游得慢，降频更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）；
+  // 频率随画质档走（高清 30 Hz → 极速 10 Hz，学自 aquarium-editor 的分级阴影）
   shadowAcc+=rawDt;
-  if(shadowAcc>=SHADOW_DT){ renderer.shadowMap.needsUpdate=true; shadowAcc%=SHADOW_DT; }
+  if(shadowAcc>=1/shadowHz){ renderer.shadowMap.needsUpdate=true; shadowAcc%=1/shadowHz; }
 
   if(shake){                                    // 敲玻璃：镜头轻震（只影响本帧渲染）
     camera.position.x+=shake.x; camera.position.y+=shake.y;
@@ -407,12 +448,14 @@ addEventListener('resize',()=>{
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
   composer.setSize(innerWidth,innerHeight);
+  quality.reapply();                              // 像素预算依赖窗口尺寸，resize 后重算当前档的实际像素比
 });
 
-installDebug({ schools, obstacles, air, feeder, dayNight, input, fishCard, runtime, store, editor, camera, controls,
+installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass,
   bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
   setCycle:(/** @type {boolean} */ on)=>{ settings.cycle=on; },   // 只改本次运行，不落盘
+  setWaterOn:(/** @type {boolean} */ on)=>{ waterOn=on; applyWaterMode(); },   // __aqDebug.water：关=回退网格水面
   glbLoaded:()=>Object.keys(glbMap).filter(k=>/** @type {any} */ (glbMap)[k]),
   // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；
   // 配合先把 window.requestAnimationFrame 换成 setTimeout 垫片使用

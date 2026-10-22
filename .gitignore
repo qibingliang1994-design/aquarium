@@ -8,6 +8,9 @@ _koi_build/
 dist/
 dist-ssr/
 
+# 本机 %TEMP% 被安全软件盯防导致 esbuild 删除临时文件被拒（见 vite.config.js），项目内临时目录替代
+.tmp/
+
 # 日志
 *.log
 npm-debug.log*

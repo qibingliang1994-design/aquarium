@@ -14,6 +14,7 @@ import { TANK } from './tank.js';
  * 水体纵深：按视线在缸内水体里穿行的长度往水色里拉——前排清晰饱满，后排水草与背光幕渐渐沉进蓝绿。
  *   深度重建世界坐标，与水体盒（玻璃内侧、水面以下）求交得到水中路径长度；先模糊再按中心像素的深度上雾。
  *   玻璃必须不写深度（tank.js），否则只"看得到"前玻璃。自然水域关闭（水面着色器已按水深处理通透度）。
+ * 开缸浊度 uTurb：雾化系数 ×(1+3·浊度)、上限 +0.3（封顶 0.8），雾色偏一点泥沙色。
  * 透明物（气泡、水面）不写深度，取的是其后不透明物的深度——误差很小，可接受。
  * ================================================================ */
 
@@ -38,11 +39,12 @@ export function createLensPass(camera, scene){
       uMin:{ value:new THREE.Vector3(-TANK.W/2+g, g, -TANK.D/2+g) },
       uMax:{ value:new THREE.Vector3(TANK.W/2-g, TANK.waterY, TANK.D/2-g) },
       uDensity:{ value:HAZE_K }, uMaxMix:{ value:HAZE_MAX },
+      uTurb:{ value:0 },                       // 开缸浊度 0..1（systems/ambience.js 每帧写）：雾化加浓、上限抬高、偏一点泥沙色
     },
     vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
     fragmentShader:`
       uniform sampler2D tDiffuse, tDepth;
-      uniform float uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uHazeOn, uDensity, uMaxMix;
+      uniform float uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uHazeOn, uDensity, uMaxMix, uTurb;
       uniform mat4 uProjInv, uViewInv;
       uniform vec2 uTexel;
       uniform vec3 uCam, uColor, uMin, uMax;
@@ -51,8 +53,10 @@ export function createLensPass(camera, scene){
       float coc(vec2 uv){ return min(abs(1.0/uFocus-1.0/viewZ(texture2D(tDepth, uv).r))*uK*uScale, uMaxR*uScale); }
       void main(){
         vec4 src=texture2D(tDiffuse, vUv);
-        float d=texture2D(tDepth, vUv).r;
         vec3 col=src.rgb;
+        // 两个效果全关：本 pass 只剩"水体合成上链"的拷贝职责，直出颜色（提前退，省深度采样与采样环）
+        if(uDofOn<=0.5 && uHazeOn<=0.5){ gl_FragColor=vec4(col, src.a); return; }
+        float d=texture2D(tDepth, vUv).r;
         // ---- 景深 ----
         float c0=uDofOn>0.5 ? coc(vUv) : 0.0;
         if(c0>=0.5){
@@ -78,7 +82,9 @@ export function createLensPass(camera, scene){
           float a=clamp(max(max(tn.x,tn.y),tn.z), 0.0, 1.0);
           float b=clamp(min(min(tf.x,tf.y),tf.z), 0.0, 1.0);
           float L=max(b-a, 0.0)*length(dir);
-          col=mix(col, uColor, min(1.0-exp(-L*uDensity), uMaxMix));
+          float tb=clamp(uTurb, 0.0, 1.0);
+          vec3 hc=mix(uColor, uColor*vec3(1.08,1.04,0.82)+0.03, tb*0.6);
+          col=mix(col, hc, min(1.0-exp(-L*uDensity*(1.0+3.0*tb)), min(uMaxMix+0.3*tb, 0.8)));
         }
         gl_FragColor=vec4(col, src.a);
       }`,
@@ -90,9 +96,14 @@ export function createLensPass(camera, scene){
   class LensPass extends Pass {
     /** @param {number} w @param {number} h */
     setSize(w, h){ u.uTexel.value.set(1/w, 1/h); u.uScale.value=h/1000; }
+    /** 水体合成 pass（water-pass.js）开启时，颜色源切到它的输出；深度永远读场景目标（水面网格不写深度，
+     *  合成也不写深度，场景深度始终有效）。null = 直接读 readBuffer。切换后重算 enabled：
+     *  背着颜色源时即使景深/雾化全关也必须保持启用（见 sync）
+     * @param {THREE.Texture|null} tex */
+    setSource(tex){ this.sourceTexture=tex; sync(); }
     /** @param {THREE.WebGLRenderer} renderer @param {THREE.WebGLRenderTarget} writeBuffer @param {THREE.WebGLRenderTarget} readBuffer */
     render(renderer, writeBuffer, readBuffer){
-      u.tDiffuse.value=readBuffer.texture;
+      u.tDiffuse.value=this.sourceTexture ?? readBuffer.texture;
       u.tDepth.value=readBuffer.depthTexture;
       u.uNear.value=camera.near; u.uFar.value=camera.far;
       u.uProjInv.value.copy(camera.projectionMatrixInverse);
@@ -108,7 +119,9 @@ export function createLensPass(camera, scene){
   const pass=new LensPass();
   let dofOn=true, hazeOn=true, focus=-1;
   const v=new THREE.Vector3();
-  const sync=()=>{ u.uDofOn.value=+dofOn; u.uHazeOn.value=+hazeOn; pass.enabled=dofOn || hazeOn; };
+  // 本 pass 还是水体合成（water-pass.js）进后期链的拷贝段：合成开着时水面网格是藏掉的，
+  // 停掉 pass 就等于整个水面消失——所以只要颜色源还接着（rtWater），景深/雾化全关也不能停
+  const sync=()=>{ u.uDofOn.value=+dofOn; u.uHazeOn.value=+hazeOn; pass.enabled=dofOn || hazeOn || !!pass.sourceTexture; };
   return Object.assign(pass, {
     uniforms:u,
     /** @param {boolean} on */

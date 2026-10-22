@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { makeRng } from '../src/utils.js';
-import { ITEM_META, ITEM_TYPES, PLACE_BOUNDS, MAX_ITEMS } from '../src/scenes/item-meta.js';
+import { ITEM_META, ITEM_TYPES, PLACE_BOUNDS, MAX_ITEMS, placeLimits, GLASS_INNER } from '../src/scenes/item-meta.js';
 import { THEMES } from '../src/scenes/themes.js';
 import { sanitizeDoc, sanitizeItem, sanitizeFish, FISH_IDS, FISH_MAX, FISH_TOTAL_MAX, fishTotal, emptyDoc } from '../src/scenes/scene-doc.js';
 import { PRESETS } from '../src/scenes/presets.js';
@@ -49,12 +49,36 @@ describe('场景文档校验', () => {
   it('非法物件被丢弃，越界坐标/缩放被夹紧', () => {
     expect(sanitizeItem({ type: 'ufo', x: 0, z: 0 })).toBeNull();
     const it = sanitizeItem({ type: 'rock', x: 99, z: -99, s: 50, rot: -1, seed: -3.7 });
-    expect(it.x).toBe(PLACE_BOUNDS.x);
-    expect(it.z).toBe(-PLACE_BOUNDS.z);
     expect(it.s).toBe(ITEM_META.rock.scale[1]);
+    // 大缩放的物件按占地半径收进玻璃内壁（比 PLACE_BOUNDS 更靠里）
+    const lim = placeLimits('rock', ITEM_META.rock.scale[1]);
+    expect(lim.x).toBeLessThan(PLACE_BOUNDS.x);
+    expect(it.x).toBe(lim.x);
+    expect(it.z).toBe(-lim.z);
     expect(it.rot).toBeGreaterThanOrEqual(0);
     expect(it.rot).toBeLessThan(Math.PI * 2);
     expect(Number.isInteger(it.seed) && it.seed >= 0).toBe(true);
+    // 小物件（气石）不受影响，仍可用满 PLACE_BOUNDS
+    const air = sanitizeItem({ type: 'airstone', x: 99, z: -99, s: 1, rot: 0, seed: 1 });
+    expect(air.x).toBe(PLACE_BOUNDS.x);
+    expect(air.z).toBe(-PLACE_BOUNDS.z);
+  });
+
+  it('placeLimits：占地半径×缩放 + 余量不出玻璃内壁，最小也有缸心可摆', () => {
+    for (const type of ITEM_TYPES) {
+      const meta = ITEM_META[type];
+      for (const s of [meta.scale[0], 1, meta.scale[1]]) {
+        const lim = placeLimits(type, s);
+        expect(lim.x).toBeGreaterThanOrEqual(0.15);
+        expect(lim.z).toBeGreaterThanOrEqual(0.15);
+        const r = meta.radius * s;
+        expect(lim.x).toBe(Math.max(0.15, Math.min(PLACE_BOUNDS.x, GLASS_INNER.x - 0.02 - r)));
+        expect(lim.z).toBe(Math.max(0.15, Math.min(PLACE_BOUNDS.z, GLASS_INNER.z - 0.02 - r)));
+        // 未触底的轴：占地半径×缩放 + 余量在玻璃内壁之内（触底的超大物件由运行时按真实包络钳制兜底）
+        if (lim.x > 0.15) expect(lim.x + r).toBeLessThanOrEqual(GLASS_INNER.x + 1e-9);
+        if (lim.z > 0.15) expect(lim.z + r).toBeLessThanOrEqual(GLASS_INNER.z + 1e-9);
+      }
+    }
   });
 
   it('鱼群：单种上限 + 总数上限 + 未知物种忽略', () => {
@@ -96,7 +120,10 @@ describe('预设', () => {
 
   it('经典混养保留旧版鱼群数量', () => {
     const classic = PRESETS.find(p => p.id === 'classic');
-    for (const s of SPECIES) expect(classic.fish[s.id]).toBe(s.count);
+    // 旧版九种：classic 预设的默认条数与物种表一致；后加的照片皮物种（guppy/betta/harlequin）不入旧预设
+    const legacy = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot'];
+    for (const id of legacy) expect(classic.fish[id]).toBe(SPECIES.find(s => s.id === id).count);
+    for (const id of ['guppy','betta','harlequin']) expect(classic.fish[id] ?? 0).toBe(0);
   });
 });
 

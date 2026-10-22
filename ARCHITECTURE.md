@@ -252,6 +252,100 @@
     回纹牙板 + 团花门心 + 铜面叶 + 马蹄足的明式柜。
   - 主题"园林墨韵"：`art:'ink'` 让背光幕画水墨远山（三重山由远及近墨色渐浓、山脚化入雾里，一轮淡日，夜里读作月亮）。
   - 预设"江南园林"（`garden`），存档版本 2 → 3（新物件 / 缸型 / 主题，老版本代码读到会只读）。
+- 常识与时间（v2.1.12，`docs/养鱼要素任务分解.md` 第一批）：
+  - 物种生态标签：纯数据模块 `entities/fish/ecology.js`（水 / 水温 / 是否吞小鱼），不放进依赖 DOM/GLTFLoader 的 `ui/encyclopedia.js`，
+    Node 单测断言 `FISH_IDS` 全覆盖；图鉴卡加"淡水 · 热带"两个胶囊。
+  - 混养小知识：纯函数 `mixNote(fish)` 按优先级只返回一句（淡海水 > 冷热水 > 肉食鱼配 ≤0.7 倍体长的鱼），
+    显示在造景鱼群页底部（随加减鱼实时变化）与图鉴页脚；不阻止、不打分。`ui/encyclopedia.js` 的 `mixNoteFor` 补上体长与显示名。
+  - 氛围接线收进 `systems/ambience.js`（main 每帧只调 `ambience.update`，原来的 `dayNight.update` 挪进去）：
+    - 灯光定时器：纯函数 `systems/light-timer.js` `clockNight(date, { on, off, ramp })`，渐变落在开灯时段之内（开灯起 45 分钟日出、
+      关灯前 45 分钟日落），支持跨午夜；设置「跟随本地时间」默认关，与 180 s 自动循环互斥（`settings-panel` 的 `EXCLUSIVE`），
+      手动按 Dock 日/夜关掉两者；开着时启动直接 `jump` 到当前时刻。
+    - 开缸清澈化：`systems/turbidity.js`（kick 取较大值，τ=1.8 s 指数回落）。首次进入某水景（含新建空缸，揭幕时）kick 1，
+      造景保存后 kick 0.45。已见水景存 `aquarium.seen`，键不存在时把现有水景全记为见过（第一次启动 / 老玩家升级不会一进来就是浑水）。
+      玻璃缸：镜头 pass 新 uniform `uTurb`（雾化系数 ×(1+3·浊度)、上限 +0.3 封顶 0.8、雾色略偏泥沙），悬浮颗粒池扩到 900、
+      `setDensity` 用 drawRange 画 300→900；自然水域：雾密度 ×(1+2.5·浊度)（`dayNight.fogD` 为基准）、`uClear` 降到 1-0.6·浊度。
+      浊度未清时不补拍缩略图。
+  - 在缸时长：care 存档新增 `since:{物种:[时间戳]}`，缺失/非法/未来值补为"现在"并落盘（旧存档从升级当天算起）；
+    `runtime.addFish` 调 `care.arrive`；`daysInTank` 按本地日历日计数。识鱼卡加"在缸第 N 天"/"今天刚到"，页脚改为可换行。
+  - 调试钩子：`clockAt(hhmm|null)`、`turbidity()`、`kickTurbid(s)`、`mixNote()`、`daysOf(si, ii)`。
+- 渲染性能（v2.2，对照学习项目 SkentSun/aquarium-editor 的 PERFORMANCE.md 第一轮优化移植）：
+  - 造景物件绘制批处理 `scenes/item-batch.js`：静态小网格按「材质 uuid + 阴影标志 + 属性签名(名:itemSize 排序) + 是否索引」
+    分桶，每桶 ≥2 件合成一个 `BatchedMesh`（`WEBGL_multi_draw` 多绘制，一次提交画全桶；扩展不可用则整体跳过、保持原网格）。
+    原网格隐藏保留作编辑代理：编辑器进入拆批恢复逐件拾取/拖拽，退出（`apply` 之后）由 `runtime.setBatching(true)` 立即重批；
+    `sync` 对"同桶同网格同矩阵"做脏检查，亲密度发鱼等频繁 `apply` 不会反复重建 GPU 缓冲。InstancedMesh（植物丛/香蒲/触手）
+    本身已是单次绘制，不参与；透明/morph/多材质槽不参与（分桶键即 `bucketOf` 纯函数，Node 单测覆盖）。
+  - 着色器注入加 `USE_BATCHING` 分支：`injectCaustics`（vWPos）、`injectSway`（toW/base 与 vSwW）、
+    `injectFloat`（toW）在批处理下经 `batchingMatrix` 取世界坐标——焦散网纹、水流倒伏、浮叶贴浪与逐件渲染完全一致；
+    three 的程序缓存键含 batching 位，共享材质在批/非批两条路径各自编译一份程序，互不污染。
+  - 自动画质升级（`systems/quality.js`）：每级新增「画布像素预算」`pixels`（标定为各档像素比在 1080p 下的实际像素数）与
+    「阴影刷新率」`shadowHz`（30→10 Hz）。`budgetRatio(budget,w,h,base)` = min(base, sqrt(预算/窗口像素))、下限 0.6——
+    4K 大窗口立即缩像素，不再等帧率阶梯慢压；小窗口预算用不完、行为与原先一致。`reapply()` 供 resize 重发当前档。
+  - 整帧渲染统计：`renderer.info.autoReset=false` + 主循环每帧手动 reset（覆盖主场景/阴影/后期全部通道）；
+    `__aqDebug.perf()` 读上一帧 draw calls / 三角形 / 几何纹理数 / 像素比，`itemBatches()` / `setBatching(on)`
+    可量化批处理前后收益（学习项目实测同类改造 Draw Calls -84%、提交三角形 -80%）。
+  - 水面细节三件套（同为 aquarium-editor 移植，纯着色器增强不动架构）：焦散**色散**（`caustics.js` RGB 沿轴错开
+    采样、随水深拉开，网纹边缘微彩虹）；水面**灯带实形反射**（`tank.js` LAMP_RECT 按各外壳发光面真实几何给出矩形，
+    视线经波面反射打到灯平面命中才亮，reef 双灯盘查两块；`daynight` 用 uLampK 跟随灯具昼夜调光）；
+    **弯月线**（水面贴玻璃处银线收边，自然水域随 uLampOn=0 一并关闭）。
+  - **水体合成 pass**（v2.3，整体移植 aquarium-editor 的 post.js WATER_FS，水面从此"不是网格而是光线合成"）：
+    - 新模块 `scene/water-pass.js`：玻璃缸的水面/水体由紧跟场景渲染的全屏 pass 合成——俯视波面折射偏移 + 菲涅尔
+      混灯带/房间反射；水中按 exp(-σL) 吸收（σ 随开缸浊度加浓）+ 14 步 march **阴影图与解析焦散网纹**的灯内散射
+      （光柱被石头/沉木/鱼剪影切开、HG 相函数、夜间跟随主灯变暗）；仰视水面**全内反射**显示缸内镜像（半分辨率
+      平面镜像 RT，仅相机入水时渲染）；缸内看侧玻璃掠射角是**平面镜**（左右 0.55× 镜像 RT，仅相机在缸内时渲染）；
+      弯月线。镜像渲染期间冻结阴影更新（复用主相机阴影图）。
+    - 通道结构与深度反馈环红线：RenderPass（场景+深度→composer A）→ 水体 pass 读 A 颜色+深度、写私有 rtWater
+      （needsSwap=false）→ lens 颜色源切到 rtWater（新增 `setSource`）、深度仍读 A → 泛光 → 输出。任何被采样的
+      目标都不在当前绘制目标上；水面网格（缸）不写深度的老约定由此接管为"合成不写深度"。
+    - 模式切换 `applyWaterMode`（main）：玻璃缸=合成+藏水面网格；自然水域=保留网格水面（岸线/浅滩/白沫依赖水深
+      贴图，盒体模型做不了）；编辑器打开=全关。画质最低档 `setShafts(0)` 停 march。`__aqDebug.water(false)`
+      一键回退网格水面做 A/B，`absorb(k)`/`shafts(k)` 调参。
+    - 与场景水面的 uniform（uTime/uFlow/uSky/uDeep/uLamp*、浊度）全部共享引用，昼夜/款式/开缸浊度自动流入合成。
+- 摆放与投喂的缸内边界（v2.3.1，修复"鱼粮沉到缸外、水草穿玻璃"）：
+  - 水体合成 pass 落地后跟进的设置项：画面里新增「水色浓淡」（`absorb`，默认 0.4）与「光柱」（`shafts`，默认 0.1）
+    两个滑杆（1% 步进，`water-pass` 的 uSigmaK / setShafts）；旧的网格光柱 `LightRays` 删除，`effects` 只剩气泡/雪/涟漪。
+  - 饲料硬边界：`systems/feeder.js` 每帧把饲料与碎屑夹在 ±2.2 / ±0.8（= 鱼群巡游矩形，也在玻璃内壁之内），
+    顺流漂到玻璃就停——不再用"漂出 |x|>2.2 就淡出"兜底（那条路会看着饲料掉到缸外才消失）。
+  - 物件包络钳制：`scene-runtime.js` build 时量出物件局部满幅（含 InstancedMesh 全部实例），`place()` 按旋转/缩放换算
+    世界包络，把中心点钳在玻璃内壁 `GLASS_INNER`（±2.265 / ±0.865，item-meta 导出）之内，水草另加摆动余量；
+    钳制结果写回运行时副本，接地暗斑跟随。`limitsOf(id)` 对编辑器暴露同一套范围。
+  - 数据侧估算 `placeLimits(type, s)`（item-meta）：玻璃内壁 − 占地半径×缩放 − 2 cm，夹在 `PLACE_BOUNDS` 内、
+    触底 0.15；`sanitizeItem` 用它把旧存档贴边的物件拉回缸内。估算比精确包络松的部分由 place() 兜底。
+  - 编辑器同一套边界：拖动/方向键微移/复制用 `limitsOf`（真实包络），新放/缩放用 `placeLimits` 估算；
+    拖动与缩放/旋转滑杆在 moveItem 后按新包络回钳文档，选中圈与视觉一致。
+  - 水草 radius 改为含叶片满幅的占地（长叶草 0.24→0.42、皇冠草 0.16→0.4 等），石拱桥/瓷罐同步调大：
+    选中圈更贴实、默认摆放间距更合理。
+- 灯光亮度调节（v2.3.2）：设置「画面」新增「灯光亮度」滑杆（`lamp`，0~150%、1% 步进、默认 100%，落盘
+  `aquarium.settings`）：`dayNight.setLamp(k)` 存用户倍率，`apply()` 里只乘缸灯本体四件套——主灯
+  `hoodSpot.intensity`、灯具发光面 `lightMat.emissiveIntensity`、水面灯带反射 `uLampK`、地面漏光
+  `floorGlowMat.opacity`（≤1 封顶）；环境光/补光/雾/焦散不受影响，昼夜循环与灯光定时器照常在其上工作。
+  旧存档坏值回落 1。调试钩子 `__aqDebug.lamp(k)`。
+- 照片级 PBR 表面（v2.3.3，素材取自 aquarium-editor，MIT）：`public/tex/` 收录 4 组 1024² albedo+法线
+  （青龙石 r_seiryu / 火山岩 r_lava / 漂木 w_drift / 大磯沙 s_oiso，各带 `_n` 法线，约 3.6 MB，
+  懒加载 + PWA 缓存，来源与许可见 public/tex/README.md）。新增 `scenes/items/surface-tex.js`：
+  三平面映射按物件局部坐标采样——无 UV 的程序化几何也能贴、纹理跟着物件走（拖动/旋转不游移）、
+  实例共享几何时同贴图；1×1 占位 + uniform 共享引用热替换，加载完成前完全保持程序化外观；
+  与 injectCaustics / injectSurfaceDetail 锚点式叠加（各自重发 include 锚点，注入顺序无关）。
+  接线：青龙石/活石拆出专用材质（河石仍程序化圆石），沉木拱贴漂木纹，缸底沙面换成大磯沙
+  albedo+法线（顶点色继续按主题调沙色，normalScale 0.55，bumpMap→normalMap 重编译一次）。
+- 镜头效果开关（v2.3.4）：设置「画面」新增「景深」（`dof`，默认开；`lens.setDof`，画质最低档仍随泛光连带
+  关闭，与光柱同一套联动）与「水体雾化」（`haze`，默认开；水体合成 pass 的深度吸收总开关——关闭即
+  `uSigmaK→0`，「水色浓淡」滑杆在其下暂失效，重开恢复）两个开关，落盘 `aquarium.settings`，旧存档缺省视为开。
+  修复：lens pass 身兼水体合成的上链拷贝段（颜色源接 rtWater），此前景深/雾化全关会把整个 pass 停掉，
+  合成水面进不了画面（此时水面网格是藏的 → 水面整个消失；极速画质档自动关景深时同样会触发）。
+  现在背着颜色源时 pass 保持启用，两效果全关走片元提前直拷（近乎零开销）。
+- 按主题分底砂 + 太湖石贴图（v2.3.5，素材续自 aquarium-editor）：主题新增 `sandTex` 字段——fresh/river=
+  水草泥 `s_aquasoil`、reef/garden=白沙 `s_white`、pond/stream=大磯沙 `s_oiso`；`tank.setSandColors(a, b, tex)`
+  接收贴图名，换装时按 `SAND_GAIN` 用材质 color 给各贴图平均亮度找平，等加载期间切主题的迟到加载作废；
+  太湖石贴 `r_ryuoh` 龙王石灰质纹理。public/tex/ 共 7 组约 5.5 MB（懒加载，PWA 缓存）。
+- 照片皮新物种 ×3（v2.3.6，模型续自 aquarium-editor，MIT）：孔雀鱼（雄）guppy、半月斗鱼 betta、
+  金三角灯 harlequin——侧面照片生成的单网格静态模型（一张嵌入式贴图、无骨骼片段），b64 解码进
+  `public/fish-models/species/`（README 记来源）。物种流水线全链登记：SPECIES（profile/鳍参数/
+  Boids/水层/程序化回退 paint）+ FILES + SPECIES_META（中文名/拉丁名/图鉴文案，名字取自源项目
+  catalog）+ ECOLOGY（均淡水热带）+ FISH_IDS/FISH_MAX（guppy 10、betta 2 独居、harlequin 24）+
+  三处 css 强调色。无 PALETTES 条目 → 走锦鲤同款"保留照片贴图+压镜面"路径；无动画片段 →
+  走 decorateFishMaterial 顶点尾摆（amp/beat/waveK 来自物种表）。classic 预设测试改为
+  "旧九种保持默认、新物种不入旧预设"。与 tetra（霓虹脂鲤=红绿灯）同种的源项目 neon 模型未收录。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

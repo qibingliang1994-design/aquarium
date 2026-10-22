@@ -26,6 +26,9 @@ export function injectFloat(mat, key){
       +sh.vertexShader.replace('#include <project_vertex>', `
       {
         mat4 toW = modelMatrix;
+        #ifdef USE_BATCHING
+          toW = modelMatrix * batchingMatrix;
+        #endif
         #ifdef USE_INSTANCING
           toW = modelMatrix * instanceMatrix;
         #endif

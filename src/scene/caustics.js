@@ -1,6 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { U } from '../uniforms.js';
+import { TANK } from './tank.js';   // 循环依赖安全：TANK 只在着色器编译时（onBeforeCompile）读取
 
 /* ================================================================
  * 焦散纹理（Voronoi 网纹，程序生成）
@@ -52,7 +53,9 @@ export function injectCaustics(mat, strength, key){
     sh.vertexShader = 'varying vec3 vWPos;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-      #ifdef USE_INSTANCING
+      #ifdef USE_BATCHING
+        vWPos = ( modelMatrix * batchingMatrix * vec4( transformed, 1.0 ) ).xyz;
+      #elif defined( USE_INSTANCING )
         vWPos = ( modelMatrix * instanceMatrix * vec4( transformed, 1.0 ) ).xyz;
       #else
         vWPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
@@ -63,11 +66,19 @@ export function injectCaustics(mat, strength, key){
       `#include <normal_fragment_maps>
       {
         vec2 cuv = vWPos.xz;
-        float c1 = texture2D( uCausticMap, cuv*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
-        float c2 = texture2D( uCausticMap, cuv*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
-        float ca = pow( min( c1, c2 ), 1.4 ) * smoothstep( 1.75, 1.0, vWPos.y ) * ${CAUSTIC_FACING};
+        // 色散（学自 aquarium-editor 的 aqCaustic）：RGB 沿一轴错开采样，入水越深错得越多——
+        // 焦散网纹的边缘透出一点微彩虹，白光透过水面被"拆开"的物理感
+        float dsp = 0.006 + clamp( ${TANK.waterY.toFixed(2)} - vWPos.y, 0.0, 1.0 ) * 0.02;
+        vec3 c1, c2;
+        c1.r = texture2D( uCausticMap, ( cuv + vec2( dsp, 0.0 ) )*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
+        c1.g = texture2D( uCausticMap, cuv*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
+        c1.b = texture2D( uCausticMap, ( cuv - vec2( dsp, 0.0 ) )*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
+        c2.r = texture2D( uCausticMap, ( cuv + vec2( dsp, 0.0 ) )*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
+        c2.g = texture2D( uCausticMap, cuv*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
+        c2.b = texture2D( uCausticMap, ( cuv - vec2( dsp, 0.0 ) )*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
+        vec3 ca = pow( min( c1, c2 ), vec3( 1.4 ) ) * smoothstep( 1.75, 1.0, vWPos.y ) * ${CAUSTIC_FACING};
         // 按表面本色提亮（光透过水打在上面），而不是叠一层白——白色网纹会盖住沙粒、像画上去的，显得不通透
-        diffuseColor.rgb += diffuseColor.rgb * vec3( 0.78, 0.94, 1.0 ) * ca * uCausticK * 1.8 * uOn;
+        diffuseColor.rgb += diffuseColor.rgb * ( ca * vec3( 0.78, 0.94, 1.0 ) ) * uCausticK * 1.8 * uOn;
       }`);
   };
 }

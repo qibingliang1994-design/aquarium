@@ -34,4 +34,18 @@ Blender 构建脚本放在本地 `_koi_build/`（已在 .gitignore 中，不进�
   `Swimming_Fast`（1.07 s 受惊冲刺，尾摆 ±24.5°）、
   `Attack`（0.63 s 咬食：甩头 + 身体单侧 C 弯 + 张嘴、胸鳍外展）。
   与 Quaternius 模型使用同一套 School 动作混合接口。
+
+## 照片皮模型（aquarium-editor，MIT）
+
+来自 [SkentSun/aquarium-editor](https://github.com/SkentSun/aquarium-editor)（MIT License），
+由侧面照片生成的单网格静态模型（一张嵌入式照片贴图、无骨骼动画），按原样解码收录。
+
+| 文件 | 物种 | 用途 |
+| --- | --- | --- |
+| species-guppy.glb | 孔雀鱼（雄） | 上层松散小群（≤10 条） |
+| species-betta.glb | 半月斗鱼 | 缓游独行（≤2 条） |
+| species-harlequin.glb | 金三角灯 | 整齐群游（≤24 条） |
+
+无动画片段：School 走 `decorateFishMaterial` 的顶点尾摆路径（`amp/beat/waveK` 来自
+物种表）；材质走锦鲤同款"保留照片贴图 + 压镜面高光"路径（物种表无 PALETTES 条目即生效）。
 - 朝向 +Z；模型尺寸 1.14 单位长，运行时按物种 `L=0.42` 归一化。

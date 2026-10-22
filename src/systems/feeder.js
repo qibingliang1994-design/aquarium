@@ -4,6 +4,9 @@ import { clamp, rand } from '../utils.js';
 
 const _white=new THREE.Color(1,1,1), _wafer=new THREE.Color(0.55,0.78,0.42);
 const WAFER_SINK=0.34;             // 沉底片下沉速度（浮游饲料 0.1）：约 4 秒到底
+// 缸内硬边界（= 鱼群巡游矩形，也在玻璃内壁 ±2.265 / ±0.865 之内）：
+// 饲料与碎屑逐帧夹在缸里，顺流漂到玻璃就停，不会穿出去落到缸外
+const FEED_X=2.2, FEED_Z=0.8;
 
 export class Feeder {
   /** @param {{ tankGroup:any, sandHeight:any, waterY:number, ripples:any }} opts */
@@ -40,8 +43,8 @@ export class Feeder {
     for(let k=0;k<10+this.wafers;k++){
       const bottom=k>=10;
       this.items[this.head]={
-        p:new THREE.Vector3(clamp(center.x+rand(-0.14,0.14),-2.15,2.15), this.waterY-0.03,
-                            clamp(center.z+rand(-0.12,0.12),-0.82,0.82)),
+        p:new THREE.Vector3(clamp(center.x+rand(-0.14,0.14),-FEED_X+0.05,FEED_X-0.05), this.waterY-0.03,
+                            clamp(center.z+rand(-0.12,0.12),-FEED_Z+0.02,FEED_Z-0.02)),
         v:new THREE.Vector3(rand(-0.03,0.03),-0.05,rand(-0.03,0.03)),
         age:0, eaten:0, ph:rand(6.283), bottom,
       };
@@ -72,6 +75,7 @@ export class Feeder {
         c.v.y+=(-0.07-c.v.y)*Math.min(1,dt*3);
         c.p.addScaledVector(c.v,dt);
         c.p.y=Math.max(c.p.y, this.sandHeight(c.p.x,c.p.z)+0.006);
+        c.p.x=clamp(c.p.x,-FEED_X,FEED_X); c.p.z=clamp(c.p.z,-FEED_Z,FEED_Z);   // 碎屑同样不出缸
         if(c.life>=LIFE) this.crumbs[i]=null;
       }
       const s=c && c.life<LIFE ? 1-c.life/LIFE : 0;
@@ -99,8 +103,9 @@ export class Feeder {
         if(it.p.y>this.sandHeight(it.p.x,it.p.z)+0.018){        // 下沉
           it.v.y+=((it.bottom?-WAFER_SINK:-0.1)-it.v.y)*dt*2.2;
           it.p.x+=Math.sin(t*1.7+it.ph)*dt*0.02+this.flow*dt*0.8;   // 下沉途中顺流漂走
-          if(Math.abs(it.p.x)>2.2) it.age=Math.max(it.age,26);     // 漂出水域：淡出
           it.p.addScaledVector(it.v,dt);
+          it.p.x=clamp(it.p.x,-FEED_X,FEED_X);                   // 撞玻璃就停：饲料留在缸内，
+          it.p.z=clamp(it.p.z,-FEED_Z,FEED_Z);                   // 底栖鱼才一定吃得到
         } else it.p.y=this.sandHeight(it.p.x,it.p.z)+0.018;      // 落底
       }
       const s=scale;

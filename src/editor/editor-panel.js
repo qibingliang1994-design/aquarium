@@ -3,7 +3,7 @@ import { ITEM_GROUPS, ITEM_META, ITEM_TYPES, MAX_ITEMS } from '../scenes/item-me
 import { THEMES, THEME_IDS } from '../scenes/themes.js';
 import { TANK_STYLES, TANK_IDS } from '../scenes/tank-styles.js';
 import { FISH_IDS, FISH_MAX, FISH_TOTAL_MAX, fishTotal } from '../scenes/scene-doc.js';
-import { SPECIES_META } from '../ui/encyclopedia.js';
+import { SPECIES_META, mixNoteFor } from '../ui/encyclopedia.js';
 
 /* ================================================================
  * 造景编辑器的 DOM 层：顶栏、三个页签（造景/鱼群/水体）、检视器
@@ -88,6 +88,9 @@ export function createEditorPanel(h){
     fishRows[id]=row;
     fishEl.appendChild(row);
   }
+  const mixEl=document.createElement('p');          // 混养冷知识：随加减鱼实时变化，只是提示
+  mixEl.className='ed-note';
+  fishEl.appendChild(mixEl);
 
   /* ---------- 水体：主题 ---------- */
   /** @type {Record<string, HTMLButtonElement>} */ const themeBtns={};
@@ -153,6 +156,8 @@ export function createEditorPanel(h){
       dec.disabled=n<=0;
       inc.disabled=n>=FISH_MAX[id] || total>=FISH_TOTAL_MAX;
     }
+    const note=mixNoteFor(doc.fish);
+    mixEl.textContent=note ?? ''; mixEl.hidden=!note;
     for(const id of THEME_IDS) themeBtns[id].classList.toggle('on', doc.theme===id);
     for(const id of TANK_IDS) tankBtns[id].classList.toggle('on', doc.tank===id);
     const full=doc.items.length>=MAX_ITEMS;

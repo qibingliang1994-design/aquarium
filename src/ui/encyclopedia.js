@@ -4,6 +4,7 @@ import { SPECIES } from '../entities/fish/species.js';
 import { scaleNormalTex, finAlphaTex } from '../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, fishEyeLayout } from '../fish/body.js';
 import { prepareFishModel, decorateFishMaterial } from '../fish/glb-style.js';
+import { ecologyTags, mixNote } from '../entities/fish/ecology.js';
 
 /* ---------- 鱼类图鉴数据与视图 ---------- */
 /** @typedef {{ name:string, latin:string, className:string, desc:string, zone:string, size:string, behavior:string, diet:string }} SpeciesMeta */
@@ -27,7 +28,18 @@ export const SPECIES_META={
     desc:'水中活宝石，白底红斑极为吉祥，悠然巡游全缸，是当之无愧的门面。',zone:'全层',size:'40–60 cm',behavior:'从容大方',diet:'杂食'},
   cory:{name:'鼠鱼',latin:'Corydoras paleatus',className:'cory',
     desc:'活跃的底栖清道夫，常在沙地上觅食，用胡须探索每一处角落。',zone:'底层',size:'4–6 cm',behavior:'底栖活跃',diet:'杂食'},
+  guppy:{name:'孔雀鱼',latin:'Poecilia reticulata',className:'guppy',
+    desc:'虹彩蓝绿的小身子拖着大红尾，在水面上层轻快巡游，是最耐养的入门鱼。',zone:'上层',size:'4–6 cm',behavior:'温和活泼',diet:'杂食'},
+  betta:{name:'半月斗鱼',latin:'Betta splendens',className:'betta',
+    desc:'展开的鱼鳍像一把绯色的扇，缓游独行、气度雍容，一缸一两尾刚刚好。',zone:'中上层',size:'6–8 cm',behavior:'从容独游',diet:'肉食'},
+  harlequin:{name:'金三角灯',latin:'Trigonostigma heteromorpha',className:'harlequin',
+    desc:'铜粉色的小灯鱼，后半身一块黑三角，成群游动时队形出奇地整齐。',zone:'中层',size:'4–5 cm',behavior:'群游整齐',diet:'杂食'},
 };
+/** 当前鱼群的混养冷知识（体长与显示名取自物种表） @param {Record<string, number>} fish */
+export function mixNoteFor(fish){
+  return mixNote(fish, { lengths:Object.fromEntries(SPECIES.map(s=>[s.id, s.L])),
+    names:Object.fromEntries(Object.entries(SPECIES_META).map(([id,m])=>[id, m.name])) });
+}
 const speciesGrid=document.getElementById('speciesGrid');
 function renderEncyclopedia(){
   speciesGrid.innerHTML=SPECIES.map(spec=>{
@@ -37,6 +49,7 @@ function renderEncyclopedia(){
       <div class="species-body">
         <div class="species-title"><h3>${m.name}</h3><span class="species-count" data-count="${spec.id}"></span></div>
         <p class="species-latin">${m.latin}</p>
+        <p class="species-eco">${(ecologyTags(spec.id) ?? []).map(t=>`<span>${t}</span>`).join('')}</p>
         <p class="species-desc">${m.desc}</p>
         <dl class="species-meta">
           <div><dt>活动水层</dt><dd>${m.zone}</dd></div>
@@ -62,6 +75,8 @@ export function syncEncyclopediaCounts(fish){
     if(n>0) present++;
   }
   const sc=document.getElementById('speciesCount'); if(sc) sc.textContent=String(present);
+  const mn=document.getElementById('mixNote');
+  if(mn){ const t=mixNoteFor(fish); mn.textContent=t ?? ''; mn.hidden=!t; }
 }
 /* ---------- 图鉴模型预览：优先加载本地鱼种 GLB，失败回退程序化鱼体网格 ---------- */
 const fishPreviewEntries=new Map();

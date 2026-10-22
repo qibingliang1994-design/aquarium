@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { clamp } from '../utils.js';
 import { sandHeight } from '../scene/tank.js';
-import { ITEM_META, PLACE_BOUNDS, MAX_ITEMS } from '../scenes/item-meta.js';
+import { ITEM_META, placeLimits, MAX_ITEMS } from '../scenes/item-meta.js';
 import { FISH_MAX, FISH_TOTAL_MAX, fishTotal, newId, cloneDoc } from '../scenes/scene-doc.js';
 import { createHistory } from './history.js';
 import { createEditorPanel } from './editor-panel.js';
@@ -75,7 +75,9 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(!it) return;
     liveBefore??=snap();
     Object.assign(it, patch);
-    runtime.moveItem(it);
+    runtime.moveItem(it);                       // 先让运行时按新 rot/s 算出真实包络的钳制范围
+    const lim=runtime.limitsOf(it.id);          // 再用同一套范围回钳文档：选中圈与视觉永远一致
+    it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
     panel.inspect(it);
     placeRing();
   }
@@ -103,8 +105,10 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     // 沉木拱、海扇是"正面朝前"的片状物件：新放时只小幅偏转，避免侧对镜头像根棍子
     const facing=FACING.has(type), jitter=(Math.random()*2-1)*0.4;
     const rot=type==='airstone' ? 0 : facing ? (jitter+TAU)%TAU : Math.random()*TAU;
-    const it={ id:newId('it'), type, x:p.x, z:p.z, rot,
-      s:clamp(1,m.scale[0],m.scale[1]), seed:Math.floor(Math.random()*1e9) };
+    const s=clamp(1,m.scale[0],m.scale[1]);
+    const lim=placeLimits(type, s);   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
+    const it={ id:newId('it'), type, x:clamp(p.x,-lim.x,lim.x), z:clamp(p.z,-lim.z,lim.z), rot,
+      s, seed:Math.floor(Math.random()*1e9) };
     commit(d=>d.items.push(it));
     select(it.id);
   }
@@ -112,8 +116,9 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     const it=selItem();
     if(!it) return;
     if(doc.items.length>=MAX_ITEMS){ toast(`物件最多 ${MAX_ITEMS} 件`); return; }
+    const lim=runtime.limitsOf(it.id);
     const copy={ ...it, id:newId('it'), seed:Math.floor(Math.random()*1e9),
-      x:clamp(it.x+0.25,-PLACE_BOUNDS.x,PLACE_BOUNDS.x), z:clamp(it.z+0.08,-PLACE_BOUNDS.z,PLACE_BOUNDS.z) };
+      x:clamp(it.x+0.25,-lim.x,lim.x), z:clamp(it.z+0.08,-lim.z,lim.z) };
     commit(d=>d.items.push(copy));
     select(copy.id);
   }
@@ -125,8 +130,15 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   }
   const edit=(/** @type {(it:any)=>void} */ fn)=>{ if(selItem()) commit(()=>fn(selItem())); };
   const rotate=(/** @type {number} */ dir)=>edit(it=>{ it.rot=((it.rot+dir*ROT_STEP)%TAU+TAU)%TAU; });
-  const rescale=(/** @type {number} */ k)=>edit(it=>{ const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3); });
-  const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{ it.x=clamp(it.x+dx,-PLACE_BOUNDS.x,PLACE_BOUNDS.x); it.z=clamp(it.z+dz,-PLACE_BOUNDS.z,PLACE_BOUNDS.z); });
+  const rescale=(/** @type {number} */ k)=>edit(it=>{
+    const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3);
+    const lim=placeLimits(it.type, it.s);       // 放大后按占地半径回钳，别让包络探出玻璃
+    it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
+  });
+  const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{
+    const lim=runtime.limitsOf(it.id);
+    it.x=clamp(it.x+dx,-lim.x,lim.x); it.z=clamp(it.z+dz,-lim.z,lim.z);
+  });
   const reseed=()=>edit(it=>{ it.seed=Math.floor(Math.random()*1e9); });
 
   function setFish(/** @type {string} */ id, /** @type {number} */ delta){
@@ -187,7 +199,10 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(!drag){ canvas.style.cursor=pickItem(e) ? 'pointer' : ''; return; }
     rayFrom(e);
     if(!raycaster.ray.intersectPlane(plane, hitP)) return;
-    liveChange({ x:clamp(hitP.x+drag.dx,-PLACE_BOUNDS.x,PLACE_BOUNDS.x), z:clamp(hitP.z+drag.dz,-PLACE_BOUNDS.z,PLACE_BOUNDS.z) });
+    const it=selItem();
+    if(!it) return;
+    const lim=runtime.limitsOf(it.id);   // 拖不出玻璃：按真实包络钳住中心点
+    liveChange({ x:clamp(hitP.x+drag.dx,-lim.x,lim.x), z:clamp(hitP.z+drag.dz,-lim.z,lim.z) });
     canvas.style.cursor='grabbing';
   });
   const endPointer=(/** @type {any} */ e)=>{

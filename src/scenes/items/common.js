@@ -36,6 +36,10 @@ export function injectSway(/** @type {any} */ mat, /** @type {number} */ amp, /*
         // 水流：水下的草顺流（世界 +x）倒伏、摆得更急；实例和物件各自随机转过，倒伏方向要换到局部空间
         mat3 toW = mat3( modelMatrix );
         vec4 base = modelMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
+        #ifdef USE_BATCHING
+          toW = toW * mat3( batchingMatrix );
+          base = modelMatrix * batchingMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
+        #endif
         #ifdef USE_INSTANCING
           toW = toW * mat3( instanceMatrix );
           base = modelMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );
@@ -47,7 +51,9 @@ export function injectSway(/** @type {any} */ mat, /** @type {number} */ amp, /*
         vec3 lean = inverse( toW ) * vec3( 1.0, 0.0, 0.0 );
         transformed += normalize( lean ) * ss * uHN * fl * 1.6 * ( 0.85 + 0.15*sin( uTimeS*0.8 + aPhase ) );
       }
-      #ifdef USE_INSTANCING
+      #ifdef USE_BATCHING
+        vSwW = ( modelMatrix * batchingMatrix * vec4( transformed, 1.0 ) ).xyz;
+      #elif defined( USE_INSTANCING )
         vSwW = ( modelMatrix * instanceMatrix * vec4( transformed, 1.0 ) ).xyz;
       #else
         vSwW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;

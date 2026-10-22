@@ -1,16 +1,18 @@
 // @ts-check
 import * as THREE from 'three';
-import { makeRng, rrange } from '../utils.js';
+import { makeRng, rrange, clamp } from '../utils.js';
 import { sandHeight, TANK } from '../scene/tank.js';
 import { SPECIES } from '../entities/fish/species.js';
 import { School } from '../entities/fish/school.js';
 import { createCare } from '../systems/care.js';
 import { buildItem, disposeItem } from './catalog.js';
+import { createItemBatch } from './item-batch.js';
 import { createContactShadows } from './contact-shadow.js';
 import { THEMES } from './themes.js';
 import { TANK_STYLES } from './tank-styles.js';
 import { careKey } from './scene-store.js';
 import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
+import { ITEM_META, PLACE_BOUNDS, GLASS_INNER } from './item-meta.js';
 
 /* ================================================================
  * 场景运行时：把场景文档落到 three 场景里，并做增量更新
@@ -23,12 +25,15 @@ import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
 const GRAVEL_N=56;
 
 /** @param {any} opts */
-export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, onTheme, onTank, onSchools }){
+export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, renderer, onTheme, onTank, onSchools }){
   const contact=createContactShadows(tankGroup, sandHeight);
   const itemsGroup=new THREE.Group();
   itemsGroup.name='scene-items';
   tankGroup.add(itemsGroup);
-  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[] }>} */
+  // 静态物件绘制批处理：同材质网格合批（Draw Calls 大减）；编辑器打开时拆批恢复逐件交互
+  const batch=createItemBatch({ renderer, parent:itemsGroup });
+  const rootsOf=()=>[...live.values()].map((/** @type {any} */ e)=>e.root);
+  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, lim:{x:number,z:number} }>} */
   const live=new Map();
   /** @type {any} */ let doc=null;
   /** @type {any} */ let care=null;
@@ -52,7 +57,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
 
   function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
-    tank.setSandColors(t.sand[0], t.sand[1]);
+    tank.setSandColors(t.sand[0], t.sand[1], t.sandTex);
     tank.setBackdrop(t.backdrop, t.art);
     for(let i=0;i<GRAVEL_N;i++) gravel.setColorAt(i, c.setHex(t.gravel[(i*7)%t.gravel.length]));
     if(gravel.instanceColor) gravel.instanceColor.needsUpdate=true;
@@ -60,8 +65,28 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   }
 
   /* ---------- 物件 ---------- */
+  // 物件局部满幅（含 InstancedMesh 的每个实例）：build 时根节点还没有变换，量出来的就是本体的包络
+  function localExtents(/** @type {any} */ object){
+    const box=new THREE.Box3();
+    object.updateMatrixWorld(true);
+    object.traverse((/** @type {any} */ o)=>{
+      if(o.isInstancedMesh){ if(!o.boundingBox) o.computeBoundingBox(); box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld)); }
+      else if(o.geometry){ if(!o.geometry.boundingBox) o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); }
+    });
+    return { x:Math.max(Math.abs(box.min.x),Math.abs(box.max.x)), z:Math.max(Math.abs(box.min.z),Math.abs(box.max.z)) };
+  }
+  /** 中心点允许范围：玻璃内壁 − 真实包络（含旋转/缩放，水草加摆动余量）。数据侧估算见 item-meta.placeLimits */
+  function limitsOf(/** @type {any} */ e){
+    const it=e.item, c=Math.abs(Math.cos(it.rot)), sn=Math.abs(Math.sin(it.rot));
+    const pad=(ITEM_META[it.type]?.group==='plant') ? 0.09 : 0.03;
+    return { x:Math.min(PLACE_BOUNDS.x, Math.max(0.15, GLASS_INNER.x-((e.ext.x*c+e.ext.z*sn)*it.s+pad))),
+             z:Math.min(PLACE_BOUNDS.z, Math.max(0.15, GLASS_INNER.z-((e.ext.x*sn+e.ext.z*c)*it.s+pad))) };
+  }
   function place(/** @type {any} */ e){
     const it=e.item;
+    e.lim=limitsOf(e);
+    it.x=clamp(it.x,-e.lim.x,e.lim.x);   // 写回运行时副本：旧存档里贴边的物件在这里被拉回缸内，
+    it.z=clamp(it.z,-e.lim.z,e.lim.z);   // 接地暗斑也跟着钳制后的位置贴沙面
     const y=sandHeight(it.x,it.z);
     e.root.position.set(it.x, y, it.z);
     e.root.rotation.set(0, it.rot, 0);
@@ -78,7 +103,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     root.userData.itemId=item.id;
     root.add(object);
     itemsGroup.add(root);
-    const e={ item:{ ...item }, root, local };
+    const e={ item:{ ...item }, root, local, ext:localExtents(object) };
     place(e);
     return e;
   }
@@ -109,6 +134,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     live.clear();
     for(const [id,e] of next) live.set(id,e);
     refreshDerived();
+    batch.resync(rootsOf());                    // 物件集合/变换变化后重批（同批同矩阵则自动跳过）
   }
 
   /* ---------- 鱼群 ---------- */
@@ -154,8 +180,14 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     get doc(){ return doc; },
     get care(){ return care; },
     itemsGroup,
+    /** 编辑器进出时开关物件批处理：关 = 拆批恢复原网格（逐件拾取/拖拽），开 = 立即重批 */
+    setBatching(/** @type {boolean} */ on){ batch.setEnabled(on); if(on) batch.resync(rootsOf()); },
+    /** 调试/验证用：当前批构成（每桶一次绘制） */
+    batchStats: () => batch.stats(),
     /** @param {string} id */
     rootOf: (/** @type {string} */ id) => live.get(id)?.root ?? null,
+    /** 编辑器摆放钳制用：该物件中心点允许范围（真实几何包络，place() 同一套） */
+    limitsOf: (/** @type {string} */ id) => live.get(id)?.lim ?? { x:PLACE_BOUNDS.x, z:PLACE_BOUNDS.z },
     /** 编辑器拖拽时的轻量更新：只改变换，不重建 */
     moveItem(/** @type {any} */ item){
       const e=live.get(item.id);
@@ -173,6 +205,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
       if(s.spec.count>=s.capacity || fishTotalOf(doc)>=FISH_TOTAL_MAX) return null;
       const i=s.addFish();
       if(i<0) return null;
+      care?.arrive(speciesId, i);               // 在缸时长从这一刻算起
       doc.fish[speciesId]=s.spec.count;
       return s;
     },

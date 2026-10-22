@@ -4,6 +4,7 @@ import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
 import { rrange, fbm3, vnoise3 } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { shared, castAll, injectSurfaceDetail } from './common.js';
+import { injectSurfaceTex } from './surface-tex.js';
 
 /* ================================================================
  * 太湖石：园林叠石之首，讲究"瘦、皱、漏、透"——细高扭转、表面褶皱、孔洞相通。
@@ -49,6 +50,7 @@ export function buildTaihu(/** @type {any} */ rng, /** @type {number} */ seed){
     const m=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.86, metalness:0.02 });
     injectCaustics(m, 0.5, 'taihu');
     injectSurfaceDetail(m, { freq:20, k:0.4, ao:0.3, key:'taihudet' });
+    injectSurfaceTex(m, { name:'r_ryuoh', scale:2.2, k:1.0, gain:1.9, key:'ryuoh' });   // 龙王石灰质纹理（aquarium-editor · MIT）
     return m;
   });
   const ph=[rng()*6.28, rng()*6.28, rng()*6.28];

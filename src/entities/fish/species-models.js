@@ -15,6 +15,10 @@ const FILES = {
   lion:  'fish-models/species/species-lion.glb',
   mandarin: 'fish-models/species/species-mandarin.glb',
   parrot: 'fish-models/species/species-parrot.glb',
+  // 照片皮静态模型（aquarium-editor，MIT；无骨骼片段，走 decorateFishMaterial 顶点尾摆）
+  guppy: 'fish-models/species/species-guppy.glb',
+  betta: 'fish-models/species/species-betta.glb',
+  harlequin: 'fish-models/species/species-harlequin.glb',
 };
 
 // 预加载；返回 map[id]={template,animations}，失败项为 null（School 回退程序化鱼）

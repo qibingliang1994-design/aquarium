@@ -8,6 +8,8 @@ import { lerp } from '../utils.js';
  * ================================================================ */
 
 const CYCLE_SECS=180;
+/** 玻璃缸的雾密度（自然水域由 env.fogD 覆盖） */
+const FOG_D=0.052;
 
 /** 自然水域的太阳位置（指向缸心 spotTarget） */
 const SUN={ x:-3.2, y:7.6, z:-2.6 };
@@ -15,7 +17,7 @@ const SUN={ x:-3.2, y:7.6, z:-2.6 };
 const SAND_CAUSTIC=0.38;
 
 /** @param {any} opts */
-export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, floorGlowMat, rays, schools, fishRim }){
+export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, floorGlowMat, schools, fishRim }){
   const { hoodSpot, hemi, fillLight, waterGlow, rim }=lights;
   const DAY={ spot:16, spotCol:new THREE.Color(0xfff2dc), hemi:0.35, fill:0.5, env:0.45,
     glow:new THREE.Color(0x2e8fb0), glowI:0.9, strip:2.8, bg:new THREE.Color(0x070b10),
@@ -24,12 +26,13 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     glow:new THREE.Color(0x3a6fa8), glowI:0.45, strip:0.5, bg:new THREE.Color(0x030509),
     fog:new THREE.Color(0x061420), sky:new THREE.Color(0.1,0.16,0.28), deep:new THREE.Color(0.005,0.03,0.06) };
   let k=0, target=0;
+  let lampK=1;                 // 用户灯光亮度倍率（0~1.5，1=默认）：昼夜调光之上再乘
   // 自然水域的户外环境：天空色/雾色/环境光覆盖日间表（夜间仍是统一的月光表）
   /** @type {any} */ let ENV=null; const envBg=new THREE.Color(), envFog=new THREE.Color();
 
   function apply(/** @type {number} */ v){
     k=v;
-    hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k);
+    hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k)*lampK;
     hoodSpot.color.lerpColors(DAY.spotCol,NIGHT.spotCol,k);
     hemi.intensity=lerp(ENV?.hemi ?? DAY.hemi,NIGHT.hemi,k);
     fillLight.intensity=lerp(ENV?.fill ?? DAY.fill,NIGHT.fill,k);
@@ -40,18 +43,27 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     scene.fog.color.lerpColors(ENV ? envFog : DAY.fog,NIGHT.fog,k);
     waterUniforms.uSky.value.lerpColors(DAY.sky,NIGHT.sky,k);
     waterUniforms.uDeep.value.lerpColors(DAY.deep,NIGHT.deep,k);
-    rays.setNight(k);
     if(sandMat.userData.causticK) sandMat.userData.causticK.value=lerp(SAND_CAUSTIC,0.07,k);
     for(const s of schools){ if(s.causticK) s.causticK.value=lerp(0.22,0.06,k); }
     fishRim.k.value=lerp(0.42,0.22,k);                          // 鱼体逆光轮廓夜间减弱
     rim.intensity=lerp(0.35,0.15,k);
-    if(shell.lightMat) shell.lightMat.emissiveIntensity=lerp(DAY.strip,NIGHT.strip,k);   // 灯具发光面夜间变暗
-    floorGlowMat.opacity=lerp(1,0.45,k);                        // 地面漏光随缸内亮度变化
+    if(shell.lightMat) shell.lightMat.emissiveIntensity=lerp(DAY.strip,NIGHT.strip,k)*lampK;   // 灯具发光面夜间变暗
+    waterUniforms.uLampK.value=lerp(1,0.22,k)*lampK;   // 水面的灯带反射/弯月线跟着灯具一起调光
+    floorGlowMat.opacity=Math.min(1, lerp(1,0.45,k)*lampK);     // 地面漏光随缸内亮度变化
   }
 
   return {
     get k(){ return k; },
     get target(){ return target; },
+    /** 当前用户灯光亮度倍率（设置面板滑杆） */
+    get lamp(){ return lampK; },
+    /** 用户灯光亮度（0~1.5，1=默认）：只缩放缸灯本体（主灯/灯带发光/水面灯带反射/地面漏光） */
+    setLamp(/** @type {number} */ v){
+      lampK=Math.min(1.5, Math.max(0, Number.isFinite(v) ? v : 1));
+      apply(k);
+    },
+    /** 当前水域的基础雾密度（开缸浊度在它之上加浓） */
+    get fogD(){ return ENV?.fogD ?? FOG_D; },
     set target(/** @type {number} */ v){ target=v; },
     /** 立即跳到某个状态（启动时恢复存档用） */
     jump(/** @type {number} */ v){ target=v; apply(v); },
@@ -81,7 +93,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
       sh.updateProjectionMatrix();
       ENV=t.env ?? null;
       if(ENV){ envBg.setHex(ENV.bg); envFog.setHex(ENV.fog); }
-      scene.fog.density=ENV?.fogD ?? 0.052;
+      scene.fog.density=ENV?.fogD ?? FOG_D;
       apply(k);
     },
     /** 鱼群重建后补一次（新鱼的焦散强度跟上当前昼夜） */

@@ -9,6 +9,15 @@ import { skyKeys, discDirs, skySignature } from '../systems/sky.js';
  * 穹顶本身每帧朝目标色缓动，所以光照是分步交叉，而不是每帧重算。
  * ================================================================ */
 
+/** 半球光用天空的色相，白天把最亮通道托到能照亮场景；夜里跟着变暗
+ * @param {number[]} rgb @param {number} kNight */
+function lightTint(rgb, kNight){
+  const m = Math.max(rgb[0], rgb[1], rgb[2], 1e-4);
+  const floor = 0.84*(1-Math.min(1, Math.max(0, kNight))*0.84);
+  const s = Math.max(m, floor)/m;
+  return [rgb[0]*s, rgb[1]*s, rgb[2]*s];
+}
+
 const VERT = `
 varying vec3 vDir;
 void main(){
@@ -19,7 +28,7 @@ void main(){
 const FRAG = `
 varying vec3 vDir;
 uniform vec3 uZenith, uHorizon, uCloudCol, uFogCol, uSunDir, uMoonDir;
-uniform float uSunVis, uMoonVis, uStar, uCloud, uWind, uTime;
+uniform float uSunVis, uMoonVis, uStar, uCloud, uWind, uTime, uHaze, uWarm;
 
 float hash13(vec3 p){
   p = fract(p*0.1031);
@@ -39,23 +48,35 @@ float vnoise(vec2 p){
 }
 void main(){
   vec3 dir = normalize(vDir);
-  float h = dir.y*0.5+0.5;
-  vec3 col = mix(uHorizon, uZenith, smoothstep(0.0, 0.72, clamp(h, 0.0, 1.0)));
-  col = mix(uFogCol, col, smoothstep(-0.08, 0.28, dir.y));
+  float up = clamp(dir.y, 0.0, 1.0);
+  float t = smoothstep(0.0, 0.48, up);
+  vec3 col = mix(uHorizon, uZenith, t*t*(3.0-2.0*t));
+  float haze = clamp(uHaze, 0.0, 1.0);
+  vec3 fogCol = mix(uHorizon, uFogCol, 0.72);
+  col = mix(col, fogCol, (1.0-smoothstep(0.0, 0.42, dir.y))*haze*0.9);
   vec3 sun = normalize(uSunDir), moon = normalize(uMoonDir);
   float sd = dot(dir, sun);
-  float disc = smoothstep(0.9985, 0.99955, sd);
-  float glow = pow(max(sd, 0.0), 56.0);
-  col += vec3(1.0, 0.90, 0.72)*(disc*2.4+glow*0.55)*clamp(uSunVis, 0.0, 1.0);
+  float disc = smoothstep(0.99915, 0.99962, sd);
+  float glow = pow(max(sd, 0.0), 40.0);
+  float corona = pow(max(sd, 0.0), 16.0);
+  float vis = clamp(uSunVis, 0.0, 1.0);
+  vec3 sunCol = mix(vec3(1.0, 0.97, 0.90), vec3(1.0, 0.48, 0.18), clamp(uWarm, 0.0, 1.0));
+  col += sunCol*(disc*5.4+glow*1.6+corona*0.14)*vis;
   float md = dot(dir, moon);
-  col += vec3(0.78, 0.84, 0.96)*smoothstep(0.9988, 0.9995, md)*clamp(uMoonVis, 0.0, 1.0)*1.7;
-  vec2 cuv = dir.xz/max(dir.y, 0.15)*0.38+vec2(uTime*(0.006+uWind*0.015), uTime*0.003);
-  float n = vnoise(cuv)*0.65+vnoise(cuv*2.15+4.2)*0.35;
-  float cover = smoothstep(0.64-uCloud*0.5, 0.92-uCloud*0.28, n);
-  cover *= smoothstep(0.0, 0.22, dir.y)*clamp(uCloud, 0.0, 1.0);
-  col = mix(col, uCloudCol, clamp(cover, 0.0, 1.0));
-  float star = step(0.993, hash13(floor(dir*150.0)))*pow(max(dir.y, 0.0), 0.4);
-  col += vec3(0.86, 0.91, 1.0)*star*clamp(uStar, 0.0, 1.0)*(1.0-clamp(cover, 0.0, 1.0));
+  col += vec3(0.82, 0.88, 1.0)*smoothstep(0.9986, 0.99945, md)*clamp(uMoonVis, 0.0, 1.0)*2.4;
+  vec2 cuv = dir.xz/max(dir.y, 0.12)*0.22+vec2(uTime*(0.004+uWind*0.012), uTime*0.002);
+  float n = vnoise(cuv)*0.52+vnoise(cuv*2.05+3.1)*0.30+vnoise(cuv*4.2+8.4)*0.18;
+  float shaped = smoothstep(0.08, 0.92, clamp(uCloud, 0.0, 1.0));
+  float edge = mix(0.86, 0.16, shaped);
+  float cover = smoothstep(edge, edge+0.18, n);
+  cover *= smoothstep(0.02, 0.20, dir.y)*mix(1.0, 0.42, haze);
+  float shade = smoothstep(edge+0.02, edge+0.22, n);
+  vec3 ccol = mix(uCloudCol*0.78, uCloudCol, shade);
+  col = mix(col, ccol, clamp(cover, 0.0, 1.0));
+  vec3 cell = floor(dir*190.0);
+  float hsh = hash13(cell);
+  float star = smoothstep(0.996, 0.9992, hsh)+smoothstep(0.9992, 1.0, hsh)*2.2;
+  col += vec3(0.94, 0.96, 1.0)*star*clamp(uStar, 0.0, 1.0)*pow(max(dir.y, 0.0), 0.3)*(1.0-clamp(cover, 0.0, 1.0));
   if(!(col.r<=4.0 && col.g<=4.0 && col.b<=4.0)) col = uZenith;
   gl_FragColor = vec4(max(col, vec3(0.0)), 1.0);
 }`;
@@ -70,7 +91,7 @@ export function createSky({ renderer, scene, hemi }){
     uCloudCol:{ value:new THREE.Color() }, uFogCol:{ value:new THREE.Color(0.7, 0.8, 0.85) },
     uSunDir:{ value:new THREE.Vector3(0, 1, 0) }, uMoonDir:{ value:new THREE.Vector3(0, 1, 0) },
     uSunVis:{ value:1 }, uMoonVis:{ value:0 }, uStar:{ value:0 }, uCloud:{ value:0 }, uWind:{ value:0 },
-    uTime:U.time,
+    uHaze:{ value:0 }, uWarm:{ value:0 }, uTime:U.time,
   };
   const mat = new THREE.ShaderMaterial({
     uniforms, vertexShader:VERT, fragmentShader:FRAG,
@@ -105,6 +126,8 @@ export function createSky({ renderer, scene, hemi }){
     uniforms.uStar.value = s.star;
     uniforms.uCloud.value = s.cloudCover;
     uniforms.uWind.value = s.wind;
+    uniforms.uHaze.value = s.haze;
+    uniforms.uWarm.value = s.warm;
     if(/** @type {any} */ (scene).fog?.color) uniforms.uFogCol.value.copy(/** @type {any} */ (scene).fog.color);
   }
   function dampToward(/** @type {ReturnType<typeof skyKeys>} */ t, /** @type {number} */ a){
@@ -118,6 +141,8 @@ export function createSky({ renderer, scene, hemi }){
     cur.cloudCover += (t.cloudCover-cur.cloudCover)*a;
     cur.wind += (t.wind-cur.wind)*a;
     cur.sunElev += (t.sunElev-cur.sunElev)*a;
+    cur.haze += (t.haze-cur.haze)*a;
+    cur.warm += (t.warm-cur.warm)*a;
   }
   function rebuild(){
     const prev = envTex;
@@ -155,8 +180,9 @@ export function createSky({ renderer, scene, hemi }){
       dampToward(skyKeys(nightK, wx), a);
       const dirs = discDirs(kCur, [sunPos.x, sunPos.y, sunPos.z]);
       paint(cur, dirs.sun, dirs.moon);
-      hemi.color.setRGB(cur.zenith[0], cur.zenith[1], cur.zenith[2]);
-      hemi.groundColor.setRGB(cur.horizon[0]*0.45, cur.horizon[1]*0.42, cur.horizon[2]*0.38);
+      const skyL = lightTint(cur.zenith, kCur), gndL = lightTint(cur.horizon, kCur);
+      hemi.color.setRGB(skyL[0], skyL[1], skyL[2]);
+      hemi.groundColor.setRGB(gndL[0]*0.42, gndL[1]*0.38, gndL[2]*0.34);
       acc += Math.max(0, dt);
       const next = skySignature(kCur, { cloud:cur.cloudCover, fogAmt:wx.fogAmt, grey:wx.grey, rain:wx.rain, sunMul:wx.sunMul });
       if(next!==sig && acc>=0.4){ sig = next; acc = 0; rebuild(); }

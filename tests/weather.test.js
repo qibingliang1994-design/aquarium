@@ -41,7 +41,7 @@ describe('weatherFrame', () => {
     expect(weatherFrame('snow', 1).snow).toBeCloseTo(0.7, 5);
     expect(weatherFrame('snow', 1).rain).toBe(0);
     expect(weatherFrame('fog', 1).fogMul).toBeGreaterThan(2);
-    expect(weatherFrame('sunny', 1).cloud).toBeCloseTo(0.05, 5);
+    expect(weatherFrame('sunny', 1).cloud).toBeCloseTo(0.2, 5);
     expect(weatherFrame('rain', 1).cloud).toBeGreaterThan(weatherFrame('cloudy', 1).cloud);
     expect(weatherFrame('fog', 1).chop).toBeLessThan(1);
   });

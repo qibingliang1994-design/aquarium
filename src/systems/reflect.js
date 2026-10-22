@@ -8,12 +8,12 @@ import { clamp, lerp } from '../utils.js';
 
 /** @typedef {{ on:boolean, size:number }} ReflectTier */
 
-/** 正方形反射贴图边长。极速档关 */
+/** 反射贴图短边。高档更清晰；极速档关。开着的档每帧都画 */
 export const REFLECT_TIERS = /** @type {ReflectTier[]} */ ([
+  { on:true, size:768 },
   { on:true, size:512 },
   { on:true, size:384 },
   { on:true, size:256 },
-  { on:true, size:192 },
   { on:false, size:0 },
 ]);
 
@@ -31,7 +31,7 @@ export function reflectDim(nightK, wx={}){
   const rain = clamp(wx.rain ?? 0, 0, 1);
   const fog = clamp(wx.fogAmt ?? 0, 0, 1);
   const grey = clamp(wx.grey ?? 0, 0, 1);
-  const day = lerp(1, 0.30, k);
-  const v = day*(1-rain*0.62)*(1-fog*0.55)*(1-grey*0.22);
-  return clamp(v, 0.06, 1);
+  const day = lerp(1, 0.40, k);
+  const dull = clamp(rain*0.32+fog*0.50+grey*0.10, 0, 0.75);
+  return clamp(day*(1-dull), 0.06, 1);
 }

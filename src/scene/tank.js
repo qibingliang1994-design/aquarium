@@ -122,6 +122,7 @@ const waterMesh=new THREE.Mesh(
       uniform vec2 uLampHalf, uLampXZ, uLampXZ2;
       varying vec3 vW; varying vec2 vXZ;
       void main(){
+        float mk=clamp(uMurk, 0.0, 0.85);                  // 0 时后面的 mix 系数是 0，水色与改前逐值相同
         float depth=1.0;                                   // 水深（自然水域按贴图，缸里视为很深）
         if(uDepthOn>0.5) depth=texture2D(uDepthTex, (vW.xz-uDepthBox.xy)*uDepthBox.zw).r*${DEPTH_MAX.toFixed(2)};
         float t=uTime;
@@ -138,14 +139,23 @@ const waterMesh=new THREE.Mesh(
         float alpha=0.93;
         if(gl_FrontFacing){
           col = mix(uDeep, uSky, fres*0.95);
-          // 平面反射：掠射角更强。uReflectOn=0（玻璃缸、最低画质）整段跳过，水色与改前相同
+          // 茶色先吃进水体。反射开着时不再在最后盖一层，免得倒影发浑。uMurk=0 时这一行是空操作
+          col = mix(col, vec3(0.42, 0.50, 0.38), mk*step(0.5, uReflectOn));
+          // 平面反射：有一层基础混合，掠射角再加强。uReflectOn=0（玻璃缸、最低画质）整段跳过
           if(uReflectOn>0.5){
+            float rfres = pow(1.0-max(dot(n, v), 0.0), 1.7);
+            vec2 gs = uChop*vec2(
+              cos(vXZ.x*1.15+t*0.55)*0.034+cos(vXZ.y*0.7+t*0.4)*0.018,
+              cos(vXZ.y*1.25+t*0.48)*0.034+cos(vXZ.x*0.6-t*0.35)*0.018);
+            vec2 bend = clamp(gs+g*0.35, vec2(-0.055), vec2(0.055));
             vec4 rc = uReflectMtx*vec4(vW, 1.0);
-            rc.xy += clamp(g, vec2(-0.05), vec2(0.05))*10.0*rc.w;
+            rc.xy += bend*1.55*rc.w;
             vec3 refl = texture2DProj(uReflectMap, rc).rgb;
             if(!(refl.r<=4.0 && refl.g<=4.0 && refl.b<=4.0)) refl = uSky;
-            float fmix = clamp(fres, 0.0, 1.0)*clamp(uReflectDim, 0.0, 1.0)*0.86;
-            col = mix(col, min(refl, vec3(3.0)), fmix);
+            float rl = dot(refl, vec3(0.2126, 0.7152, 0.0722));
+            refl = mix(vec3(rl), refl, 1.42);
+            float fmix = (0.38+0.58*clamp(rfres, 0.0, 1.0))*clamp(uReflectDim, 0.0, 1.0);
+            col = mix(col, min(max(refl, vec3(0.0)), vec3(3.0)), clamp(fmix, 0.0, 0.96));
           }
           // 按视角：侧看（掠射）仍是反光的水面，俯视时透出缸里（此前缸模式恒 0.93，俯视机位和编辑器都被一块深色板挡住）
           alpha = mix(mix(0.32, 0.93, pow(fres,0.7)), mix(0.2, 0.92, pow(fres,0.8)), uClear);
@@ -191,8 +201,7 @@ const waterMesh=new THREE.Mesh(
         }
         vec3 r=reflect(normalize(vec3(-0.05,-1.0,-0.22)),n);
         col+=uLightColor*pow(max(dot(r,v),0.0),90.0)*2.2;
-        float mk=clamp(uMurk, 0.0, 0.85);          // 0 时 mix 的系数是 0，水色与改前逐值相同
-        col=mix(col, vec3(0.42, 0.50, 0.38), mk);
+        col=mix(col, vec3(0.42, 0.50, 0.38), mk*(1.0-step(0.5, uReflectOn)));
         alpha=mix(alpha, min(alpha+0.12, 0.96), mk);
         gl_FragColor=vec4(col,alpha);
       }`,

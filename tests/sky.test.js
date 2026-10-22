@@ -17,6 +17,27 @@ describe('skyKeys', () => {
     expect(night.moonVis).toBeGreaterThan(0.4);
   });
 
+  it('晴天正午更深更蓝，黄昏地平线偏暖，雾天才发灰', () => {
+    const day = skyKeys(0, weatherFrame('sunny', 1));
+    expect(day.zenith[2]).toBeGreaterThan(day.zenith[0]*2);
+    expect(day.zenith[2]).toBeLessThan(0.82);
+    const dayL = day.zenith[0]+day.zenith[1]+day.zenith[2];
+    const horL = day.horizon[0]+day.horizon[1]+day.horizon[2];
+    expect(horL).toBeGreaterThan(dayL);
+    expect(day.haze).toBeLessThan(0.05);
+    expect(day.warm).toBeLessThan(0.05);
+    const dusk = skyKeys(0.54, weatherFrame('sunny', 1));
+    expect(dusk.horizon[0]).toBeGreaterThan(dusk.horizon[2]);
+    expect(dusk.warm).toBeGreaterThan(0.6);
+    const night = skyKeys(1, weatherFrame('sunny', 1));
+    expect(night.zenith[0]+night.zenith[1]+night.zenith[2]).toBeLessThan(0.08);
+    const fog = skyKeys(0, weatherFrame('fog', 1));
+    const rain = skyKeys(0, weatherFrame('rain', 1));
+    expect(fog.haze).toBeGreaterThan(rain.haze);
+    expect(rain.haze).toBeGreaterThan(day.haze);
+    expect(rain.cloudCol[0]).toBeLessThan(day.cloudCol[0]);
+  });
+
   it('云量跟着天气走：中雨多于多云，多云多于晴天', () => {
     const sun = skyKeys(0, weatherFrame('sunny', 1));
     const cloud = skyKeys(0, weatherFrame('cloudy', 1));

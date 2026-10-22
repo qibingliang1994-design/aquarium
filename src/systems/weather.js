@@ -21,7 +21,7 @@ export const CYCLE_SECS = 28;
 /** @typedef {{ cloud:number, rain:number, snow:number, fog:number, wind:number, sunMul:number, hemiMul:number, wetTarget:number, chop:number, grey:number }} WxPreset */
 /** @type {Record<WeatherId, WxPreset>} */
 const PRESETS = {
-  sunny:   { cloud:0.05, rain:0,    snow:0,   fog:0.05, wind:0.35, sunMul:1,    hemiMul:1,    wetTarget:0.05, chop:0.35, grey:0 },
+  sunny:   { cloud:0.2,  rain:0,    snow:0,   fog:0.05, wind:0.35, sunMul:1,    hemiMul:1,    wetTarget:0.05, chop:0.35, grey:0 },
   cloudy:  { cloud:0.75, rain:0,    snow:0,   fog:0.18, wind:0.55, sunMul:0.45, hemiMul:0.85, wetTarget:0.12, chop:0.55, grey:0.55 },
   drizzle: { cloud:0.7,  rain:0.35, snow:0,   fog:0.25, wind:0.5,  sunMul:0.35, hemiMul:0.75, wetTarget:0.7,  chop:0.7,  grey:0.5 },
   rain:    { cloud:0.9,  rain:1,    snow:0,   fog:0.35, wind:0.85, sunMul:0.22, hemiMul:0.65, wetTarget:1,    chop:1.15, grey:0.65 },

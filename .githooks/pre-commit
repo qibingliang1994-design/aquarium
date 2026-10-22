@@ -1,8 +1,33 @@
 #!/bin/sh
-# 提交前本地检查：lint → typecheck → test（不含 build，保持提交够快）
+# 提交前本地检查：lint → typecheck → test → aoci check（不含 build，保持提交够快）
 # 启用：npm install 时由 prepare 脚本自动设置 core.hooksPath=.githooks
 # 临时跳过：git commit --no-verify
+# aoci：优先 $AOCI_BIN，其次 PATH 上的 aoci，再回退到本机默认安装路径
 set -e
 echo "[pre-commit] lint"      && npm run --silent lint
 echo "[pre-commit] typecheck" && npm run --silent typecheck
 echo "[pre-commit] test"      && npm run --silent test
+
+resolve_aoci() {
+  if [ -n "${AOCI_BIN:-}" ] && [ -x "$AOCI_BIN" ]; then
+    printf '%s\n' "$AOCI_BIN"
+    return 0
+  fi
+  if command -v aoci >/dev/null 2>&1; then
+    command -v aoci
+    return 0
+  fi
+  # Windows：与 docs/install 建议的稳定路径一致（Git Bash / MSYS）
+  if [ -n "${LOCALAPPDATA:-}" ] && [ -x "$LOCALAPPDATA/aoci/aoci.exe" ]; then
+    printf '%s\n' "$LOCALAPPDATA/aoci/aoci.exe"
+    return 0
+  fi
+  return 1
+}
+
+echo "[pre-commit] aoci check"
+AOCI=$(resolve_aoci) || {
+  echo "[pre-commit] 未找到 aoci。请安装到 %LOCALAPPDATA%\\aoci\\aoci.exe，或设置 AOCI_BIN / 加入 PATH。" >&2
+  exit 1
+}
+"$AOCI" --repo "$(git rev-parse --show-toplevel)" check

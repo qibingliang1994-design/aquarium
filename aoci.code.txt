@@ -1,0 +1,137 @@
+#AOCI-CODE-VOLUME: 1
+
+===C:/work/code/aquarium/===
+.editorconfig[FC2T]: F:全仓 UTF-8/LF/2 空格缩进约定 | R:code:.gitattributes | A:- | S:*.md关闭trim，避免破坏硬换行
+.gitattributes[FC2T]: F:强制文本 LF，并声明 glb/图片为 binary | R:code:.editorconfig | A:- | S:glb与常见图片标binary，防Git改行尾损坏
+.gitignore[FC3T]: F:忽略依赖、构建产物、锦鲤构建中间件与本机临时目录 | R:- | A:- | S:_koi_build/与.tmp/须忽略；勿忽略aoci认知资产
+.nvmrc[FV2T]: F:锁定本仓 Node 主版本为 20 | R:code:package.json,code:.github/workflows/pages.yml | A:- | S:Pages CI读本文件；engines仅要求>=18.18
+AGENTS.md[SG5S]: F:宿主 Agent 的 AOCI 仓库认知接入说明 | R:code:aoci.txt | A:- | S:aoci:begin/end 区块由 init 托管；索引语义不得由路径/AST/模板生成，须跟当前 Guide
+ARCHITECTURE.md[SG6M]: F:架构决策与已落地进度的运行日志 | R:code:CLAUDE.md,code:DESIGN.md | A:- | S:结构性落地追加「已落地的进度」；保持Vite+原生ES，不急上React/Vue
+CLAUDE.md[SG7T]: F:给编码 Agent 的仓库命令、架构与调试约定 | R:code:ARCHITECTURE.md,code:DESIGN.md,code:package.json | A:- | S:中文注释；禁整仓格式化；改three须同步package与importmap
+DESIGN.md[SB7S]: F:治愈系桌面水族箱 GDD、红线与路线图验收 | R:code:docs/养鱼要素任务分解.md | A:- | S:红线固定：无任务列表、无硬经济、无内购；进展只能是陪伴与照顾产生的软进展
+_serve.cjs[RN5T]: F:无构建本地静态服，优先仓库根再回退 public/ | R:code:package.json,code:index.html | A:npm run serve | S:只监听 127.0.0.1；within() 拒绝 ../ 与绝对路径穿越；响应一律 no-store
+eslint.config.js[XQ4T]: F:ESLint 9 正确性规则，显式忽略 dist/public/_koi_build/.claude | R:code:package.json | A:- | S:禁空catch；_serve.cjs用commonjs；无格式化规则
+index.html[EU8M]: F:应用壳：SVG 图标精灵、HUD/Dock/各面板 markup 与唯一模块入口 | R:code:src/main.js,code:public/manifest.webmanifest | A:- | S:importmap 仅给 _serve 裸 three 用 CDN；Vite 构建忽略它并打包本地 three，升版本须双处同步
+jsconfig.json[FQ3T]: F:tsc 检查配置：ES2022、allowJs、noEmit | R:code:package.json,code:CLAUDE.md | A:npm run typecheck | S:checkJs=false，靠//@ts-check加入；缺@types/three会爆
+package-lock.json[FV3L]: F:npm 依赖锁定，保证 CI/本地解析一致 | R:code:package.json | A:npm ci | S:lockfileVersion 3；勿手改，改依赖后重装
+package.json[FV7T]: F:脚本与依赖清单：Vite/Three 应用、lint/typecheck/test/check | R:code:.githooks/pre-commit,code:.nvmrc | A:- | S:type=module 故本地服必须 _serve.cjs；prepare 失败用 || exit 0 不阻断安装；three 钉死 0.180.0
+vite.config.js[XV5T]: F:Vite/Vitest 配置：相对 base、es2022 与 Node 测环境 | R:code:package.json | A:- | S:Windows 把 TMP/TEMP 重定向到项目 .tmp/，规避安全软件拦 %TEMP% 致 esbuild 失败
+
+===C:/work/code/aquarium/.claude/===
+launch.json[XV3T]: F:Claude Code 启动配置，用 npm run dev 固定 5173 端口 | R:code:package.json | A:- | S:含--strictPort，端口占用则失败不换口
+
+===C:/work/code/aquarium/.cursor/===
+mcp.json[FC4T]: F:Cursor 项目级 MCP，登记本仓库 aoci stdio 服务 | R:- | A:- | S:command须为本机aoci.exe绝对路径；args含--repo与mcp
+
+===C:/work/code/aquarium/.githooks/===
+pre-commit[OQ5T]: F:提交前串行 lint→typecheck→test→aoci check | R:code:package.json | A:- | S:aoci 解析顺序 AOCI_BIN→PATH→%LOCALAPPDATA%/aoci/aoci.exe；找不到则非零退出；故意不含 build；启用靠 prepare 设 core.hooksPath=.githooks，临时跳过用 --no-verify
+
+===C:/work/code/aquarium/.github/workflows/===
+pages.yml[OV5T]: F:main 推送或手动触发构建并部署 GitHub Pages | R:code:.nvmrc,code:package.json | A:- | S:产物上传 path 固定 dist；concurrency group=pages 且 cancel-in-progress
+
+===C:/work/code/aquarium/docs/===
+养鱼要素任务分解.md[SB5M]: F:养鱼真实感后续任务拆解与批次建议 | R:code:docs/现代养鱼体系要素清单.md,code:DESIGN.md | A:- | S:任务零数值零惩罚；确认后拟并入DESIGN作P5，不改红线
+现代养鱼体系要素清单.md[SB5M]: F:观赏水族八大子系统与本游戏对照底稿 | R:code:docs/养鱼要素任务分解.md,code:DESIGN.md | A:- | S:氨氮循环等监测数值标🚫；只能治愈化呈现，不做压力/惩罚系统
+
+===C:/work/code/aquarium/public/fish-models/species/===
+README.md[SB4T]: F:物种 GLB 来源、许可与动画/归一化约定 | R:code:src/entities/fish/species-models.js | A:- | S:无动画走顶点尾摆；锦鲤构建不进仓；按物种L归一化
+
+===C:/work/code/aquarium/public/===
+manifest.webmanifest[FU3T]: F:PWA 清单：独立显示、相对 scope 与图标集 | R:code:index.html,code:scripts/gen-icons.mjs | A:- | S:路径用./相对，适配Pages非根部署
+sw.js[RN5T]: F:生产 Service Worker：导航网络优先，静态资源缓存优先 | R:code:src/main.js,code:public/manifest.webmanifest | A:- | S:仅 PROD 注册；CACHE 名含版本，activate 删旧缓存；跨 origin 请求不处理
+
+===C:/work/code/aquarium/public/tex/===
+README.md[SB3T]: F:造景 PBR 贴图清单、主题用途与色彩空间说明 | R:code:src/scenes/items/surface-tex.js | A:- | S:_n线性法线、albedo为sRGB；三平面映射无UV
+
+===C:/work/code/aquarium/scripts/===
+gen-icons.mjs[XV4S]: F:纯 Node 手写 PNG 生成 PWA/any 与 maskable 图标 | R:code:public/manifest.webmanifest,code:package.json | A:npm run icons | S:无图像库；maskable主体缩到60%安全区
+
+===C:/work/code/aquarium/src/===
+debug.js[XO6S]: F:安装 window.__aqDebug 自动化验证钩子 | R:code:src/main.js,code:src/entities/fish/identity.js | A:installDebug | S:schoolIndex 只计当前场景非零物种且按 SPECIES 序；setNight/clockAt 等调试改动默认不落盘
+main.js[EG9L]: F:组合根：建世界、接线 UI、驱动主循环与场景切换 | R:code:src/scenes/scene-runtime.js,code:src/scene/setup.js,code:index.html | A:- | S:waterPass与lens同链勿二次读深度；阴影按SHADOW_DT更新；隐藏页rAF须shim
+uniforms.js[CG6T]: F:全局共享 shader uniform：time/excite/flow | R:code:src/main.js | A:U | S:各材质引用同一对象，main 每帧只更新一次
+utils.js[CG5T]: F:纯工具：rand/clamp/lerp/sstep/噪声与 makeRng | R:code:src/scenes/catalog.js,code:src/entities/fish/identity.js | A:makeRng,sstep,vnoise | S:makeRng 用 mulberry32，同 seed 同序列驱动造景确定性
+
+===C:/work/code/aquarium/src/editor/===
+editor-panel.js[AU6S]: F:造景编辑器 DOM：顶栏/页签/调色板/鱼群步进/检视器 | R:code:src/editor/scene-editor.js,code:src/scenes/item-meta.js | A:createEditorPanel | S:只转发事件不改文档；Ctrl/⌘+S 在输入框也要 blur 后交给保存，避免浏览器另存网页
+history.js[CD4T]: F:场景文档 JSON 快照撤销/重做栈 | R:code:src/editor/scene-editor.js | A:createHistory | S:push清空redo；默认上限60份快照
+scene-editor.js[AU8M]: F:所见即所得造景编辑：选中/拖动/commit 差量应用到 runtime | R:code:src/editor/editor-panel.js,code:src/editor/history.js,code:src/scenes/scene-runtime.js | A:createSceneEditor | S:离散改动走 commit 快照；拖动/滑块只在开始记一次 liveBefore；pointerdown 捕获阶段先禁用 OrbitControls
+
+===C:/work/code/aquarium/src/entities/fish/===
+ecology.js[DB5T]: F:物种水/温/捕食生态标签与混养提示纯函数 | R:code:src/ui/encyclopedia.js,code:src/entities/fish/species.js | A:mixNote,ecologyTags | S:mixNote 只返回一句提示从不阻断；PREY_RATIO=0.7 仅用于文案判断大鱼吃小鱼
+identity.js[DB5T]: F:按场景/物种/序号确定性起名，并由行为统计映射个性标签 | R:code:src/utils.js,code:src/entities/fish/school.js | A:schoolNames,personaTags | S:名字不落盘；obs<8 只显示「观察中」；个性相对全群均值比较而非绝对阈值
+school.js[DB9L]: F:单物种鱼群：GLB 或程序化双模式共享 Boids 更新与成长 | R:code:src/entities/fish/steering.js,code:src/entities/fish/species.js,code:src/fish/glb-style.js | A:School | S:实例数组按 capacity 预分配；dispose 释骨架但不 dispose 材质克隆；GLB 每帧设 swim/fast/bite 权重勿用 crossFade；子网格须 shareSkeleton
+species-models.js[IB6T]: F:按 FILES 映射加载物种 GLB 并归一化到物种 L | R:code:src/entities/fish/species.js,code:src/fish/glb-style.js | A:loadSpeciesModels | S:读 FILES 映射而非 SPECIES.glb 字段；失败 resolve null 以回退程序化鱼
+species.js[DB8M]: F:数据驱动物种表：体型、Boids、水层带与行为旗标 | R:code:src/entities/fish/school.js,code:src/scenes/scene-doc.js | A:SPECIES | S:count 只是默认，实况条数来自场景文档；hug 种才追快速下沉 wafer；新行为应加物种字段由 School 检查
+steering.js[KB7M]: F:零分配纯函数：同种 Boids、越界、障碍与猎物选择 | R:code:src/entities/fish/school.js,code:src/scene/tank.js | A:boidsAccumulate,boundaryAcc,huntTarget | S:SWIM与缸尺寸耦合，改TANK须同步；硬夹在School.update
+
+===C:/work/code/aquarium/src/fish/===
+body.js[KB7M]: F:程序化鱼体/鳍几何与 injectSwim 游动着色注入 | R:code:src/fish/textures.js,code:src/scene/caustics.js | A:buildFishBody,injectSwim | S:与 GLB decorateFishMaterial 同用 onBeforeCompile 注入模式
+glb-style.js[IB7M]: F:GLB 鱼材质重塑：折角法线、调色板、焦散与尾摆 | R:code:src/entities/fish/species-models.js,code:src/ui/encyclopedia.js | A:prepareFishModel,decorateFishMaterial | S:clone后须再decorate；无动画才开顶点尾摆；无PALETTES则保留贴图压镜面
+textures.js[KB4T]: F:程序化鳞片法线与鳍透明贴图单例 | R:code:src/fish/body.js | A:scaleNormalTex,finAlphaTex | S:需 canvas/WebGL，勿进 Node 单测
+
+===C:/work/code/aquarium/src/scene/===
+caustics.js[KB6T]: F:程序焦散纹理与 onBeforeCompile 材质注入 | R:code:src/fish/body.js,code:src/fish/glb-style.js | A:injectCaustics,setCausticsEnabled | S:须在 injectSurfaceDetail 之前调用；生成贴图依赖 canvas 勿进 Node 单测
+daynight.js[RB7S]: F:昼夜 k 插值驱动灯光/雾/水色与主光位姿 | R:code:src/scene/tank-shells.js,code:src/systems/ambience.js | A:createDayNight | S:自然水域用近平行SUN；循环默认180s；setTheme只换日侧水色
+grading.js[RB4T]: F:显示空间调色与胶片颗粒后期 Pass | R:code:src/scene/setup.js | A:createGradePass | S:在OutputPass之后；防pow负底致bloom黑块
+lens-pass.js[RB7S]: F:景深与水体纵深雾合在单 Pass，共享场景深度 | R:code:src/main.js,code:src/scene/tank.js | A:createLensPass,attachDepth | S:绝不可拆成两个读深度 Pass（反馈环黑屏）；自然水域关 haze；玻璃须 depthWrite=false
+ming-shell.js[RB5S]: F:明式木缸外壳几何：框、柜与灯板 | R:code:src/scene/tank-shells.js | A:buildMing | S:仅外壳样式，内腔尺寸与鱼界不变
+natural-shells.js[RB7M]: F:自然水域地形壳：岸坡、河道与水深纹理 | R:code:src/scene/tank.js,code:src/scene/water-wave.js | A:buildNaturalShell | S:隐藏玻璃/房间/缸沙；depth供软岸线；stream/river沿x开槽
+setup.js[RB8T]: F:createWorld：渲染器、相机、灯光与后期 composer | R:code:src/main.js,code:src/scene/grading.js | A:createWorld | S:composer 目标 MSAA 由质量档 setMSAA；后期顺序由 main 再插 water/lens
+substrate.js[RB4T]: F:缸底分层砾石裙边着色器材质 | R:code:src/scene/tank.js | A:createSkirtMaterial | S:属createTank沙床；换色走setSandColors
+tank-shells.js[RB6M]: F:按样式构建/销毁缸壳（classic/rimless/reef/zen/ming） | R:code:src/scene/ming-shell.js,code:src/scene/natural-shells.js | A:buildShell,disposeShell | S:内腔体积恒定；shell.lightMat 供昼夜调罩灯发射
+tank.js[RB8L]: F:TANK 尺寸、沙高场与玻璃/水面/沙床工厂 | R:code:src/scene/substrate.js,code:src/scene/tank-shells.js,code:src/entities/fish/steering.js | A:TANK,sandHeight,createTank | S:改尺寸须同步SWIM/PLACE_BOUNDS/相机/喂食；玻璃水面depthWrite=false
+water-pass.js[RB8M]: F:玻璃缸水体合成：折射/FIR/吸收/光柱，写私有 RT | R:code:src/main.js,code:src/scene/lens-pass.js | A:createWaterPass | S:needsSwap=false 写 rtWater；lens 采色切 rtWater、深度仍读 composer A，避免反馈环
+water-wave.js[RB5T]: F:共享 WAVE_GLSL 水面波与 injectFloat 浮物跟波 | R:code:src/scene/tank.js,code:src/scenes/items/plants.js | A:WAVE_GLSL,injectFloat | S:浮叶/花必须 injectFloat，否则会沉入波谷下
+
+===C:/work/code/aquarium/src/scenes/===
+catalog.js[IB5T]: F:按 type+seed 确定性构建造景物并回收几何 | R:code:src/scenes/items/common.js,code:src/scenes/item-meta.js | A:buildItem,disposeItem | S:材料缓存永不 dispose；几何按物件；新类型=builder+BUILDERS+ITEM_META
+contact-shadow.js[RB4T]: F:造景物脚下软接触阴影斑 | R:code:src/scenes/scene-runtime.js | A:createContactShadows | S:place按包络拟合，非真实阴影贴图
+item-batch.js[RP6S]: F:造景网格按材质桶合批多绘制以降 draw call | R:code:src/scenes/scene-runtime.js | A:createItemBatch,bucketOf | S:可用 setBatching(false) 对照 perf().calls；桶键依赖材质身份
+item-meta.js[FC6T]: F:造景物件元数据：分组、足迹半径、缩放与放置界 | R:code:src/scene/tank.js,code:src/editor/scene-editor.js | A:ITEM_META,placeLimits,PLACE_BOUNDS | S:PLACE_BOUNDS/GLASS_INNER 随缸尺寸；MAX_ITEMS=80
+presets.js[FC6S]: F:内置水景预设文档（classic/reef/pond 等） | R:code:src/scenes/scene-doc.js,code:src/scenes/scene-store.js | A:- | S:纯数据；单测约束各预设 tank/水种不同；删掉的预设不会因升级再种回
+scene-doc.js[PD8S]: F:场景文档 schema、sanitizeDoc 与 FISH_IDS/MAX | R:code:src/entities/fish/species.js,code:src/scenes/scene-store.js | A:sanitizeDoc,FISH_IDS | S:存档须sanitize；FISH_IDS序须与SPECIES一致有单测
+scene-runtime.js[AB9M]: F:将场景文档差量应用到 Three 场景、障碍与鱼群 | R:code:src/scenes/catalog.js,code:src/entities/fish/school.js,code:src/systems/care.js | A:createSceneRuntime | S:obstacles/schools原地突变；条数变才重建School；care按场景；air取首气石
+scene-store.js[PD8S]: F:localStorage 场景库与缩略图，播种预设并迁移旧 care | R:code:src/scenes/presets.js,code:src/systems/write-lock.js | A:createSceneStore | S:键 aquarium.scenes/thumbs；只读窗口跳过写入；新预设只种一次由 seeded 列表跟踪
+tank-styles.js[FC5T]: F:缸壳样式表：灯色/强度与自然水域 env 覆盖 | R:code:src/scene/tank-shells.js,code:src/scene/natural-shells.js | A:TANK_STYLES,resolveTank,isNatural | S:resolveTank 为旧存档补 tank；NATURAL_CAMS 供自然水域机位
+themes.js[FC4T]: F:水色/沙色主题表，可选水墨山幕 | R:code:src/scene/daynight.js,code:src/scene/tank.js | A:THEMES | S:art:'ink' 才画水墨幕；只影响视觉不改生态机制
+
+===C:/work/code/aquarium/src/scenes/items/===
+bridge.js[KB5S]: F:中式拱桥造景物几何构建器 | R:code:src/scenes/catalog.js,code:src/scenes/items/common.js | A:- | S:返回 {object,obstacles}，原点在沙面
+common.js[CB6S]: F:造景共享材料缓存、摆动注入与表面细节 | R:code:src/scene/caustics.js,code:src/uniforms.js | A:injectSway,injectSurfaceDetail | S:injectSurfaceDetail 必须在 injectCaustics 之后（读 vWPos）；材料按类型缓存永不 dispose
+corals.js[KB5S]: F:珊瑚类造景物确定性构建 | R:code:src/scenes/catalog.js,code:src/scenes/items/common.js | A:- | S:seed 驱动形态；含 obstacles 供鱼避障
+decor.js[KB5S]: F:岩石/沉木等硬景装饰构建器 | R:code:src/scenes/items/natural-geo.js,code:src/scenes/catalog.js | A:- | S:可用表面贴图；障碍半径进 ITEM_META
+leaf-shapes.js[KB5S]: F:弯曲叶片几何组合成莲座/带状/茎生/地毯植物 | R:code:src/scenes/items/plants.js | A:- | S:植物模板按类型缓存 3 变体
+natural-geo.js[KB5T]: F:分层岩石与锥形树干等自然几何生成器 | R:code:src/scenes/items/decor.js | A:- | S:输出供 decor/植物复用，非独立造景类型
+plants.js[KB5T]: F:水草类造景构建，含水面漂浮物 | R:code:src/scenes/items/leaf-shapes.js,code:src/scene/water-wave.js | A:- | S:睡莲/芦苇经 userData.onPlace(H) 伸到水面；须 injectFloat 跟波
+porcelain.js[KB5S]: F:青花瓷罐中式造景物构建器 | R:code:src/scenes/catalog.js,code:src/scenes/items/common.js | A:- | S:属中式庭院组，返回 object+obstacles
+surface-tex.js[IB5T]: F:加载 public/tex PBR 贴图并做三平面采样材质 | R:code:public/tex/README.md,code:src/scenes/items/decor.js | A:- | S:_n 线性法线、albedo sRGB；无 UV 依赖世界/物件坐标
+taihu.js[KB5S]: F:隐式场+MarchingCubes 太湖石造景 | R:code:src/scenes/catalog.js | A:- | S:几何由 seed 确定性；属中式庭院组
+wetland.js[KB5S]: F:湿地岸生植物与浮垫类物件构建 | R:code:src/scenes/items/plants.js,code:src/scene/water-wave.js | A:- | S:浮垫类同样依赖 onPlace/injectFloat 贴合水面
+
+===C:/work/code/aquarium/src/systems/===
+ambience.js[RB6T]: F:每帧驱动昼夜循环/时钟与开缸浊度 | R:code:src/systems/light-timer.js,code:src/systems/turbidity.js,code:src/scene/daynight.js | A:createAmbience | S:cycle 与 clock 互斥；main 每帧调用一次
+care.js[DB8S]: F:全缸饱食/食欲、个体成长与亲密度里程碑 | R:code:src/scenes/scene-runtime.js,code:src/main.js | A:createCare,MILESTONES | S:按场景键 aquarium.care.<id> 持久化并离线衰减；milestoneDue 编辑中/切景时延后
+effects.js[RB6S]: F:气泡/光柱/悬浮物/涟漪环境特效工厂 | R:code:src/main.js,code:src/uniforms.js | A:createEffects | S:无气石时气泡隐藏；依赖显式传参不持有全局场景
+feeder.js[DB7S]: F:饲料颗粒与咬食碎屑物理 | R:code:src/entities/fish/school.js,code:src/systems/care.js | A:Feeder | S:consume() 返回是否真正吃到；有 hug 种才加快速下沉 wafer
+light-timer.js[RB4T]: F:按本地钟点映射罩灯目标亮度 | R:code:src/systems/ambience.js | A:- | S:约 8:00 开灯、21:30 关灯；仅 clock 模式使用
+quality.js[RP6T]: F:纯自动画质状态机：按实测 FPS 升降档 | R:code:src/main.js | A:createQuality,budgetRatio | S:渲染副作用在 main.onLevel；前 4s 忽略；巨帧间隙重置窗口
+sound.js[RU5T]: F:WebAudio 程序合成环境音与交互音效 | R:code:src/main.js | A:SoundEngine | S:无音频资源文件；全部合成
+turbidity.js[RB4T]: F:开缸浊度衰减与「已见场景」记录 | R:code:src/systems/ambience.js | A:- | S:见过的场景写入 aquarium.seen；浊度影响 lens uTurb
+write-lock.js[PD6T]: F:Web Lock 保证首开窗口为唯一写入者 | R:code:src/scenes/scene-store.js,code:src/systems/care.js | A:acquireWriter,canWrite | S:锁名 aquarium-writer；须在 createSceneStore 前获取；后续窗只读
+
+===C:/work/code/aquarium/src/ui/===
+backup.js[PU5S]: F:导出/导入全部 aquarium.* 本地存档 | R:code:src/ui/settings-panel.js | A:installBackup | S:导入两步确认后整替换并 reload；覆盖全部进度
+encyclopedia.js[AU7M]: F:图鉴 UI、SPECIES_META 与侧视 GLB/程序化预览 | R:code:src/entities/fish/species.js,code:src/fish/glb-style.js,code:src/entities/fish/ecology.js | A:SPECIES_META,mixNoteFor | S:预览用 prepareFishModel+decorate；失败回退程序化；依赖 DOM/GLTF 勿进纯逻辑单测
+fish-card.js[AU6T]: F:射线识鱼与信息卡展示 | R:code:src/entities/fish/school.js,code:src/systems/care.js | A:createFishCard | S:GLB 命中须上溯到带 fishIndex 的克隆根；care 经 getCare() 按场景取
+photo-mode.js[AU4T]: F:H 键隐藏 UI 再截高清 PNG，Esc 退出 | R:code:src/main.js | A:createPhotoMode | S:第二次 H 才保存；非一次切换即下载
+scene-picker.js[AU6S]: F:我的水景模态：切换/复制/新建/删除 | R:code:src/scenes/scene-store.js,code:src/main.js | A:createScenePicker | S:卡片由本模块生成填入 #scenes；切换走 main.switchScene
+settings-panel.js[AU5T]: F:锚定 Dock 的设置开关与滑条 | R:code:src/main.js,code:src/ui/backup.js | A:createSettingsPanel | S:偏好写 aquarium.settings；cycle/clock 互斥由面板与 ambience 共同保证
+tank-input.js[AU7T]: F:观赏模式画布交互：喂食/识鱼与双击敲玻璃 | R:code:src/systems/feeder.js,code:src/ui/fish-card.js,code:src/entities/fish/school.js | A:createTankInput | S:首次点击立即喂食或识鱼；300ms/30px 内第二击才是敲玻璃；编辑中 isBlocked 全让出
+
+===C:/work/code/aquarium/src/ui/styles/===
+base.css[FU6S]: F:设计令牌与 HUD/Dock 基础样式 | R:code:index.html | A:- | S:由 index.html 直接 link，Vite 与 _serve 皆可用
+editor.css[FU5S]: F:造景编辑器面板与检视器样式 | R:code:src/editor/editor-panel.js | A:- | S:含物种强调色 --sp，新物种须同步 panels/encyclopedia
+encyclopedia.css[FU5T]: F:鱼类图鉴模态与物种卡片样式 | R:code:src/ui/encyclopedia.js | A:- | S:含物种强调色 --sp，新物种须同步 panels/editor
+panels.css[FU5S]: F:设置/帮助/识鱼卡等浮层样式 | R:code:src/ui/styles/base.css | A:- | S:含 --sp 物种色；与 encyclopedia/editor 同步扩展
+scenes.css[FU4T]: F:我的水景选择器卡片与缩略图样式 | R:code:src/ui/scene-picker.js | A:- | S:配合 #scenes 模态 markup

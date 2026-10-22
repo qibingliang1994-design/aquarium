@@ -17,7 +17,7 @@
 /** @typedef {{ min:number, max:number, near:number, far:number }} CamRig */
 /** @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean,
  *   light:{ spotCol:number, spotK:number, spotY:number, strip:number, sun?:SunRig },
- *   env?:WaterEnv, volume?:TankVolume, rig?:CamRig,
+ *   env?:WaterEnv, volume?:TankVolume, shore?:{ x:number, z:number }, rig?:CamRig,
  *   cams?:{pos:number[], tgt:number[]}[], thumb?:{pos:number[], tgt:number[]} }} TankStyle */
 
 /** @type {Record<string, TankStyle>} */
@@ -47,6 +47,7 @@ export const TANK_STYLES = {
       sun:{ pos:[-18,26,-14], angle:0.72, penumbra:0.75, decay:0, distance:0, near:8, far:90, fit:12 } },
     env:{ bg:0x6aa4e4, fog:0x8eb6d8, fogD:0.0045, hemi:0.7, fill:0.4, env:0.62, clear:1, current:0, clarity:0.88 },
     volume:{ W:11.11, H:2.2, D:6.45, glass:0, waterY:1.84 },
+    shore:{ x:13.2, z:9.4 },
     rig:{ min:1.6, max:32, near:0.08, far:180 },
     cams:[
       { pos:[0,8.4,12.2], tgt:[0,0.35,0] },

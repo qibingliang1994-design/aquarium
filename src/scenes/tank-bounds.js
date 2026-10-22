@@ -10,7 +10,7 @@ import { TANK_STYLES } from './tank-styles.js';
 
 /** @typedef {{ W:number, H:number, D:number, glass:number, waterY:number }} TankVolume */
 /** @typedef {{ x:number, z:number }} Half */
-/** @typedef {{ volume:TankVolume, swim:Half, place:Half, glassInner:Half, feed:Half, feedClick:Half,
+/** @typedef {{ volume:TankVolume, swim:Half, place:Half, glassInner:Half, shore:Half, feed:Half, feedClick:Half,
  *   feedScatter:Half, feedReach:Half, yCeil:number, waterY:number,
  *   grid:{ min:{x:number,y:number,z:number}, max:{x:number,y:number,z:number} } }} TankBounds */
 
@@ -34,7 +34,8 @@ export function deriveBounds(vol){
   const yCeil = snap(vol.waterY-0.18, 1.66);
   const gridY = snap(vol.waterY+0.06, 1.9);
   return {
-    volume:vol, swim, place, glassInner, feed, feedClick, feedScatter, feedReach, yCeil, waterY:vol.waterY,
+    volume:vol, swim, place, glassInner, shore:{ x:place.x, z:place.z },
+    feed, feedClick, feedScatter, feedReach, yCeil, waterY:vol.waterY,
     grid:{ min:{ x:-feed.x, y:0.1, z:-feed.z }, max:{ x:feed.x, y:gridY, z:feed.z } },
   };
 }
@@ -51,9 +52,14 @@ const cache = new Map();
 /** 某缸型的边界。没有 volume 的款式共用默认对象（玻璃缸与旧的自然水域都是它）
  * @param {string} id @returns {TankBounds} */
 export function boundsFor(id){
-  const vol = TANK_STYLES[id]?.volume;
+  const style = TANK_STYLES[id];
+  const vol = style?.volume;
   if(!vol) return DEFAULT_BOUNDS;
   let hit = cache.get(id);
-  if(!hit){ hit = deriveBounds(vol); cache.set(id, hit); }
+  if(!hit){
+    hit = deriveBounds(vol);
+    if(style.shore) hit.shore = { x:style.shore.x, z:style.shore.z };
+    cache.set(id, hit);
+  }
   return hit;
 }

@@ -8,6 +8,8 @@ import { createSceneStore, careKey, MAX_SCENES, VERSION, BACKUP_KEY } from '../s
 import { createHistory } from '../src/editor/history.js';
 import { TANK_STYLES, resolveTank, isNatural } from '../src/scenes/tank-styles.js';
 import { SPECIES } from '../src/entities/fish/species.js';
+import { boundsFor } from '../src/scenes/tank-bounds.js';
+import { pondD } from '../src/scene/pond-shape.js';
 
 function stubStorage(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -116,6 +118,27 @@ describe('预设', () => {
     for (const it of p.items) expect(ITEM_TYPES).toContain(it.type);
     expect(d.fish).toEqual(sanitizeFish(p.fish));
     expect(fishTotal(d)).toBe(Object.values(p.fish).reduce((a, n) => a + n, 0));   // 没被上限截断
+  });
+
+  it('大户外池塘的岸边景物停在水线外，玻璃缸里的松树收回缸内', () => {
+    const outdoor = PRESETS.find(p => p.id === 'outdoor');
+    const d = sanitizeDoc(outdoor);
+    const shore = d.items.filter(it => ['pine', 'maple', 'bankGrass', 'lantern'].includes(it.type));
+    expect(shore).toHaveLength(26);
+    for (const it of shore) {
+      const src = outdoor.items.find(o => o.id === it.id);
+      expect(it.x).toBeCloseTo(src.x, 5);
+      expect(it.z).toBeCloseTo(src.z, 5);
+      expect(pondD(it.x, it.z)).toBeGreaterThan(1);
+    }
+    const grasses = shore.filter(it => it.type === 'bankGrass');
+    expect(grasses.filter(it => it.seed % 3 === 0).length).toBeGreaterThan(3);
+    expect(grasses.some(it => it.seed % 3 !== 0)).toBe(true);
+    const far = placeLimits('pine', 1.25, boundsFor('outdoor'));
+    expect(far.x).toBeGreaterThan(boundsFor('outdoor').place.x);
+    const tank = sanitizeItem({ type: 'pine', x: 9, z: 0, s: 1, rot: 0, seed: 1 }, boundsFor('classic'));
+    expect(Math.abs(tank.x)).toBeLessThan(PLACE_BOUNDS.x);
+    expect(placeLimits('lily', 1, boundsFor('outdoor')).x).toBeLessThanOrEqual(boundsFor('outdoor').place.x);
   });
 
   it('经典混养保留旧版鱼群数量', () => {

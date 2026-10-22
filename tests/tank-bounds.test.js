@@ -51,6 +51,14 @@ describe('大户外池塘边界内接在岸线内', () => {
     expect(worst).toBeLessThan(0.93);
   });
 
+  it('岸上摆放范围盖过水面，默认缸岸线等于摆放框', () => {
+    expect(DEFAULT_BOUNDS.shore).toEqual(DEFAULT_BOUNDS.place);
+    expect(boundsFor('classic').shore).toEqual(boundsFor('classic').place);
+    expect(b.shore.x).toBeGreaterThan(12);
+    expect(b.shore.x).toBeGreaterThan(b.place.x);
+    expect(b.shore.z).toBeGreaterThan(b.place.z);
+  });
+
   it('饲料散布随水面放大，不再卡在 ±1.1', () => {
     expect(b.feedScatter.x).toBeGreaterThan(2);
     expect(b.feedReach.x).toBeGreaterThan(10);

@@ -397,6 +397,7 @@ const quality=createQuality({
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);
     reflect.setLevel(q.level);
+    runtime.applyShore(q.level);
   },
 });
 
@@ -479,6 +480,7 @@ function frame(){
   sky.update(dt, dayNight.k, wxNow, hoodSpot.position, natural);
   sky.place(camera.position);
   reflect.setDim(reflectDim(dayNight.k, wxNow));
+  runtime.glowShore(dayNight.k);                 // 先点灯，反射 pass 里的石灯才是亮的
   reflect.render(natural && !editor.active && waterMesh.visible);
 
   // 阴影贴图限频：鱼游得慢，降频更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）；

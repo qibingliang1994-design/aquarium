@@ -29,6 +29,7 @@ export function installDebug(/** @type {any} */  d){
     setWeather:(/** @type {string} */ mode, /** @type {number} */ intensity)=>d.setWeather?.(mode, intensity) ?? null,   // 本次运行的天气，不落盘
     sky:(/** @type {boolean|null} */ on)=>d.sky?.setForce(on),
     reflect:(/** @type {boolean|null} */ on)=>d.reflect?.setForce(on),
+    shore:(/** @type {boolean} */ on)=>runtime.setShoreVisible(on),
     reflectOn:()=>d.reflect?.on ?? 0,
     skyOn:()=>!!d.sky?.dome?.visible,
     weather:()=>d.weather?.() ?? null,

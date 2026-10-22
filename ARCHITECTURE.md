@@ -360,6 +360,11 @@
   开着就每帧渲（隔帧会闪）。鱼群在反射 pass 里关掉。环境贴图用同一天空渲 PMREM，签名变了才重建，至少隔 0.4 秒。
   大池塘的聚光阴影用 `systems/shadow-fit.js` 收到岸线内，纹素吸附防爬行，灯光张角不动。清澈度滑杆只改碗形池塘的 `uMurk`。
   天空色键把晴天正午收成更深的蓝、地平线更亮，黄昏地平线偏暖，雾和灰才把天顶洗灰；云量决定云块覆盖而不是整片发透。反射高档短边 768，菲涅尔之外有一层基础混合，茶色先吃进水体再叠倒影。大户外池塘晴天雾密度降到 0.0045。
+  岸边景物（松、秋枫、岸草、石灯）是普通造景物件，登记在 `ITEM_META` 的 `shore` 组，`land:true`。
+  `bounds.shore` 只在比水面摆放框更大时放开（大户外池塘 13.2×9.4），玻璃缸的 shore 等于 place，旧的钳制测试不变。
+  树干、松冠和灯石走物件批处理；草叶和枫叶是 InstancedMesh，`systems/shore-lod.js` 按现有五档减 `count`，`seed%3===0` 的加密草丛在第 3 档起整丛隐藏。
+  石灯的火室发光和点光源在反射 pass 之前由 `glowShore` 按昼夜点亮，所以倒影里也是亮的。树皮 / 叶 / 地衣是 Poly Haven CC0 的 1K WebP（`public/tex/README.md`）。
+  潮湿度沿用 `injectWet`，雨天压暗树皮、叶、灯石和已经接过潮湿度的地面。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

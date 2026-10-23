@@ -1,6 +1,8 @@
 // @ts-check
 import * as THREE from 'three';
 import { lerp } from '../utils.js';
+import { U } from '../uniforms.js';
+import { shadowFit } from '../systems/shadow-fit.js';
 
 /* ================================================================
  * 昼夜：nightK 向 target 缓动；apply(k) 驱动所有灯光、雾、水色、焦散强度
@@ -27,20 +29,53 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     fog:new THREE.Color(0x061420), sky:new THREE.Color(0.1,0.16,0.28), deep:new THREE.Color(0.005,0.03,0.06) };
   let k=0, target=0;
   let lampK=1;                 // 用户灯光亮度倍率（0~1.5，1=默认）：昼夜调光之上再乘
+  // 大池塘把阴影纹素吸到格上。0 = 不吸附（玻璃缸 / 小自然水域）
+  let snapTexel=0;
+  const snapRight=new THREE.Vector3(), snapUp=new THREE.Vector3(), snapProj=new THREE.Matrix4();
+  const shadow=/** @type {any} */ (hoodSpot.shadow), origMatrices=shadow.updateMatrices.bind(shadow);
+  shadow.updateMatrices=function(/** @type {any} */ light){
+    origMatrices(light);
+    if(!(snapTexel>0)) return;
+    const cam=shadow.camera;
+    snapRight.setFromMatrixColumn(cam.matrixWorld, 0);
+    snapUp.setFromMatrixColumn(cam.matrixWorld, 1);
+    const ox=cam.position.dot(snapRight), oy=cam.position.dot(snapUp);
+    const sx=Math.round(ox/snapTexel)*snapTexel, sy=Math.round(oy/snapTexel)*snapTexel;
+    if(sx===ox && sy===oy) return;
+    cam.position.addScaledVector(snapRight, sx-ox).addScaledVector(snapUp, sy-oy);
+    cam.updateMatrixWorld();
+    snapProj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    shadow._frustum.setFromProjectionMatrix(snapProj, cam.coordinateSystem, cam.reversedDepth);
+    shadow.matrix.set(
+      0.5, 0.0, 0.0, 0.5,
+      0.0, 0.5, 0.0, 0.5,
+      0.0, 0.0, 0.5, 0.5,
+      0.0, 0.0, 0.0, 1.0);
+    shadow.matrix.multiply(snapProj);
+  };
+  // 天气倍率：晴天全是 1 / 0，apply 每次从昼夜表重算再乘一次，不会越乘越暗
+  const wx={ sunMul:1, hemiMul:1, fogMul:1, chop:1, grey:0, rain:0, fogAmt:0 };
+  const greyCol=new THREE.Color();
   // 自然水域的户外环境：天空色/雾色/环境光覆盖日间表（夜间仍是统一的月光表）
   /** @type {any} */ let ENV=null; const envBg=new THREE.Color(), envFog=new THREE.Color();
 
   function apply(/** @type {number} */ v){
     k=v;
-    hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k)*lampK;
+    hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k)*lampK*wx.sunMul;
     hoodSpot.color.lerpColors(DAY.spotCol,NIGHT.spotCol,k);
-    hemi.intensity=lerp(ENV?.hemi ?? DAY.hemi,NIGHT.hemi,k);
-    fillLight.intensity=lerp(ENV?.fill ?? DAY.fill,NIGHT.fill,k);
-    scene.environmentIntensity=lerp(ENV?.env ?? DAY.env,NIGHT.env,k);
+    hemi.intensity=lerp(ENV?.hemi ?? DAY.hemi,NIGHT.hemi,k)*wx.hemiMul;
+    fillLight.intensity=lerp(ENV?.fill ?? DAY.fill,NIGHT.fill,k)*wx.hemiMul;
+    scene.environmentIntensity=lerp(ENV?.env ?? DAY.env,NIGHT.env,k)*lerp(1, wx.sunMul, 0.55);
     waterGlow.color.lerpColors(DAY.glow,NIGHT.glow,k);
     waterGlow.intensity=lerp(DAY.glowI,NIGHT.glowI,k);
     scene.background.lerpColors(ENV ? envBg : DAY.bg,NIGHT.bg,k);
     scene.fog.color.lerpColors(ENV ? envFog : DAY.fog,NIGHT.fog,k);
+    if(wx.grey>1e-4){                              // 0 时不碰颜色：晴天与改前逐值相同
+      const lift=lerp(1.15, 0.32, k);
+      greyCol.setRGB(0.55*lift, 0.58*lift, 0.62*lift);
+      scene.background.lerp(greyCol, wx.grey*0.85);
+      scene.fog.color.lerp(greyCol, Math.min(1, wx.grey*0.55+wx.fogAmt*0.45));
+    }
     waterUniforms.uSky.value.lerpColors(DAY.sky,NIGHT.sky,k);
     waterUniforms.uDeep.value.lerpColors(DAY.deep,NIGHT.deep,k);
     if(sandMat.userData.causticK) sandMat.userData.causticK.value=lerp(SAND_CAUSTIC,0.07,k);
@@ -62,8 +97,16 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
       lampK=Math.min(1.5, Math.max(0, Number.isFinite(v) ? v : 1));
       apply(k);
     },
-    /** 当前水域的基础雾密度（开缸浊度在它之上加浓） */
-    get fogD(){ return ENV?.fogD ?? FOG_D; },
+    /** 当前水域的基础雾密度（开缸浊度在它之上加浓；天气再乘 fogMul，晴天 = 1） */
+    get fogD(){ return (ENV?.fogD ?? FOG_D)*wx.fogMul; },
+    /** 叠一层天气。每帧从昼夜表重算，晴天倍率是 1
+     * @param {{ sunMul:number, hemiMul:number, fogMul:number, chop:number, grey:number, rain:number, fogAmt:number }} f */
+    setWeather(f){
+      wx.sunMul=f.sunMul; wx.hemiMul=f.hemiMul; wx.fogMul=f.fogMul; wx.chop=f.chop;
+      wx.grey=f.grey; wx.rain=f.rain; wx.fogAmt=f.fogAmt;
+      U.chop.value=f.chop;
+      apply(k);
+    },
     set target(/** @type {number} */ v){ target=v; },
     /** 立即跳到某个状态（启动时恢复存档用） */
     jump(/** @type {number} */ v){ target=v; apply(v); },
@@ -77,15 +120,37 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     /** 缸体款式：主灯色/强度/高度跟随灯具（夜间月光表不变） */
     setTank(/** @type {any} */ t){
       DAY.spotCol.setHex(t.light.spotCol); DAY.spot=16*t.light.spotK;
-      const nat=t.kind==='natural', sh=hoodSpot.shadow.camera;
-      if(nat){
+      const nat=t.kind==='natural', sh=hoodSpot.shadow.camera, sun=t.light.sun;
+      snapTexel=0;
+      hoodSpot.shadow.focus=1;
+      if(sun){
+        // 大场景的太阳自己带位置和张角。不能再除 (spotY-0.7)²——灯一抬高亮度就没了
+        hoodSpot.position.set(sun.pos[0], sun.pos[1], sun.pos[2]);
+        hoodSpot.angle=sun.angle; hoodSpot.penumbra=sun.penumbra; hoodSpot.decay=sun.decay; hoodSpot.distance=sun.distance;
+        sh.near=sun.near; sh.far=sun.far;
+        hoodSpot.shadow.bias=-0.0012; hoodSpot.shadow.normalBias=0.05;
+        hoodSpot.target.position.set(0, 0.35, 0);
+        if(sun.fit){
+          // 照射张角不动，只把阴影相机收到池塘上，并按纹素吸附
+          const fit=shadowFit(
+            { x:sun.pos[0], y:sun.pos[1], z:sun.pos[2] },
+            { x:0, y:0.35, z:0 }, sun.fit, hoodSpot.shadow.mapSize.width || 1024);
+          hoodSpot.shadow.focus=Math.min(1, fit.angle/Math.max(0.05, hoodSpot.angle));
+          sh.near=fit.near; sh.far=fit.far;
+          snapTexel=fit.texel;
+        }
+      }else if(nat){
         // 自然水域：太阳斜照（后左上方约 30°），近似平行光、不随距离衰减——鱼影斜落在河床上，
         // 而不是正下方被鱼身挡住；也没有"舞台追光"那样的一圈亮斑。亮度按原先正上方灯在河床处的照度折算
         DAY.spot/=(t.light.spotY-0.7)**2;
         hoodSpot.position.set(SUN.x, SUN.y, SUN.z);
         hoodSpot.angle=0.62; hoodSpot.penumbra=0.7; hoodSpot.decay=0; hoodSpot.distance=0;
         sh.near=3; sh.far=16;
+        hoodSpot.shadow.bias=-0.0004; hoodSpot.shadow.normalBias=0.02;
+        hoodSpot.target.position.set(0, 0.7, 0.1);
       }else{
+        hoodSpot.shadow.bias=-0.0004; hoodSpot.shadow.normalBias=0.02;
+        hoodSpot.target.position.set(0, 0.7, 0.1);
         hoodSpot.position.set(0, t.light.spotY, -0.15);
         hoodSpot.angle=1.02; hoodSpot.penumbra=0.88; hoodSpot.decay=2; hoodSpot.distance=8;
         sh.near=0.4; sh.far=6;
@@ -93,7 +158,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
       sh.updateProjectionMatrix();
       ENV=t.env ?? null;
       if(ENV){ envBg.setHex(ENV.bg); envFog.setHex(ENV.fog); }
-      scene.fog.density=ENV?.fogD ?? FOG_D;
+      scene.fog.density=(ENV?.fogD ?? FOG_D)*wx.fogMul;
       apply(k);
     },
     /** 鱼群重建后补一次（新鱼的焦散强度跟上当前昼夜） */

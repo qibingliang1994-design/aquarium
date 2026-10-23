@@ -1,8 +1,10 @@
 // @ts-check
 import * as THREE from 'three';
 import { clamp, makeRng, rrange, fbm3, vnoise3, sstep } from '../utils.js';
+import { pondD, edgePoint, terrainHeight } from './pond-shape.js';
 import { injectCaustics } from './caustics.js';
 import { injectFloat } from './water-wave.js';
+import { injectWet } from './wet.js';
 import { injectSurfaceDetail } from '../scenes/items/common.js';
 import { ribbons } from '../scenes/items/leaf-shapes.js';
 import { bladeMat, bladeDepth } from '../scenes/items/plants.js';
@@ -65,7 +67,8 @@ function meshHeight(/** @type {any} */ K, /** @type {any} */ H, /** @type {numbe
  * （此前水面是一块平面硬插进地形，岸线是一条锐利的交线） */
 export const DEPTH_MAX=0.6;
 function bakeDepth(/** @type {(x:number,z:number)=>number} */ hAt, /** @type {number} */ waterY, /** @type {{x:number,z:number}} */ ext){
-  const NX=Math.min(512, Math.round(ext.x*2*28)), NZ=Math.round(ext.z*2*28), data=new Uint8Array(NX*NZ);
+  // NZ 封顶：旧的池塘/溪流/小河本来就在 384 以下，大户外池塘不再把水深贴图拉到 500+
+  const NX=Math.min(512, Math.round(ext.x*2*28)), NZ=Math.min(384, Math.round(ext.z*2*28)), data=new Uint8Array(NX*NZ);
   for(let j=0;j<NZ;j++) for(let i=0;i<NX;i++){
     const x=-ext.x+(i+0.5)/NX*ext.x*2, z=-ext.z+(j+0.5)/NZ*ext.z*2;
     data[j*NX+i]=Math.round(clamp((waterY-hAt(x,z))/DEPTH_MAX,0,1)*255);
@@ -101,6 +104,7 @@ function terrain(/** @type {any} */ K, /** @type {any} */ H, /** @type {number} 
   const mat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.96, metalness:0 });
   injectCaustics(mat, 0.55, 'terrain');
   injectSurfaceDetail(mat, { freq:7, k:0.35, ao:0.25, key:'terrdet' });
+  injectWet(mat, 'terrain');   // uWet=0 时与干燥材质逐值相同
   const m=new THREE.Mesh(g, mat);
   m.receiveShadow=true;
   // 远景地面：一圈大圆盘接在地形边缘外，任何缩放距离都看不到地形的边
@@ -141,9 +145,148 @@ function swayInstances(/** @type {any} */ geo, /** @type {any[]} */ pts, /** @ty
   return mesh;
 }
 
+/** 大户外池塘：不规则岸线 + 石缘 + 碗形底 + 四周地面。鱼的矩形内腔由 volume 决定，这里只负责看得到的地形。
+ * @param {number} waterY */
+function buildOutdoor(waterY){
+  const rng=makeRng(71);
+  const bed=(/** @type {number} */ x, /** @type {number} */ z)=>{
+    const h=waterY+terrainHeight(x, z);
+    return Number.isFinite(h) ? h : waterY-0.2;
+  };
+  const group=new THREE.Group();
+  const TW=42, TD=34, flat=waterY+0.42;
+  const g=new THREE.PlaneGeometry(TW, TD, 160, 120).rotateX(-Math.PI/2);
+  const p=g.attributes.position, col=new Float32Array(p.count*3);
+  const mud0=new THREE.Color(0x6d6248), mud1=new THREE.Color(0x4a4334);
+  const stone=new THREE.Color(0x8a8478), grass0=new THREE.Color(0x4f7a32), grass1=new THREE.Color(0x6e9444), dry=new THREE.Color(0x8d8458);
+  const c=new THREE.Color();
+  const hMesh=(/** @type {number} */ x, /** @type {number} */ z)=>{
+    const edge=clamp(Math.min(TW/2-Math.abs(x), TD/2-Math.abs(z))/2.4, 0, 1);
+    const h=bed(x, z);
+    const e=edge*edge*(3-2*edge);                 // 只在网格最外圈压平，碗底和岸线不动
+    return flat+(h-flat)*e;
+  };
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i), z=p.getZ(i), h=hMesh(x, z), d=pondD(x, z);
+    p.setY(i, h);
+    const n=fbm3(x*0.35, 2, z*0.35, 3);
+    if(d<0.9) c.copy(mud0).lerp(mud1, n).multiplyScalar(0.72+0.28*(1-Math.min(1, (waterY-h)*0.35)));
+    else if(d<1.08) c.copy(mud1).lerp(stone, sstep(0.9, 1.08, d));
+    else c.copy(grass0).lerp(grass1, n).lerp(dry, Math.max(0, n*1.4-0.85));
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  const mat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.96, metalness:0 });
+  injectCaustics(mat, 0.45, 'outdoor');
+  injectSurfaceDetail(mat, { freq:5, k:0.28, ao:0.22, key:'outdet' });
+  injectWet(mat, 'outdoor');
+  const mesh=new THREE.Mesh(g, mat);
+  mesh.receiveShadow=true;
+  const far=new THREE.Mesh(new THREE.RingGeometry(16, 90, 48, 1).rotateX(-Math.PI/2),
+    new THREE.MeshStandardMaterial({ color:new THREE.Color(0x4a6e30).multiplyScalar(0.85), roughness:1 }));
+  far.position.y=flat-0.02;
+  far.receiveShadow=true;
+  mesh.add(far);
+  group.add(mesh);
+
+  const rockMat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.9 });
+  injectCaustics(rockMat, 0.4, 'orock');
+  injectSurfaceDetail(rockMat, { freq:12, k:0.4, ao:0.3, key:'orockdet' });
+  injectWet(rockMat, 'orock');
+  const rockN=14;
+  for(let k=0;k<3;k++){
+    const geo=makeRockGeo(0.46, 800+k*91, 'river');
+    const im=new THREE.InstancedMesh(geo, rockMat, rockN);
+    const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), v=new THREE.Vector3(), up=new THREE.Vector3(0,1,0);
+    for(let i=0;i<rockN;i++){
+      const a=(k*rockN+i)/(rockN*3)*Math.PI*2+rrange(rng, -0.05, 0.05);
+      const [x, z]=edgePoint(a, rrange(rng, 1.02, 1.14));
+      const sc=rrange(rng, 0.55, 1.15);
+      q.setFromAxisAngle(up, rng()*6.283);
+      im.setMatrixAt(i, m.compose(v.set(x, bed(x, z)-sc*0.12, z), q, s.set(sc, sc*rrange(rng, 0.45, 0.75), sc*rrange(rng, 0.8, 1.15))));
+    }
+    im.castShadow=im.receiveShadow=true;
+    group.add(im);
+  }
+
+  // 水下卵石（岸线以内），一网格实例化
+  {
+    const pts=[];
+    for(let tries=0; pts.length<220 && tries<4000; tries++){
+      const x=rrange(rng, -9, 9), z=rrange(rng, -6.5, 6.5), d=pondD(x, z);
+      if(d<0.72 || d>0.97) continue;
+      pts.push({ x, z, h:bed(x, z) });
+    }
+    const pebMat=new THREE.MeshStandardMaterial({ roughness:0.72 });
+    injectWet(pebMat, 'opeb');
+    const im=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), pebMat, pts.length);
+    const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), v=new THREE.Vector3(), e=new THREE.Euler(), c=new THREE.Color();
+    const pal=[0x9a958a, 0x7d776c, 0xb4ab98, 0x6a645b];
+    pts.forEach((pt, i)=>{
+      const sc=rrange(rng, 0.025, 0.07);
+      q.setFromEuler(e.set(rrange(rng, -0.3, 0.3), rng()*6.283, rrange(rng, -0.3, 0.3)));
+      im.setMatrixAt(i, m.compose(v.set(pt.x, pt.h+sc*0.2, pt.z), q, s.set(sc*rrange(rng, 1, 1.4), sc*0.55, sc)));
+      im.setColorAt(i, c.setHex(pal[i%pal.length]).multiplyScalar(rrange(rng, 0.85, 1.1)));
+    });
+    im.receiveShadow=true;
+    group.add(im);
+  }
+
+  const grassPts=[];
+  for(let tries=0; grassPts.length<900 && tries<8000; tries++){
+    const x=rrange(rng, -16, 16), z=rrange(rng, -13, 13), d=pondD(x, z), h=bed(x, z);
+    if(d<1.06 || h<waterY+0.02) continue;
+    if(z>5 && Math.abs(x)<6 && rng()<0.8) continue;     // 镜头这一侧少挡视线
+    grassPts.push({ x, z, h, d });
+  }
+  const grassGeo=ribbons(rng, { n:5, len:[0.16, 0.34], width:0.016, twist:0.3, spread:0.05,
+    colors:[[0x3d5e22, 0x86a848], [0x4a6a28, 0x9ab85a]], segs:4, cols:1 });
+  if(grassPts.length) group.add(swayInstances(grassGeo, grassPts, rng, [0.75, 1.45]));
+
+  const reedPts=[];
+  for(let tries=0; reedPts.length<70 && tries<2000; tries++){
+    const a=rng()*Math.PI*2, [x, z]=edgePoint(a, rrange(rng, 0.9, 1.06)), h=bed(x, z);
+    if(h<waterY-0.25 || h>waterY+0.18) continue;
+    if(z>3.5 && Math.abs(x)<4) continue;
+    reedPts.push({ x, z, h, d:pondD(x, z) });
+  }
+  if(reedPts.length) group.add(swayInstances(reedGeo(rng, true), reedPts, rng, [0.7, 1.15], 0.02));
+
+  const padPts=[];
+  for(let tries=0; padPts.length<18 && tries<800; tries++){
+    const x=rrange(rng, -6, 6), z=rrange(rng, -4, 3), d=pondD(x, z);
+    if(d<0.45 || d>0.82) continue;
+    padPts.push({ x, z });
+  }
+  if(padPts.length){
+    const pad=new THREE.CircleGeometry(1, 18, 0.3, Math.PI*2-0.45).rotateX(-Math.PI/2);
+    const padMat=new THREE.MeshStandardMaterial({ roughness:0.42, side:THREE.DoubleSide });
+    injectFloat(padMat, 'outPad');
+    const im=new THREE.InstancedMesh(pad, padMat, padPts.length);
+    const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), v=new THREE.Vector3(), up=new THREE.Vector3(0,1,0), c=new THREE.Color();
+    padPts.forEach((pt, i)=>{
+      const sc=rrange(rng, 0.16, 0.32);
+      q.setFromAxisAngle(up, rng()*6.283);
+      im.setMatrixAt(i, m.compose(v.set(pt.x, waterY+0.004, pt.z), q, s.set(sc, 1, sc)));
+      im.setColorAt(i, c.setHex(rng()<0.3 ? 0x7a5a2e : 0x3f6a2a).multiplyScalar(rrange(rng, 0.85, 1.12)));
+    });
+    im.receiveShadow=true;
+    group.add(im);
+  }
+
+  // 半宽给 tank.setShell 放大水面。网格半宽 ≈ water.x * (几何宽 / TANK.W)，略放大才盖住最凸的岸线
+  group.userData.water={ x:13, z:9.6 };
+  group.userData.depth=bakeDepth(hMesh, waterY, group.userData.water);
+  group.userData.bed=bed;                       // 鱼和物件贴这张碗，不贴压平后的网格边缘
+  return group;
+}
+
 /** 构建自然水域外壳 @param {string} kind @param {{W:number,D:number,glass:number}} dims */
 /** @param {string} kind @param {any} dims @param {any} opts */
 export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
+  if(kind==='outdoor') return buildOutdoor(waterY);
   const K=(/** @type {any} */ (KINDS))[kind] ?? KINDS.pond, rng=makeRng(K.seed);
   const H=heightField(K, dims, waterY, sandHeight);
   const group=new THREE.Group();
@@ -160,6 +303,7 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
   const rockMat=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.9 });
   injectCaustics(rockMat, 0.55, 'rock');
   injectSurfaceDetail(rockMat, { freq:14, k:0.45, ao:0.35, key:'rockdet' });
+  injectWet(rockMat, 'rock');
   for(const pt of scatter(rng, H, waterY, K.rocks, (h)=>h>waterY-0.35 && h<waterY+0.35, 1.6)){
     const r=rrange(rng,0.22,0.5), g=makeRockGeo(r, Math.floor(rng()*1e6), 'river');
     g.scale(1, rrange(rng,0.55,0.85), rrange(rng,0.8,1.1));
@@ -171,7 +315,9 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
   // 卵石：浅滩与水线
   {
     const pts=scatter(rng, H, waterY, K.pebbles, (h)=>h<waterY+0.1, 1.2);
-    const mesh=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1), new THREE.MeshStandardMaterial({ roughness:0.7 }), pts.length);
+    const pebMat=new THREE.MeshStandardMaterial({ roughness:0.7 });
+    injectWet(pebMat, 'peb');
+    const mesh=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1), pebMat, pts.length);
     const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), v=new THREE.Vector3(), e=new THREE.Euler(), c=new THREE.Color();
     const pal=[0x9a958a,0x7d776c,0xb4ab98,0x6a645b,0xa38f72];
     pts.forEach((pt,i)=>{

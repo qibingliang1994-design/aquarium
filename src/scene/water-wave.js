@@ -6,11 +6,12 @@ import { U } from '../uniforms.js';
  * 叶片逐顶点贴着波面起伏，不会被浪头淹没或悬空
  * ================================================================ */
 
-/** GLSL：waterWave(xz, t, flow) → 相对静水面的高度；波形顺流（+x）平移 */
+/** GLSL：waterWave(xz, t, flow) → 相对静水面的高度；波形顺流（+x）平移。
+ *  调用方必须声明 uniform float uChop（晴天 = 1，与改前逐值相同） */
 export const WAVE_GLSL = `
 float waterWave(vec2 xz, float t, float flow){
   vec2 q=vec2(xz.x-flow*t*0.9, xz.y);
-  return ( sin(q.x*7.0+t*1.3) + sin(q.y*9.0+t*1.7) + sin((q.x+q.y)*5.0+t*0.9) )*0.006;
+  return ( sin(q.x*7.0+t*1.3) + sin(q.y*9.0+t*1.7) + sin((q.x+q.y)*5.0+t*0.9) )*0.006*uChop;
 }
 `;
 
@@ -21,8 +22,8 @@ export function injectFloat(mat, key){
   mat.customProgramCacheKey=()=>`${prevKey}_float_${key}`;
   mat.onBeforeCompile=(/** @type {any} */ sh)=>{
     prev?.(sh);
-    sh.uniforms.uTimeW=U.time; sh.uniforms.uFlowW=U.flow;
-    sh.vertexShader='uniform float uTimeW, uFlowW;\n'+WAVE_GLSL
+    sh.uniforms.uTimeW=U.time; sh.uniforms.uFlowW=U.flow; sh.uniforms.uChop=U.chop;
+    sh.vertexShader='uniform float uTimeW, uFlowW, uChop;\n'+WAVE_GLSL
       +sh.vertexShader.replace('#include <project_vertex>', `
       {
         mat4 toW = modelMatrix;

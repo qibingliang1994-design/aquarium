@@ -1,7 +1,8 @@
 // @ts-check
 import * as THREE from 'three';
 import { clamp } from '../utils.js';
-import { sandHeight } from '../scene/tank.js';
+import { groundY } from '../scene/ground.js';
+import { boundsFor } from '../scenes/tank-bounds.js';
 import { ITEM_META, placeLimits, MAX_ITEMS } from '../scenes/item-meta.js';
 import { FISH_MAX, FISH_TOTAL_MAX, fishTotal, newId, cloneDoc } from '../scenes/scene-doc.js';
 import { createHistory } from './history.js';
@@ -55,7 +56,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     ring.visible=!!it;
     if(!it) return;
     const r=Math.max(0.12, ITEM_META[it.type].radius*it.s+0.05);
-    ring.position.set(it.x, sandHeight(it.x,it.z)+0.012, it.z);
+    ring.position.set(it.x, groundY(it.x,it.z)+0.012, it.z);
     ring.scale.setScalar(r);
   }
   /** 一次离散改动：记快照 → 改文档 → 应用 */
@@ -89,11 +90,20 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   }
 
   /* ---------- 物件操作 ---------- */
-  function spawnPoint(/** @type {number} */ radius){
-    // 在前中景找一个离现有物件最远的位置（12 次随机取最优）
-    let best={ x:0, z:0.1 }, bestD=-1;
+  function spawnPoint(/** @type {number} */ radius, /** @type {boolean} */ land){
+    // 水中物件找前中景空位；岸边物件（大池塘 shore 比水面更大）落在岸环上
+    const b=boundsFor(doc.tank);
+    const onShore=land && (b.shore.x>b.place.x+1e-4 || b.shore.z>b.place.z+1e-4);
+    let best={ x:0, z:onShore ? b.place.z : 0.1 }, bestD=-1;
     for(let i=0;i<12;i++){
-      const x=(Math.random()*2-1)*1.3, z=Math.random()*0.7-0.3;
+      let x, z;
+      if(onShore){
+        const a=Math.random()*TAU, k=0.62+Math.random()*0.2;
+        x=Math.cos(a)*(b.place.x+(b.shore.x-b.place.x)*k);
+        z=Math.sin(a)*(b.place.z+(b.shore.z-b.place.z)*k);
+      }else{
+        x=(Math.random()*2-1)*1.3; z=Math.random()*0.7-0.3;
+      }
       const d=Math.min(9, ...doc.items.map((/** @type {any} */ o)=>Math.hypot(o.x-x,o.z-z)-ITEM_META[o.type].radius*o.s-radius));
       if(d>bestD){ bestD=d; best={ x, z }; }
     }
@@ -101,12 +111,12 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   }
   function addItem(/** @type {string} */ type){
     if(doc.items.length>=MAX_ITEMS){ toast(`物件最多 ${MAX_ITEMS} 件`); return; }
-    const m=ITEM_META[type], p=spawnPoint(m.radius);
+    const m=ITEM_META[type], p=spawnPoint(m.radius, !!m.land);
     // 沉木拱、海扇是"正面朝前"的片状物件：新放时只小幅偏转，避免侧对镜头像根棍子
     const facing=FACING.has(type), jitter=(Math.random()*2-1)*0.4;
     const rot=type==='airstone' ? 0 : facing ? (jitter+TAU)%TAU : Math.random()*TAU;
     const s=clamp(1,m.scale[0],m.scale[1]);
-    const lim=placeLimits(type, s);   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
+    const lim=placeLimits(type, s, boundsFor(doc.tank));   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
     const it={ id:newId('it'), type, x:clamp(p.x,-lim.x,lim.x), z:clamp(p.z,-lim.z,lim.z), rot,
       s, seed:Math.floor(Math.random()*1e9) };
     commit(d=>d.items.push(it));
@@ -132,7 +142,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   const rotate=(/** @type {number} */ dir)=>edit(it=>{ it.rot=((it.rot+dir*ROT_STEP)%TAU+TAU)%TAU; });
   const rescale=(/** @type {number} */ k)=>edit(it=>{
     const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3);
-    const lim=placeLimits(it.type, it.s);       // 放大后按占地半径回钳，别让包络探出玻璃
+    const lim=placeLimits(it.type, it.s, boundsFor(doc.tank));   // 放大后按占地半径回钳，别让包络探出玻璃
     it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
   });
   const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{
@@ -187,7 +197,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(!id) return;
     select(id);
     const it=selItem();
-    plane.set(new THREE.Vector3(0,1,0), -sandHeight(it.x,it.z));
+    plane.set(new THREE.Vector3(0,1,0), -groundY(it.x,it.z));
     if(!raycaster.ray.intersectPlane(plane, hitP)) return;
     drag={ dx:it.x-hitP.x, dz:it.z-hitP.z, pointer:e.pointerId };
     controls.enabled=false;

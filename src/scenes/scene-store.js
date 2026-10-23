@@ -12,8 +12,9 @@ import { canWrite } from '../systems/write-lock.js';
 /** @typedef {import('./scene-doc.js').SceneDoc} SceneDoc */
 
 /** 存档格式版本：加入新物件类型/缸型/字段时递增——更老的代码读到更高版本会进入只读，不会把新数据清洗掉再写回
- * 1 = v1.8~v2.0，2 = v2.1 起（版本闸门本身从这一版开始生效），3 = v2.1.11 起（中式物件 / 明式缸 / 园林主题） */
-export const VERSION = 3;
+ * 1 = v1.8~v2.0，2 = v2.1 起（版本闸门本身从这一版开始生效），3 = v2.1.11 起（中式物件 / 明式缸 / 园林主题），
+ * 4 = 大户外池塘（tank=outdoor；旧代码会把不认识的缸型洗掉，所以升版本） */
+export const VERSION = 4;
 const KEY = 'aquarium.scenes', THUMBS = 'aquarium.thumbs';
 /** 无法解析的存档在重新播种前原样备份到这里（只保留最近一份） */
 export const BACKUP_KEY = 'aquarium.scenes.bak';

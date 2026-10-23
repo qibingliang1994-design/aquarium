@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { sstep } from './utils.js';
 import { U } from './uniforms.js';
-import { TANK, sandHeight, createTank } from './scene/tank.js';
+import { TANK, createTank } from './scene/tank.js';
+import { groundY } from './scene/ground.js';
 import { createWorld } from './scene/setup.js';
 import { createDayNight } from './scene/daynight.js';
 import { setCausticsEnabled } from './scene/caustics.js';
@@ -11,6 +12,10 @@ import { Feeder } from './systems/feeder.js';
 import { SoundEngine } from './systems/sound.js';
 import { createQuality, budgetRatio } from './systems/quality.js';
 import { createAmbience } from './systems/ambience.js';
+import { createWeather, sanitizeWeather, pondTint } from './systems/weather.js';
+import { reflectDim } from './systems/reflect.js';
+import { createSky } from './scene/sky-dome.js';
+import { createWaterReflect } from './scene/water-reflect.js';
 import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
 import { SPECIES_META } from './ui/encyclopedia.js';
@@ -20,6 +25,7 @@ import { fishRim } from './fish/glb-style.js';
 import { createSceneStore } from './scenes/scene-store.js';
 import { acquireWriter, canWrite } from './systems/write-lock.js';
 import { TANK_STYLES, NATURAL_CAMS, isNatural } from './scenes/tank-styles.js';
+import { boundsFor } from './scenes/tank-bounds.js';
 import { createSceneRuntime } from './scenes/scene-runtime.js';
 import { createSceneEditor } from './editor/scene-editor.js';
 import { renderEncyclopediaPreviews, modelPreviewStats, syncEncyclopediaCounts } from './ui/encyclopedia.js';
@@ -58,12 +64,13 @@ composer.insertPass(lens, 2);
 const focusPt=new THREE.Vector3();
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
-const { bubbles, snow, ripples }=createEffects({ tankGroup, air, sandHeight, waterY:TANK.waterY });
-const feeder=new Feeder({ tankGroup, sandHeight, waterY:TANK.waterY, ripples });
+const { bubbles, snow, ripples, precip }=createEffects({ tankGroup, air, sandHeight:groundY, waterY:TANK.waterY, scene });
+const feeder=new Feeder({ tankGroup, sandHeight:groundY, waterY:TANK.waterY, ripples });
 
 /* ---------- 场景基础：昼夜 / 存档 / 模型预加载 ---------- */
 /** @type {any[]} */ const schools=[];         // 两个数组都由 runtime 原地维护
 /** @type {any[]} */ const obstacles=[];
+/** @type {ReturnType<typeof createFishGrid>} */ let fishGrid=createFishGrid();
 const dayNight=createDayNight({ scene, lights:{ hoodSpot, hemi, fillLight, waterGlow, rim },
   waterUniforms, sandMat, shell:tank.shell, floorGlowMat, schools, fishRim });
 // 多窗口单写者：必须在第一次写存档（createSceneStore 启动时会回写）之前拿锁
@@ -81,9 +88,14 @@ loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
 });
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
-/** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true };
+/** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true,
+  weatherMode:'sunny', weatherI:0.7, weatherAuto:false, weatherWet:0, clarity:0.88 };
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
 settings.lamp=Math.min(1.5, Math.max(0, +settings.lamp||1));   // 旧存档/坏值兜底：0~1.5，1=默认
+Object.assign(settings, sanitizeWeather(settings));
+if(typeof settings.clarity!=='number' || !Number.isFinite(settings.clarity)) settings.clarity=0.88;
+else settings.clarity=Math.min(1, Math.max(0.35, settings.clarity));
+const weather=createWeather(settings);
 const saveSettings=()=>{ if(!canWrite()) return; try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
 snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
@@ -103,14 +115,38 @@ function applyWaterMode(){
   lens.setHaze(false);                           // 水体吸收由合成 pass 接管（自然水域本就关，网格+水深贴图自管）
   waterMesh.visible=!editor?.active && (nat || !on);   // 缸走合成时藏网格；自然水域与回退态用网格
 }
+/** 换缸：饲料边界、点击范围、邻域网格、相机远近一起跟当前缸型走。input 还没建好时先跳过
+ * @param {string} id */
+function applyTankChrome(id){
+  const b=boundsFor(id), style=TANK_STYLES[id] ?? TANK_STYLES.classic, rig=style.rig;
+  fishGrid=createFishGrid(0.7, b.grid);
+  feeder.setHalf(b.feed.x, b.feed.z);
+  input?.setBounds(b);
+  if(rig){ controls.minDistance=rig.min; controls.maxDistance=rig.max; camera.near=rig.near; camera.far=rig.far; }
+  else { controls.minDistance=1; controls.maxDistance=11; camera.near=0.05; camera.far=60; }
+  camera.updateProjectionMatrix();
+}
+/** @type {ReturnType<typeof createTankInput>|null} */ let input=null;
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, renderer,
-  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t), onTank:(/** @type {any} */ t)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); applyWaterMode(); }, onSchools:()=>dayNight.refresh() });
+  onTheme:(/** @type {any} */ t)=>dayNight.setTheme(t),
+  onTank:(/** @type {any} */ t, /** @type {string} */ id)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); applyWaterMode(); applyTankChrome(id); },
+  onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
 dayNight.setLamp(settings.lamp);               // 灯光亮度（设置面板滑杆），先于昼夜状态应用
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
+dayNight.setWeather(weather.frame());          // 存档里的天气（默认晴天 = 恒等）
+U.wet.value=weather.wet;
+/** @type {(st:any)=>void} */ let onWeather=()=>{};
+const murkBase=()=>{
+  const st=TANK_STYLES[runtime.doc?.tank];
+  if(!st?.bowl) return 0;                      // 玻璃缸与旧自然水域：晴天 uMurk=0
+  const q=Math.min(1, Math.max(0.35, Number(settings.clarity) || 0.88));
+  return pondTint(q, q);
+};
 // 灯光定时器 + 开缸浊度（跟随本地时间开着时，启动直接对上当前时刻）
 const ambience=createAmbience({ settings, dayNight, lens, snow, scene, waterUniforms, isNatural:()=>isNatural(runtime.doc.tank),
-  knownIds:store.list().map((/** @type {any} */ d)=>d.id), onFlip:()=>syncLightButton() });
+  knownIds:store.list().map((/** @type {any} */ d)=>d.id), onFlip:()=>syncLightButton(),
+  weather, murkBase, onWeather:(/** @type {any} */ st)=>onWeather(st) });
 
 /* ---------- 轻提示 ---------- */
 const toastEl=$('toast');
@@ -125,8 +161,9 @@ else if(store.recovered) toast('水景存档无法读取，已备份并恢复为
 
 /* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
 const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care, getSceneId:()=>runtime.doc.id });
-const input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, feeder, sound,
+input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, feeder, sound,
   isBlocked:()=>editor?.active });
+input.setBounds(boundsFor(runtime.doc.tank));
 $('bFeed').addEventListener('click',()=>input.feedAt(randomFeedPoint()));
 
 /* ---------- 相机预设 ---------- */
@@ -142,8 +179,12 @@ function tweenCam(/** @type {any} */ preset, /** @type {number} */ dur=1.4){
     to:new THREE.Vector3(...preset.pos), toT:new THREE.Vector3(...preset.tgt), t:0, dur };
 }
 controls.addEventListener('start',()=>{ camTween=null; });
-// 自然水域没有前玻璃，机位改为俯视水面
-const camPresets=()=>isNatural(runtime.doc.tank) ? NATURAL_CAMS : CAM_PRESETS;
+// 自然水域没有前玻璃，机位改为俯视水面；大户外池塘用自己的一组（更远、更高）
+const camPresets=()=>{
+  const st=TANK_STYLES[runtime.doc.tank];
+  if(st?.cams) return st.cams;
+  return isNatural(runtime.doc.tank) ? NATURAL_CAMS : CAM_PRESETS;
+};
 $('bCam').addEventListener('click',()=>{ const cams=camPresets(); camIdx=(camIdx+1)%cams.length; tweenCam(cams[camIdx]); });
 tweenCam(camPresets()[0], 2.6);   // 开场运镜
 
@@ -173,7 +214,9 @@ function setHint(/** @type {boolean} */ natural){
 function captureThumb(){
   const keepP=camera.position.clone(), keepQ=camera.quaternion.clone();
   const halfTan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(camera.aspect, 16/9);
-  if(isNatural(runtime.doc.tank)){ camera.position.set(0, 3.4, 4.4); camera.lookAt(0, 1.3, 0); }   // 自然水域：俯拍水面
+  const thumb=TANK_STYLES[runtime.doc.tank]?.thumb;
+  if(thumb){ camera.position.set(thumb.pos[0], thumb.pos[1], thumb.pos[2]); camera.lookAt(thumb.tgt[0], thumb.tgt[1], thumb.tgt[2]); }
+  else if(isNatural(runtime.doc.tank)){ camera.position.set(0, 3.4, 4.4); camera.lookAt(0, 1.3, 0); }   // 自然水域：俯拍水面
   else { camera.position.set(0, 1.2, 2.45/halfTan); camera.lookAt(0, 0.98, 0); }           // 缸：缸宽刚好填满裁切框
   composer.render();
   camera.position.copy(keepP); camera.quaternion.copy(keepQ);
@@ -279,8 +322,22 @@ const settingsPanel=createSettingsPanel({ settings, onChange:(/** @type {string}
   if(key==='shafts') waterPass.setShafts(qualityBloom ? value : 0);
   if(key==='dof') lens.setDof(!!value && qualityBloom);   // 画质最低档时与光柱一致：保持关闭
   if(key==='lamp') dayNight.setLamp(value);
+  if(key==='weatherMode') weather.set(String(value));
+  if(key==='weatherI') weather.set(weather.mode, /** @type {number} */ (value));
+  if(key==='weatherAuto') weather.setAuto(!!value);
+  if(key==='weatherMode' || key==='weatherI' || key==='weatherAuto'){
+    Object.assign(settings, weather.snapshot());
+    dayNight.setWeather(weather.frame());
+    U.wet.value=weather.wet;
+  }
   saveSettings();
 }});
+onWeather=(/** @type {any} */ st)=>{
+  settings.weatherMode=st.mode; settings.weatherI=st.intensity; settings.weatherWet=st.wet;
+  settingsPanel.sync('weatherMode', st.mode);
+  settingsPanel.sync('weatherI', st.intensity);
+  saveSettings();
+};
 addEventListener('pointerdown',()=>sound.ensure(),{ once:true });
 installBackup({ toast });                         // 设置弹层里的存档导出/导入
 
@@ -311,8 +368,12 @@ addEventListener('keydown',e=>{
 const clock=new THREE.Clock();
 const statsEl=$('stats'), careFill=$('careFill'), careText=$('careText');
 let fpsFrames=0, fpsTime=0, realT=0;
-const fishGrid=createFishGrid();                  // 全体鱼共享的邻域查询网格（每帧重建）
 renderer.info.autoReset=false;                    // 整帧统计（含阴影/后期）由主循环手动重置（__aqDebug.perf 用）
+
+/* ---------- 自然水域：天空穹顶 + 平面反射（玻璃缸不走这里） ---------- */
+const sky=createSky({ renderer, scene, hemi });
+const reflect=createWaterReflect({ renderer, scene, camera, waterMesh, waterUniforms, sky,
+  hideRoots:()=>[...schools.map(s=>s.group), ...precip.parts] });
 
 /* ---------- 自动画质：阶梯降级（像素预算+像素比上限 → 1.25/1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
 const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
@@ -334,6 +395,9 @@ const quality=createQuality({
     waterPass.setShafts(q.bloom ? settings.shafts : 0);   // 光柱 march 是最贵的逐像素步进：最低档停，其余按用户强度
     setMSAA(ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
+    precip.setLevel(q.level);
+    reflect.setLevel(q.level);
+    runtime.applyShore(q.level);
   },
 });
 
@@ -390,6 +454,7 @@ function frame(){
   const appetite=care.appetite();
   const active=feeder.pellets;
   U.excite.value+=((active.length?appetite:0)-U.excite.value)*Math.min(1,dt*1.4);
+  if(!input) return;
   const shake=input.update(dt, t);
   // 夜间睡眠：喂食与惊吓都会把鱼叫醒
   const sleep=sstep(0.55,0.9,dayNight.k)*(1-U.excite.value)*(1-input.fear);
@@ -408,7 +473,15 @@ function frame(){
   sound.update(dt, settings.bubbles && air.on);
   snow.update(dt,t);
   ripples.update(dt);
+  const wxNow=weather.frame();
+  precip.update(dt, wxNow, t);
   editor.update(t);
+  const natural=isNatural(runtime.doc.tank);
+  sky.update(dt, dayNight.k, wxNow, hoodSpot.position, natural);
+  sky.place(camera.position);
+  reflect.setDim(reflectDim(dayNight.k, wxNow));
+  runtime.glowShore(dayNight.k);                 // 先点灯，反射 pass 里的石灯才是亮的
+  reflect.render(natural && !editor.active && waterMesh.visible);
 
   // 阴影贴图限频：鱼游得慢，降频更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）；
   // 频率随画质档走（高清 30 Hz → 极速 10 Hz，学自 aquarium-editor 的分级阴影）
@@ -453,8 +526,18 @@ addEventListener('resize',()=>{
 
 installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass,
   bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
+  sky, reflect,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,
   setCycle:(/** @type {boolean} */ on)=>{ settings.cycle=on; },   // 只改本次运行，不落盘
+  settingsPanel,
+  setWeather:(/** @type {string} */ mode, /** @type {number|undefined} */ intensity)=>{
+    weather.set(mode, intensity); weather.setAuto(false); settings.weatherAuto=false;
+    settingsPanel.set('weatherAuto', false);
+    settingsPanel.sync('weatherMode', weather.mode); settingsPanel.sync('weatherI', weather.intensity);
+    const f=weather.frame(); dayNight.setWeather(f); U.wet.value=weather.wet;
+    return { mode:f.mode, intensity:f.intensity, rain:+f.rain.toFixed(3), snow:+f.snow.toFixed(3), grey:+f.grey.toFixed(3), chop:+f.chop.toFixed(3) };
+  },
+  weather:()=>weather.snapshot(),
   setWaterOn:(/** @type {boolean} */ on)=>{ waterOn=on; applyWaterMode(); },   // __aqDebug.water：关=回退网格水面
   glbLoaded:()=>Object.keys(glbMap).filter(k=>/** @type {any} */ (glbMap)[k]),
   // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；

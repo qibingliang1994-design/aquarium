@@ -29,13 +29,13 @@ describe('mixNote', () => {
     ['classic', '淡水鱼和海水鱼'], ['planted', '淡水鱼和海水鱼'],
     ['stream', '26 °C'], ['river', '26 °C'],
     ['reef', '狮子鱼会把麒麟鱼当点心'],
-    ['pond', null], ['lotus', null], ['garden', null],
+    ['pond', null], ['lotus', null], ['garden', null], ['outdoor', null],
   ])('预设 %s', (id, want) => {
     const got = note(byId[id]);
     if (want === null) expect(got).toBeNull();
     else expect(got).toContain(want);
   });
-  it('8 个预设都有预期', () => { expect(PRESETS).toHaveLength(8); });
+  it('9 个预设都有预期', () => { expect(PRESETS).toHaveLength(9); });
   it('温水鼠鱼不触发冷热水', () => {
     expect(note({ gold: 3, cory: 4 })).toBeNull();
     expect(note({ tetra: 3, cory: 4 })).toBeNull();

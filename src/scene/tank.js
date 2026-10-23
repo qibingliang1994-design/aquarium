@@ -8,6 +8,8 @@ import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX } from './natural-shells.js';
 import { createSkirtMaterial } from './substrate.js';
 import { surfacePair, onTexPair } from '../scenes/items/surface-tex.js';
+import { boundsFor } from '../scenes/tank-bounds.js';
+import { setGround, setGroundBase } from './ground.js';
 
 /* ================================================================
  * 水族箱尺寸
@@ -22,6 +24,7 @@ export const TANK = {
 export function sandHeight(/** @type {number} */ x, /** @type {number} */ z){
   return 0.20 + vnoise(x*1.5+3.7, z*1.5+7.2)*0.10 + (z*0.5+0.5)*0.10;
 }
+setGroundBase(sandHeight);
 
 export function createTank(/** @type {any} */ scene){
 /* ================================================================
@@ -66,6 +69,12 @@ const waterUniforms={
   uCMap:{value:causticsTex},
   uClear:{value:0},          // 0 = 缸（水面近乎不透明，主要从侧面看）；1 = 自然水域（俯视时清澈见底，掠射角才反光）
   uFlow:U.flow,              // 水流速度：波纹沿 +x 漂移（与水草倒伏、浮叶共用）
+  uChop:U.chop,              // 波浪倍率（晴天 = 1）。水体合成 pass 共用同一个对象
+  uMurk:{value:0},           // 额外茶色 0 = 不改水色；只在网格水面（自然水域）里混
+  uReflectOn:{value:0},      // 1 = 采样平面反射（自然水域、画质档开着）。0 时下面的分支不走
+  uReflectDim:{value:1},     // 雨 / 雾 / 夜把反射压暗
+  uReflectMap:{value:(()=>{ const t=new THREE.DataTexture(new Uint8Array([190,210,220,255]),1,1); t.needsUpdate=true; return t; })()},
+  uReflectMtx:{value:new THREE.Matrix4()},
   uDepthTex:{value:/** @type {THREE.Texture|null} */ (null)},   // 自然水域的水深贴图（natural-shells bakeDepth）
   uDepthBox:{value:new THREE.Vector4(0,0,1,1)},  // 贴图覆盖范围：x0, z0, 1/宽, 1/深
   uDepthOn:{value:0},
@@ -93,7 +102,7 @@ const waterMesh=new THREE.Mesh(
     uniforms:waterUniforms, transparent:true, opacity:0.55, side:THREE.DoubleSide,
     depthWrite:false,          // 不写深度：镜头 pass（景深/水体纵深）要的是水面下物体的深度，俯视自然水域时尤其如此
     vertexShader:`
-      uniform float uTime, uFlow;
+      uniform float uTime, uFlow, uChop;
       varying vec3 vW; varying vec2 vXZ;
       ${WAVE_GLSL}
       void main(){
@@ -105,17 +114,19 @@ const waterMesh=new THREE.Mesh(
         gl_Position=projectionMatrix*viewMatrix*wp;
       }`,
     fragmentShader:`
-      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn;
+      uniform float uTime, uClear, uDepthOn, uLampY, uLampK, uLampOn, uChop, uMurk, uReflectOn, uReflectDim;
       uniform vec3 uSky, uDeep, uLightColor, uLampCol;
-      uniform sampler2D uCMap, uDepthTex;
+      uniform sampler2D uCMap, uDepthTex, uReflectMap;
+      uniform mat4 uReflectMtx;
       uniform vec4 uDepthBox;
       uniform vec2 uLampHalf, uLampXZ, uLampXZ2;
       varying vec3 vW; varying vec2 vXZ;
       void main(){
+        float mk=clamp(uMurk, 0.0, 0.85);                  // 0 时后面的 mix 系数是 0，水色与改前逐值相同
         float depth=1.0;                                   // 水深（自然水域按贴图，缸里视为很深）
         if(uDepthOn>0.5) depth=texture2D(uDepthTex, (vW.xz-uDepthBox.xy)*uDepthBox.zw).r*${DEPTH_MAX.toFixed(2)};
         float t=uTime;
-        vec2 g=vec2(
+        vec2 g=uChop*vec2(
           7.0*cos(vXZ.x*7.0+t*1.3)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006,
           9.0*cos(vXZ.y*9.0+t*1.7)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006);
         // 法线 y 分量太小（此前缸模式 0.02，而波斜率可达 0.07）会让法线几乎水平，俯视时菲涅尔变成大块条纹
@@ -128,6 +139,24 @@ const waterMesh=new THREE.Mesh(
         float alpha=0.93;
         if(gl_FrontFacing){
           col = mix(uDeep, uSky, fres*0.95);
+          // 茶色先吃进水体。反射开着时不再在最后盖一层，免得倒影发浑。uMurk=0 时这一行是空操作
+          col = mix(col, vec3(0.42, 0.50, 0.38), mk*step(0.5, uReflectOn));
+          // 平面反射：有一层基础混合，掠射角再加强。uReflectOn=0（玻璃缸、最低画质）整段跳过
+          if(uReflectOn>0.5){
+            float rfres = pow(1.0-max(dot(n, v), 0.0), 1.7);
+            vec2 gs = uChop*vec2(
+              cos(vXZ.x*1.15+t*0.55)*0.034+cos(vXZ.y*0.7+t*0.4)*0.018,
+              cos(vXZ.y*1.25+t*0.48)*0.034+cos(vXZ.x*0.6-t*0.35)*0.018);
+            vec2 bend = clamp(gs+g*0.35, vec2(-0.055), vec2(0.055));
+            vec4 rc = uReflectMtx*vec4(vW, 1.0);
+            rc.xy += bend*1.55*rc.w;
+            vec3 refl = texture2DProj(uReflectMap, rc).rgb;
+            if(!(refl.r<=4.0 && refl.g<=4.0 && refl.b<=4.0)) refl = uSky;
+            float rl = dot(refl, vec3(0.2126, 0.7152, 0.0722));
+            refl = mix(vec3(rl), refl, 1.42);
+            float fmix = (0.38+0.58*clamp(rfres, 0.0, 1.0))*clamp(uReflectDim, 0.0, 1.0);
+            col = mix(col, min(max(refl, vec3(0.0)), vec3(3.0)), clamp(fmix, 0.0, 0.96));
+          }
           // 按视角：侧看（掠射）仍是反光的水面，俯视时透出缸里（此前缸模式恒 0.93，俯视机位和编辑器都被一块深色板挡住）
           alpha = mix(mix(0.32, 0.93, pow(fres,0.7)), mix(0.2, 0.92, pow(fres,0.8)), uClear);
           if(uDepthOn>0.5){
@@ -172,6 +201,8 @@ const waterMesh=new THREE.Mesh(
         }
         vec3 r=reflect(normalize(vec3(-0.05,-1.0,-0.22)),n);
         col+=uLightColor*pow(max(dot(r,v),0.0),90.0)*2.2;
+        col=mix(col, vec3(0.42, 0.50, 0.38), mk*(1.0-step(0.5, uReflectOn)));
+        alpha=mix(alpha, min(alpha+0.12, 0.96), mk);
         gl_FragColor=vec4(col,alpha);
       }`,
   }));
@@ -344,7 +375,10 @@ const shell={ id:'', group:null, lightMat:null };
 function setShell(/** @type {string} */ id){
   if(shell.id===id) return;
   if(shell.group){ tankGroup.remove(shell.group); disposeShell(shell.group); }
-  const built=buildShell(id, TANK, { waterY:TANK.waterY, sandHeight });
+  const vol=boundsFor(id).volume;
+  const built=buildShell(id, vol, { waterY:vol.waterY, sandHeight });
+  setGround(typeof built.group.userData.bed==='function' ? built.group.userData.bed : null);
+  waterMesh.position.y=vol.waterY;
   Object.assign(shell, { id, ...built });
   tankGroup.add(built.group);
   const nat=built.natural;

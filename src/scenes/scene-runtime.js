@@ -1,7 +1,8 @@
 // @ts-check
 import * as THREE from 'three';
 import { makeRng, rrange, clamp } from '../utils.js';
-import { sandHeight, TANK } from '../scene/tank.js';
+import { sandHeight } from '../scene/tank.js';
+import { groundY } from '../scene/ground.js';
 import { SPECIES } from '../entities/fish/species.js';
 import { School } from '../entities/fish/school.js';
 import { createCare } from '../systems/care.js';
@@ -12,7 +13,10 @@ import { THEMES } from './themes.js';
 import { TANK_STYLES } from './tank-styles.js';
 import { careKey } from './scene-store.js';
 import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
-import { ITEM_META, PLACE_BOUNDS, GLASS_INNER } from './item-meta.js';
+import { ITEM_META } from './item-meta.js';
+import { boundsFor } from './tank-bounds.js';
+import { shoreLod } from '../systems/shore-lod.js';
+import { lanternGlow, fireflyMat } from './items/shore.js';
 
 /* ================================================================
  * 场景运行时：把场景文档落到 three 场景里，并做增量更新
@@ -26,17 +30,18 @@ const GRAVEL_N=56;
 
 /** @param {any} opts */
 export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, renderer, onTheme, onTank, onSchools }){
-  const contact=createContactShadows(tankGroup, sandHeight);
+  const contact=createContactShadows(tankGroup, groundY);
   const itemsGroup=new THREE.Group();
   itemsGroup.name='scene-items';
   tankGroup.add(itemsGroup);
   // 静态物件绘制批处理：同材质网格合批（Draw Calls 大减）；编辑器打开时拆批恢复逐件交互
   const batch=createItemBatch({ renderer, parent:itemsGroup });
   const rootsOf=()=>[...live.values()].map((/** @type {any} */ e)=>e.root);
-  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, lim:{x:number,z:number} }>} */
+  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, lim:{x:number,z:number}, shadow?:THREE.Mesh|null }>} */
   const live=new Map();
   /** @type {any} */ let doc=null;
   /** @type {any} */ let care=null;
+  let shoreLevel=0;
 
   /* ---------- 碎石（主题配色，位置固定） ---------- */
   const gravel=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),   // 圆润卵石（十二面体太像碎块）
@@ -54,6 +59,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     gravel.receiveShadow=true;
     tankGroup.add(gravel);
   }
+  const boxOf=()=>boundsFor(doc?.tank ?? 'classic');
 
   function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
@@ -75,23 +81,29 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     });
     return { x:Math.max(Math.abs(box.min.x),Math.abs(box.max.x)), z:Math.max(Math.abs(box.min.z),Math.abs(box.max.z)) };
   }
-  /** 中心点允许范围：玻璃内壁 − 真实包络（含旋转/缩放，水草加摆动余量）。数据侧估算见 item-meta.placeLimits */
+  /** 中心点允许范围：玻璃内壁 − 真实包络（含旋转/缩放，水草加摆动余量）。
+   *  岸边物件在 shore 大于水面摆放框时改收到岸线内。数据侧估算见 item-meta.placeLimits */
   function limitsOf(/** @type {any} */ e){
     const it=e.item, c=Math.abs(Math.cos(it.rot)), sn=Math.abs(Math.sin(it.rot));
-    const pad=(ITEM_META[it.type]?.group==='plant') ? 0.09 : 0.03;
-    return { x:Math.min(PLACE_BOUNDS.x, Math.max(0.15, GLASS_INNER.x-((e.ext.x*c+e.ext.z*sn)*it.s+pad))),
-             z:Math.min(PLACE_BOUNDS.z, Math.max(0.15, GLASS_INNER.z-((e.ext.x*sn+e.ext.z*c)*it.s+pad))) };
+    const meta=ITEM_META[it.type];
+    const pad=(meta?.group==='plant') ? 0.09 : 0.03;
+    const b=boxOf();
+    const hx=(e.ext.x*c+e.ext.z*sn)*it.s+pad, hz=(e.ext.x*sn+e.ext.z*c)*it.s+pad;
+    const land=!!meta?.land && (b.shore.x>b.place.x+1e-4 || b.shore.z>b.place.z+1e-4);
+    if(land) return { x:Math.max(0.15, b.shore.x-hx), z:Math.max(0.15, b.shore.z-hz) };
+    return { x:Math.min(b.place.x, Math.max(0.15, b.glassInner.x-hx)),
+             z:Math.min(b.place.z, Math.max(0.15, b.glassInner.z-hz)) };
   }
   function place(/** @type {any} */ e){
     const it=e.item;
     e.lim=limitsOf(e);
     it.x=clamp(it.x,-e.lim.x,e.lim.x);   // 写回运行时副本：旧存档里贴边的物件在这里被拉回缸内，
     it.z=clamp(it.z,-e.lim.z,e.lim.z);   // 接地暗斑也跟着钳制后的位置贴沙面
-    const y=sandHeight(it.x,it.z);
+    const y=groundY(it.x,it.z);
     e.root.position.set(it.x, y, it.z);
     e.root.rotation.set(0, it.rot, 0);
     e.root.scale.setScalar(it.s);
-    e.root.children[0]?.userData.onPlace?.((TANK.waterY-y)/it.s);   // 睡莲/香蒲按到水面的局部高度伸展
+    e.root.children[0]?.userData.onPlace?.((boxOf().waterY-y)/it.s);   // 睡莲/香蒲按到水面的局部高度伸展
     e.root.updateMatrix();
     e.root.updateMatrixWorld(true);
     e.shadow=contact.fit(it, e.shadow ?? null);   // 接地暗斑跟着位置/缩放重贴沙面
@@ -135,6 +147,51 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     for(const [id,e] of next) live.set(id,e);
     refreshDerived();
     batch.resync(rootsOf());                    // 物件集合/变换变化后重批（同批同矩阵则自动跳过）
+    applyShore(shoreLevel);
+  }
+
+  /** 草叶 / 枫叶按画质档减实例；加密草丛（seed%3===0）在低档整丛隐藏。InstancedMesh 不进批处理 */
+  function applyShore(/** @type {number} */ level){
+    shoreLevel=level;
+    const lod=shoreLod(level);
+    for(const e of live.values()){
+      e.root.traverse((/** @type {any} */ o)=>{
+        const sh=o.userData?.shore;
+        if(!sh || !o.isInstancedMesh) return;
+        if(sh.extra && !lod.extra){ o.visible=false; return; }
+        o.visible=true;
+        const k=sh.kind==='grass' ? lod.grass : lod.leaf;
+        const min=sh.extra ? 0 : 3;
+        o.count=clamp(Math.round(sh.full*k), min, sh.full);
+      });
+    }
+  }
+
+  /** 石灯火室与萤火虫。要在反射 pass 之前调，倒影里才看得到夜光 */
+  function glowShore(/** @type {number} */ k){
+    const night=k*k, show=k>0.4;
+    let glow=null, flies=null;
+    for(const e of live.values()){
+      if(e.item.type!=='lantern') continue;
+      glow=glow ?? lanternGlow();
+      flies=flies ?? fireflyMat();
+      e.root.traverse((/** @type {any} */ o)=>{
+        if(o.userData?.shoreLight) o.intensity=night*2.2;
+        if(o.isPoints) o.visible=show;
+      });
+    }
+    if(glow) glow.emissiveIntensity=0.04+night*2.4;
+    if(flies) flies.opacity=show ? Math.min(0.95, (k-0.4)/0.35) : 0;
+  }
+
+  /** 调试用：藏起岸边物件（含已合批的树干）做前后对比。@param {boolean} on */
+  function setShoreVisible(/** @type {boolean} */ on){
+    for(const e of live.values()){
+      if(!ITEM_META[e.item.type]?.land) continue;
+      e.root.visible=on;
+      if(e.shadow) e.shadow.visible=on;
+    }
+    batch.resync(on ? rootsOf() : rootsOf().filter((/** @type {any} */ r)=>r.visible));
   }
 
   /* ---------- 鱼群 ---------- */
@@ -144,14 +201,16 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     const specs=SPECIES.map((s,i)=>({ ...s, count:counts[i] }));
     care?.dispose();
     care=createCare(specs, { key:careKey(doc.id) });
+    const b=boxOf();
     const old=new Map(schools.map((/** @type {any} */ s)=>[s.spec.id, s]));
     const next=[];
     for(const spec of specs){
       const prev=old.get(spec.id);
-      if(prev && !reset && prev.spec.count===spec.count){ next.push(prev); old.delete(spec.id); continue; }
+      if(prev && !reset && prev.spec.count===spec.count){ prev.setLimits(b.swim, b.yCeil, b.waterY); next.push(prev); old.delete(spec.id); continue; }
       if(spec.count<=0) continue;
       const s=new School(spec, obstacles, glbMap[spec.id],
-        { growth:care.growthArray(spec.id), capacity:FISH_MAX[spec.id] ?? spec.count, gloss:care.glossK() });
+        { growth:care.growthArray(spec.id), capacity:FISH_MAX[spec.id] ?? spec.count, gloss:care.glossK(),
+          swim:b.swim, yCeil:b.yCeil, waterY:b.waterY });
       tankGroup.add(s.group);
       next.push(s);
     }
@@ -166,13 +225,16 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     const prev=doc;
     doc=cloneDoc(nextDoc);
     if(fresh || !prev || prev.theme!==doc.theme) setTheme(doc.theme);
-    if(fresh || !prev || prev.tank!==doc.tank){
+    const tankChanged=fresh || !prev || prev.tank!==doc.tank;
+    if(tankChanged){
       tank.setShell(doc.tank);
-      onTank?.(TANK_STYLES[doc.tank] ?? TANK_STYLES.classic);
+      gravel.visible=!(TANK_STYLES[doc.tank]?.bowl);   // 小缸碎石会浮在碗形底上方
+      onTank?.(TANK_STYLES[doc.tank] ?? TANK_STYLES.classic, doc.tank);
     }
     syncItems(doc.items);
     const fishChanged=!prev || countsOf(prev.fish).join()!==countsOf(doc.fish).join();
     if(fresh || prev?.id!==doc.id || fishChanged) setFish(doc.fish, { reset:fresh || prev?.id!==doc.id });
+    else if(tankChanged){ const b=boxOf(); for(const s of schools) s.setLimits(b.swim, b.yCeil, b.waterY); }
   }
 
   return {
@@ -187,7 +249,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     /** @param {string} id */
     rootOf: (/** @type {string} */ id) => live.get(id)?.root ?? null,
     /** 编辑器摆放钳制用：该物件中心点允许范围（真实几何包络，place() 同一套） */
-    limitsOf: (/** @type {string} */ id) => live.get(id)?.lim ?? { x:PLACE_BOUNDS.x, z:PLACE_BOUNDS.z },
+    limitsOf: (/** @type {string} */ id) => live.get(id)?.lim ?? { x:boxOf().place.x, z:boxOf().place.z },
     /** 编辑器拖拽时的轻量更新：只改变换，不重建 */
     moveItem(/** @type {any} */ item){
       const e=live.get(item.id);
@@ -211,6 +273,9 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     },
     /** 光泽度变化时刷新全部鱼群（School 内部去重，同值不重设材质） */
     setGloss(/** @type {number} */ k){ for(const s of /** @type {any[]} */ (schools)) s.setGloss(k); },
+    applyShore,
+    glowShore,
+    setShoreVisible,
   };
 }
 const fishTotalOf=(/** @type {any} */ d)=>Object.values(d.fish).reduce((/** @type {number} */ a,/** @type {any} */ n)=>a+n,0);

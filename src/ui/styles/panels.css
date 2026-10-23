@@ -3,12 +3,16 @@
  * ================================================================ */
 
 /* ---------- 设置弹层（锚定 Dock 按钮，位置由 settings-panel.js 计算） ---------- */
-#settingsPop{position:fixed;z-index:20;width:236px;padding:10px 8px 8px;border-radius:var(--r-md);
+#settingsPop{position:fixed;z-index:20;width:260px;padding:10px 8px 8px;border-radius:var(--r-md);
   transform-origin:50% 100%;animation:popIn .2s var(--ease)}
 #settingsPop[hidden]{display:none}
 @keyframes popIn{from{opacity:0;transform:translateY(8px) scale(.97)}}
 .pop-title{margin:6px 10px 4px;font-size:10px;letter-spacing:.24em;color:var(--ink-3)}
 .pop-title:first-child{margin-top:0}
+.select-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;
+  border-radius:var(--r-sm);font-size:13px;color:var(--ink-2)}
+.select-row select{font:inherit;color:var(--ink);background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);
+  border-radius:6px;padding:3px 8px}
 .switch-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:9px 10px;border-radius:var(--r-sm);font-size:13px;color:var(--ink-2);cursor:pointer;
   transition:background .15s,color .15s}

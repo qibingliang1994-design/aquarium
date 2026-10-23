@@ -98,6 +98,20 @@
   <label class="switch-row"><span>气泡</span><input type="checkbox" id="setBubbles" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>悬浮颗粒</span><input type="checkbox" id="setSnow" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>水面焦散</span><input type="checkbox" id="setCaustics" role="switch"/><i class="switch"></i></label>
+  <p class="pop-title">天气</p>
+  <label class="select-row"><span>天气</span>
+    <select id="setWeather" aria-label="天气">
+      <option value="sunny">晴天</option>
+      <option value="cloudy">多云</option>
+      <option value="drizzle">小雨</option>
+      <option value="rain">中雨</option>
+      <option value="fog">薄雾</option>
+      <option value="snow">小雪</option>
+    </select>
+  </label>
+  <label class="slider-row"><span class="sr-head"><em>强度<small>0 时与晴天相同</small></em><b></b></span><input type="range" id="setWeatherI" min="0" max="1" step="0.01"/></label>
+  <label class="slider-row"><span class="sr-head"><em>清澈度<small>户外池塘水色 · 玻璃缸不变</small></em><b></b></span><input type="range" id="setClarity" min="0.35" max="1" step="0.01"/></label>
+  <label class="switch-row"><span>自动天气<small>约半分钟换一种</small></span><input type="checkbox" id="setWeatherAuto" role="switch"/><i class="switch"></i></label>
   <p class="pop-title">存档</p>
   <div class="backup-row">
     <button id="bExport" class="chip-btn" type="button">导出存档</button>

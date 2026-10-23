@@ -1,15 +1,24 @@
 // @ts-check
 /* ================================================================
  * 水域款式（纯数据）：玻璃缸只换外壳（框、玻璃边、灯具、底柜、灯色）；
- * 自然水域（池塘 / 溪流 / 小河）去掉玻璃与底柜，换成土岸地形 + 岸边植被 + 天空与日光
- * 内部水体尺寸所有款式一致，鱼群活动范围与造景坐标不受影响
+ * 自然水域（池塘 / 溪流 / 小河 / 大户外池塘）去掉玻璃与底柜，换成土岸地形 + 岸边植被 + 天空与日光
+ * 不带 volume 的款式共用默认缸的内腔（4.6×2.2×1.8），鱼和造景坐标不变。
+ * volume 是可选的水体尺寸，边界由 scenes/tank-bounds.js 按同一套内缩推出。
  * light.spotCol / spotK：日间主灯（自然水域即太阳）颜色与强度倍率；spotY：主灯高度
+ * light.sun：有则按给定位置做平行太阳，不再按 spotY 做距离平方衰减（高太阳会被除没）
  * env（仅自然水域）：天空/雾色、雾浓度、环境光、水面通透度 clear、水流速度 current（+x 方向）
+ *   clarity：只给大户外池塘的水色着色（见 weather.pondTint），不进饲养、不扣分
+ * rig / cams / thumb：只在需要不同于默认机位的大场景上填
  * ================================================================ */
 
-/** @typedef {{ bg:number, fog:number, fogD:number, hemi:number, fill:number, env:number, clear:number, current:number }} WaterEnv */
-/** @typedef {{ label:string, hint:string, kind:'tank'|'natural', light:{ spotCol:number, spotK:number, spotY:number, strip:number },
- *   env?:WaterEnv }} TankStyle */
+/** @typedef {{ bg:number, fog:number, fogD:number, hemi:number, fill:number, env:number, clear:number, current:number, clarity?:number }} WaterEnv */
+/** @typedef {{ pos:[number,number,number], angle:number, penumbra:number, decay:number, distance:number, near:number, far:number, fit?:number }} SunRig */
+/** @typedef {{ W:number, H:number, D:number, glass:number, waterY:number }} TankVolume */
+/** @typedef {{ min:number, max:number, near:number, far:number }} CamRig */
+/** @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean,
+ *   light:{ spotCol:number, spotK:number, spotY:number, strip:number, sun?:SunRig },
+ *   env?:WaterEnv, volume?:TankVolume, shore?:{ x:number, z:number }, rig?:CamRig,
+ *   cams?:{pos:number[], tgt:number[]}[], thumb?:{pos:number[], tgt:number[]} }} TankStyle */
 
 /** @type {Record<string, TankStyle>} */
 export const TANK_STYLES = {
@@ -32,6 +41,21 @@ export const TANK_STYLES = {
   river:   { label:'林间小河', hint:'沙滩缓岸 · 茶色河水 · 缓流', kind:'natural',
     light:{ spotCol:0xffe9c8, spotK:3.5, spotY:4.4, strip:0 },
     env:{ bg:0xa9bfb0, fog:0x9fb5a6, fogD:0.028, hemi:0.56, fill:0.38, env:0.5, clear:0.85, current:0.06 } },
+  // 鱼的活动矩形内接在不规则岸线里（pondD<0.92）；视觉水面约 17×12，见 scene/pond-shape.js
+  outdoor: { label:'大户外池塘', hint:'不规则石岸 · 开阔水面 · 晴雨雾雪', kind:'natural', bowl:true,
+    light:{ spotCol:0xfff0d4, spotK:0.32, spotY:18, strip:0,
+      sun:{ pos:[-18,26,-14], angle:0.72, penumbra:0.75, decay:0, distance:0, near:8, far:90, fit:12 } },
+    env:{ bg:0x6aa4e4, fog:0x8eb6d8, fogD:0.0045, hemi:0.7, fill:0.4, env:0.62, clear:1, current:0, clarity:0.88 },
+    volume:{ W:11.11, H:2.2, D:6.45, glass:0, waterY:1.84 },
+    shore:{ x:13.2, z:9.4 },
+    rig:{ min:1.6, max:32, near:0.08, far:180 },
+    cams:[
+      { pos:[0,8.4,12.2], tgt:[0,0.35,0] },
+      { pos:[11,5.6,7.5], tgt:[0.4,0.2,-0.2] },
+      { pos:[0,16.5,1.2], tgt:[0,0.1,0] },
+      { pos:[-7.5,3.8,5.2], tgt:[1.2,0.6,-0.4] },
+    ],
+    thumb:{ pos:[0,8.4,12.2], tgt:[0,0.35,0] } },
 };
 export const TANK_IDS = Object.keys(TANK_STYLES);
 

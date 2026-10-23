@@ -346,6 +346,25 @@
   三处 css 强调色。无 PALETTES 条目 → 走锦鲤同款"保留照片贴图+压镜面"路径；无动画片段 →
   走 decorateFishMaterial 顶点尾摆（amp/beat/waveK 来自物种表）。classic 预设测试改为
   "旧九种保持默认、新物种不入旧预设"。与 tetra（霓虹脂鲤=红绿灯）同种的源项目 neon 模型未收录。
+- 大户外池塘（场景存档 v4）：水体边界收到 `scenes/tank-bounds.js`。不带 `volume` 的缸型仍是
+  4.6×2.2×1.8，默认边界吸附回历史字面量（swim 2.13×0.74、摆放 2.05×0.75、玻璃内壁 2.265×0.865、
+  饲料 2.2×0.8）。`outdoor` 的活动矩形内接在不规则岸线里（硬钳制角 pondD&lt;0.93），视觉水面约 17×12
+  （`scene/pond-shape.js` + `natural-shells.js` 的 `buildOutdoor`：石缘、碗形底、`userData.bed`）。
+  地面查询走 `scene/ground.js`，沙床公式不动。预设「大户外池塘」用现有锦鲤 / 睡莲 / 香蒲。
+  旧 v3 存档按 seeded 补发一次。天气是 `systems/weather.js` 的纯逻辑（晴 / 多云 / 小雨 / 中雨 /
+  薄雾 / 小雪 + 强度 + 28 秒自动），晴天或强度 0 不改变灯光、雾和波浪；粒子在 `effects.js`，
+  数量跟着现有五档画质走；潮湿度 `U.wet` 只压暗地面和石头。eco-pond 的水质分数不移植，只把
+  相对清澈的茶色差写进自然水域网格水面的 `uMurk`。阴影仍由主循环按画质档刷新，不在天气里开关投影。
+  自然水域另有天空穹顶（`scene/sky-dome.js`，色键在 `systems/sky.js`）和平面反射（`scene/water-reflect.js`）。
+  反射只贴在网格水面上，不进玻璃缸的 water-pass；水面仍不写深度。贴图按五档画质缩放，最低档关闭，
+  开着就每帧渲（隔帧会闪）。鱼群在反射 pass 里关掉。环境贴图用同一天空渲 PMREM，签名变了才重建，至少隔 0.4 秒。
+  大池塘的聚光阴影用 `systems/shadow-fit.js` 收到岸线内，纹素吸附防爬行，灯光张角不动。清澈度滑杆只改碗形池塘的 `uMurk`。
+  天空色键把晴天正午收成更深的蓝、地平线更亮，黄昏地平线偏暖，雾和灰才把天顶洗灰；云量决定云块覆盖而不是整片发透。反射高档短边 768，菲涅尔之外有一层基础混合，茶色先吃进水体再叠倒影。大户外池塘晴天雾密度降到 0.0045。
+  岸边景物（松、秋枫、岸草、石灯）是普通造景物件，登记在 `ITEM_META` 的 `shore` 组，`land:true`。
+  `bounds.shore` 只在比水面摆放框更大时放开（大户外池塘 13.2×9.4），玻璃缸的 shore 等于 place，旧的钳制测试不变。
+  树干、松冠和灯石走物件批处理；草叶和枫叶是 InstancedMesh，`systems/shore-lod.js` 按现有五档减 `count`，`seed%3===0` 的加密草丛在第 3 档起整丛隐藏。
+  石灯的火室发光和点光源在反射 pass 之前由 `glowShore` 按昼夜点亮，所以倒影里也是亮的。树皮 / 叶 / 地衣是 Poly Haven CC0 的 1K WebP（`public/tex/README.md`）。
+  潮湿度沿用 `injectWet`，雨天压暗树皮、叶、灯石和已经接过潮湿度的地面。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

@@ -1,5 +1,6 @@
 // @ts-check
 import * as THREE from 'three';
+import { SWIM as SWIM_BOUNDS, DEFAULT_BOUNDS } from '../../scenes/tank-bounds.js';
 
 /* ================================================================
  * 鱼群转向力的纯逻辑（从 School.update 抽出，可在 Node 里单测）
@@ -14,21 +15,24 @@ import * as THREE from 'three';
 const _v=new THREE.Vector3();
 
 /* ---------- 统一网格：每帧重建（rebuildFishGrid），条目对象与单元格数组全部复用 ---------- */
-const GRID_MIN={ x:-2.2, y:0.1, z:-0.8 }, GRID_MAX={ x:2.2, y:1.9, z:0.8 };
+/** 默认缸的网格盒（±2.2 / 0.1..1.9 / ±0.8）。大场景传入 bounds.grid，否则邻域查询会把远处的鱼夹进边缘格 */
+const GRID_MIN=DEFAULT_BOUNDS.grid.min, GRID_MAX=DEFAULT_BOUNDS.grid.max;
 
-/** @param {number} cell 单元格边长（≥0.7 时 3×3×3 邻域即可覆盖最大 schoolRad 1.4） */
-export function createFishGrid(cell=0.7){
-  const nx=Math.max(1,Math.ceil((GRID_MAX.x-GRID_MIN.x)/cell));
-  const ny=Math.max(1,Math.ceil((GRID_MAX.y-GRID_MIN.y)/cell));
-  const nz=Math.max(1,Math.ceil((GRID_MAX.z-GRID_MIN.z)/cell));
+/** @param {number} [cell] 单元格边长（≥0.7 时 3×3×3 邻域即可覆盖最大 schoolRad 1.4）
+ *  @param {{ min:{x:number,y:number,z:number}, max:{x:number,y:number,z:number} }} [box] */
+export function createFishGrid(cell=0.7, box){
+  const min=box?.min ?? GRID_MIN, max=box?.max ?? GRID_MAX;
+  const nx=Math.max(1,Math.ceil((max.x-min.x)/cell));
+  const ny=Math.max(1,Math.ceil((max.y-min.y)/cell));
+  const nz=Math.max(1,Math.ceil((max.z-min.z)/cell));
   /** @type {number[][]} */
   const cells=Array.from({length:nx*ny*nz},()=>[]);
   /** @type {{ school:any, i:number, p:THREE.Vector3 }[]} */
   const entries=[];
   const clampI=(/** @type {number} */ v,/** @type {number} */ n)=>Math.min(n-1,Math.max(0,v));
-  const cx=(/** @type {number} */ v)=>clampI(Math.floor((v-GRID_MIN.x)/cell),nx);
-  const cy=(/** @type {number} */ v)=>clampI(Math.floor((v-GRID_MIN.y)/cell),ny);
-  const cz=(/** @type {number} */ v)=>clampI(Math.floor((v-GRID_MIN.z)/cell),nz);
+  const cx=(/** @type {number} */ v)=>clampI(Math.floor((v-min.x)/cell),nx);
+  const cy=(/** @type {number} */ v)=>clampI(Math.floor((v-min.y)/cell),ny);
+  const cz=(/** @type {number} */ v)=>clampI(Math.floor((v-min.z)/cell),nz);
   return {
     clear(){ for(const c of cells) c.length=0; entries.length=0; },
     /** @param {any} school @param {number} i @param {THREE.Vector3} p */
@@ -158,11 +162,11 @@ export function wanderAcc(acc, time, i, wander){
   acc.z+=Math.cos(wT*0.9+i*3.3)*wander*0.4;
 }
 
-/** 活动范围（鱼体中心）：缸内腔 x ±2.265 / z ±0.865（TANK 4.6×1.8 减玻璃）留出贴玻璃的余量。
- * 此前写死 ±1.5 / ±0.48，鱼只用了约四分之一的水体；按体长再往里收（swimLimits） */
-export const SWIM={ x:2.13, z:0.74 };
-/** 某体长的鱼的水平软边界半宽：大鱼离玻璃更远（转身时头尾不撞玻璃） @param {number} L */
-export const swimLimits = L => ({ x:SWIM.x-0.5*L, z:SWIM.z-0.3*L });
+/** 默认缸的活动范围（鱼体中心）。大场景把 bounds.swim 传给 swimLimits 的第二个参数 */
+export const SWIM=SWIM_BOUNDS;
+/** 某体长的鱼的水平软边界半宽：大鱼离玻璃更远（转身时头尾不撞玻璃）
+ * @param {number} L @param {{x:number,z:number}} [swim] */
+export function swimLimits(L, swim=SWIM){ return { x:swim.x-0.5*L, z:swim.z-0.3*L }; }
 
 /** 缸体软边界（swimLimits 内 0.14 起弹簧；y 为 band 水层带，floor 可抬高下界——底栖种按沙面算）
  * @param {THREE.Vector3} p @param {[number,number]} band @param {THREE.Vector3} acc

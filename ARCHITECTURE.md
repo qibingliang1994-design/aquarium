@@ -376,6 +376,25 @@
   `play(on)` / `playState()` / `playAt(x,y,z)` / `nibbles(0)`。
   顺手修复：`main.js` 的 `import.meta.env.PROD` 在 `npm run serve`（裸源码）下是 undefined 会抛错，
   改为 `import.meta.env?.PROD`。
+- 性能优化（v2.2.1，实测 M1 经典缸同负载 22→52 FPS、全屏尺寸阶梯收敛 45+）。逐项（按收益排序）：
+  1. **镜像 RT 门控**（water-pass.js）：水面镜像只查了 y、侧玻璃镜像只查了 x，默认机位（缸外上方）
+     每帧白渲 3 块镜像 = 3 次全场景重渲（~600 次蒙皮鱼绘制）。改为：水面镜像 = 水下 且 缸体 x/z 范围内；
+     侧玻璃 = 相机整个在缸内。L0 绘制调用 1435→432。
+  2. **同物种共享装饰材质**（school.js）：动画鱼逐鱼着色一致，材质实例 196 → 每物种 ~4 份
+     （锦鲤冷暖微调与静态尾摆相位仍逐鱼克隆）。three 只在材质切换时重传 uniform，CPU 帧耗时 13.7→4ms。
+  3. **光柱焦散调制贴图化**：march 每步的 2×4 迭代解析网纹（~30 次 ALU）换成 causticsTex 一次采样；
+     步数随画质档 14→4（dt 同步放大，积分量不变）。单独关闭光柱的帧率差从 +13 收到 +1。
+  4. **DOF 采样点数随档缩放**（lens-pass.js setTaps 24→10），单独关闭差从 +9 收到 +2。
+  5. **Bloom 内部分辨率封顶 1280 宽**（setup.js 包装 setSize）。
+  6. **小鱼免投影**：L<0.2 的鱼群（脂鲤/鼠鱼等）castShadow=false，阴影 pass 蒙皮绘制减半，
+     三角形 1.33M→462K。
+  7. **阴影刷新率下调**（quality.js shadowHz 30/24/18/12/10 → 20/16/12/10/8）：软阴影 + 慢鱼无感。
+  8. **画质死区收窄**：降档阈值 32→40、升档 50→55（8 秒）。旧 33~49 死区会让 34 FPS 卡在均衡档永远不动。
+  9. **倒影隔帧渲染**（water-reflect.js）：RT 里只有静态景物（鱼群本就隐藏），内容 30Hz 更新、
+     采样矩阵仍每帧更新（转视角不糊）。
+  10. 修复 SW 缓存版本号停在 v2.1.0：发新版后 PWA 用户会一直拿旧资产（CACHE 随版本走 v2.2.1）。
+  测量方法：Chrome DevTools 实机开关矩阵（各子系统单独关闭的帧率差）+ renderer.info 逐项计数 +
+  loopFrame 计时（CPU/GPU 分侧）。教训：换档瞬间有着色器重编译毛刺，帧率采样要取中位数并留稳定期。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

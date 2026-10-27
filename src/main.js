@@ -44,7 +44,7 @@ import { installDebug } from './debug.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.2';
+const VERSION='v2.2.1';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
@@ -408,6 +408,8 @@ const quality=createQuality({
     bloom.enabled=q.bloom; lens.setDof(q.bloom && settings.dof!==false);   // 最低一档连景深一起关（用户也关了才算数）
     qualityBloom=q.bloom;
     waterPass.setShafts(q.bloom ? settings.shafts : 0);   // 光柱 march 是最贵的逐像素步进：最低档停，其余按用户强度
+    waterPass.setSteps([14,11,11,8,5][q.level] ?? 8);     // march 步数随档缩放（贴图化焦散调制后每步也便宜了）
+    lens.setTaps([24,18,18,12,10][q.level] ?? 12);        // 景深采样点数随档缩放
     setMSAA(ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);

@@ -1,14 +1,15 @@
 // @ts-check
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { causticsTex } from './caustics.js';
 
 /* ================================================================
  * 水体合成 pass（整体移植自学习项目 SkentSun/aquarium-editor 的 post.js WATER_FS，MIT）：
  * 水面不再是场景网格，而是紧跟场景渲染的全屏光线合成——
  *   俯视：波面折射偏移采样场景色 + 菲涅尔混入灯带/房间环境反射
- *   水中：按路径长 exp(-σL) 吸收；沿视线 14 步 march 阴影图 + 解析焦散网纹的灯内散射（光柱被造景剪影切开）
- *   仰视水面：全内反射显示缸内镜像（水面平面镜像 RT，仅在相机入水时渲染）
- *   侧玻璃：掠射角变平面镜（左右两块镜像 RT，仅在相机位于缸内时渲染）
+ *   水中：按路径长 exp(-σL) 吸收；沿视线 march 阴影图 + 烘焙焦散网纹的灯内散射（光柱被造景剪影切开；步数随画质档 4..14）
+ *   仰视水面：全内反射显示缸内镜像（水面平面镜像 RT，仅相机在水下且位于缸体 x/z 范围内时渲染）
+ *   侧玻璃：掠射角变平面镜（左右两块镜像 RT，仅相机整个位于缸内时渲染）
  *   水面贴玻璃处：弯月线
  * 玻璃缸专用；自然水域（池塘/溪流/小河）保留场景网格水面（岸线/浅滩/白沫依赖水深贴图，盒体模型做不了）。
  *
@@ -26,18 +27,8 @@ vec2 waterGrad(vec2 xz, float t, float flow){
                a*( 9.0*cos(y*9.0+t*1.7) + 5.0*cos((qx+y)*5.0+t*0.9) ) );
 }`;
 
-/** 学习项目的焦散网纹（解析式，2 次调用作光柱调制；MIT） */
-const CAU_NET_GLSL = `
-float aqCauNet(vec2 p, float t){
-  vec2 i=p; float c=1.0; const float inten=0.005;
-  for(int n=0;n<4;n++){
-    float tt=t*(1.0-(3.5/float(n+1)));
-    i=p+vec2(cos(tt-i.x)+sin(tt+i.y), sin(tt-i.y)+cos(tt+i.x));
-    c+=1.0/length(vec2(p.x/(sin(i.x+tt)/inten), p.y/(cos(i.y+tt)/inten)));
-  }
-  c/=4.0; c=1.17-pow(c,1.4);
-  return pow(abs(c),7.0);
-}`;
+/** 学习项目的焦散网纹（解析式）已由 tCau 烘焙贴图取代：每个光柱 march 步
+ *  从 2×4 迭代三角函数（~30 次 ALU）降为 1 次纹理采样，视觉仍是同一族网纹 */
 
 /** 玻璃缸内水体盒由构造参数传入（box.min/max，玻璃内侧）；水面高度 waterY */
 
@@ -65,6 +56,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     uMin:{value:box.min.clone()}, uMax:{value:box.max.clone()},
     uSigma:{value:new THREE.Vector3(0.5,0.18,0.24)}, uSigmaK:{value:0.4},
     uShafts:{value:0.1}, uShaftCol:{value:new THREE.Vector3(1,0.95,0.85)},
+    uSteps:{value:14}, tCau:{value:causticsTex},   // march 步数随画质档缩放；焦散调制改烘好的网纹贴图采样
     uShadowOn:{value:0}, tShadow:{value:/** @type {THREE.Texture|null} */ (null)}, uShadowM:{value:new THREE.Matrix4()},
     uLightDir:{value:new THREE.Vector3(0.05,-1,0.1)},
     uMirrorOn:{value:0}, tMirror:{value:/** @type {THREE.Texture|null} */ (null)}, uMirrorVP:{value:new THREE.Matrix4()},
@@ -83,17 +75,19 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb,
                     uMirrorOn, uSideOn;
       uniform mat4 uShadowM, uMirrorVP, uMirrorLVP, uMirrorRVP;
-      uniform sampler2D tShadow, tMirror, tMirrorL, tMirrorR;
+      uniform sampler2D tShadow, tMirror, tMirrorL, tMirrorR, tCau;
+      uniform float uSteps;
       varying vec2 vUv;
       ${GRAD_GLSL}
-      ${CAU_NET_GLSL}
       float ign(vec2 p){ return fract(52.9829189*fract(dot(p, vec2(0.06711056,0.00583715)))); }
-      // 光柱用的 2 次网纹（比材质焦散便宜；灯射线穿过水面处取样）
+      // 光柱用的焦散调制：烘好的 Voronoi 网纹贴图采样（替换原 2×4 迭代解析式，
+      // 每个 march 步省 ~30 次三角函数/幂运算，形状仍是同一族网纹）
       float cauLite(vec3 w){
         float depth=max(uWaterY-w.y, 0.0);
         vec2 s=w.xz-uLightDir.xz/max(-uLightDir.y,0.2)*depth;
         vec2 p=s*6.2831853/0.35;
-        float c=aqCauNet(p, uTime*0.55)+0.6*aqCauNet(p*0.47+3.1, uTime*0.385+1.3);
+        float c=texture2D(tCau, p*0.15915494+vec2(uTime*0.021,uTime*0.017)).r*1.6
+               +0.6*texture2D(tCau, (p*0.47+3.1)*0.15915494-vec2(uTime*0.013,-uTime*0.019)).r;
         return mix(1.0, 0.35+1.1*clamp(c,0.0,2.5), min(uShafts,1.0));
       }
       // 主相机阴影图上的可见性（光柱被石头/沉木/鱼剪影切开）
@@ -195,14 +189,15 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
         // 散射色要亮（青白打底，掺主题水色）——用深水色会把光柱吃掉；夜间光柱由 uShaftCol 跟随主灯变暗
         vec3 scat=mix(vec3(0.75,0.95,1.0), uSky, 0.45)*1.6;
         if(L>0.02 && uShafts>0.01){
-          const int N=14;
+          float n=max(uSteps, 4.0);              // 步数随画质档缩放（dt 跟着放大，积分量不变）
           float j=fract(ign(gl_FragCoord.xy)+uFrame*0.618034);
-          float dt=L/float(N);
+          float dt=L/n;
           float cosP=dot(uLightDir,-d);
           float ph=0.55;
           float hg=(1.0-ph*ph)/pow(1.0+ph*ph-2.0*ph*cosP,1.5)/12.566;
           float phase=0.35/12.566+hg*0.65;
-          for(int i=0;i<N;i++){
+          for(int i=0;i<14;i++){                 // 上限 14（高清档满配），低档提前 break
+            if(float(i)>=n) break;
             float t=(float(i)+j)*dt;
             vec3 p=pIn+d*t;
             float down=max(uWaterY-p.y,0.0);
@@ -283,16 +278,21 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       const sm=/** @type {any} */ (light).shadow;
       if(sm?.map){ u.uShadowOn.value=light.castShadow?1:0; u.tShadow.value=sm.map.texture; u.uShadowM.value.copy(sm.matrix); }
       else u.uShadowOn.value=0;
-      // 条件镜像：相机入水 → 水面镜像；相机在缸内 → 侧玻璃镜像
-      const below=camera.position.y<waterY+0.02;
+      // 条件镜像：镜像 = 一整次场景重渲（含全部蒙皮鱼网格，~400 次绘制），只在着色器真的会采样时才渲。
+      // 水面镜像：相机在水下且位于缸体 x/z 范围内（缸外看缸的常规机位走不到 outTop 采样）；
+      // 侧玻璃镜像：相机整个位于缸内。此前只查 x（侧）/y（水面），默认机位每帧白渲 3 块镜像。
+      const cp=camera.position;
+      const inXZ=cp.x>box.min.x && cp.x<box.max.x && cp.z>box.min.z && cp.z<box.max.z;
+      const below=cp.y<waterY+0.02 && inXZ;
       u.uMirrorOn.value=below?1:0;
       if(below) renderMirror(renderer,'y',waterY,rtMirror,u.uMirrorVP.value);
       u.tMirror.value=rtMirror.texture;
-      const inX=camera.position.x>box.min.x && camera.position.x<box.max.x;
-      const sideL=inX, sideR=inX;
-      u.uSideOn.value=(sideL||sideR)?1:0;
-      if(sideL) renderMirror(renderer,'x',box.min.x,rtSide[0],u.uMirrorLVP.value);
-      if(sideR) renderMirror(renderer,'x',box.max.x,rtSide[1],u.uMirrorRVP.value);
+      const inTank=inXZ && cp.y>box.min.y;
+      u.uSideOn.value=inTank?1:0;
+      if(inTank){
+        renderMirror(renderer,'x',box.min.x,rtSide[0],u.uMirrorLVP.value);
+        renderMirror(renderer,'x',box.max.x,rtSide[1],u.uMirrorRVP.value);
+      }
       u.tMirrorL.value=rtSide[0].texture; u.tMirrorR.value=rtSide[1].texture;
       renderer.setRenderTarget(rtWater);
       quad.render(renderer);
@@ -307,5 +307,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     get output(){ return rtWater.texture; },
     /** 光柱强度（画质最低档关） @param {number} k */
     setShafts(k){ u.uShafts.value=k; },
+    /** 光柱 march 步数（画质档驱动：高清 14 → 低档 4..7） @param {number} n */
+    setSteps(n){ u.uSteps.value=Math.max(4, Math.min(14, Math.round(n))); },
   });
 }

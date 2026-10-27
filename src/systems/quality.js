@@ -14,17 +14,20 @@
 
 /** 每一级的标签与开关。pixels = 画布像素预算（null = 不限，用基准 dpr；标定 = 各档像素比在 1080p
  *  窗口下的实际画布像素，大窗口由此立即缩、不必等帧率阶梯）；shadowHz = 阴影贴图刷新率
+ *  （软阴影 + 慢鱼：20Hz 与 30Hz 肉眼无差，但每档都省下蒙皮鱼群整组重投影的 GPU 时间）
  *  @type {QualityLevel[]} */
 export const LEVELS=[
-  { label:'高清', glass:'high', bloom:true,  pixels:null,   shadowHz:30 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:4.6e6,  shadowHz:24 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:3.2e6,  shadowHz:18 },
-  { label:'流畅', glass:'low',  bloom:true,  pixels:2.0e6,  shadowHz:12 },
-  { label:'极速', glass:'low',  bloom:false, pixels:1.4e6,  shadowHz:10 },
+  { label:'高清', glass:'high', bloom:true,  pixels:null,   shadowHz:20 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:4.6e6,  shadowHz:16 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:3.2e6,  shadowHz:12 },
+  { label:'流畅', glass:'low',  bloom:true,  pixels:2.0e6,  shadowHz:10 },
+  { label:'极速', glass:'low',  bloom:false, pixels:1.4e6,  shadowHz:8 },
 ];
 /** 像素比上限（第二道闸；budgetRatio 算出的值再被它夹一次，小窗口保持原行为） */
 const RATIOS=[null, 1.5, 1.25, 1, 1];
-const DOWN_FPS=32, UP_FPS=50, DOWN_N=6, UP_N=20, GRACE_SECS=4;
+/** 升降阈值收窄成 40~55 的窄带：旧 32~50 死区会让 35 FPS 的档位永远不动（实测 M1 全屏卡在均衡 34 FPS）。
+ *  帧率总应收敛到 45+；回升放宽到 8 秒（特效便宜了，回升更安全） */
+const DOWN_FPS=40, UP_FPS=55, DOWN_N=6, UP_N=16, GRACE_SECS=4;
 /** 像素比下限：再低的档画面会糊到影响观赏，宁可降特效 */
 const MIN_RATIO=0.6;
 

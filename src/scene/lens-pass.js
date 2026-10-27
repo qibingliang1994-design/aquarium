@@ -28,13 +28,13 @@ const HAZE_K=0.24, HAZE_MAX=0.42;
 export function createLensPass(camera, scene){
   const g=TANK.glass;
   const mat=new THREE.ShaderMaterial({
-    defines:{ TAPS },
     uniforms:{
       tDiffuse:{ value:null }, tDepth:{ value:null },
       uNear:{ value:0.05 }, uFar:{ value:60 },
       uProjInv:{ value:new THREE.Matrix4() }, uViewInv:{ value:new THREE.Matrix4() },
       uTexel:{ value:new THREE.Vector2() }, uScale:{ value:1 },
       uDofOn:{ value:1 }, uFocus:{ value:5 }, uK:{ value:DOF_K }, uMaxR:{ value:DOF_MAX },
+      uTaps:{ value:TAPS },   // 采样点数（画质档缩放：低档 10，上限 24）
       uHazeOn:{ value:1 }, uCam:{ value:new THREE.Vector3() }, uColor:{ value:new THREE.Color() },
       uMin:{ value:new THREE.Vector3(-TANK.W/2+g, g, -TANK.D/2+g) },
       uMax:{ value:new THREE.Vector3(TANK.W/2-g, TANK.waterY, TANK.D/2-g) },
@@ -44,7 +44,7 @@ export function createLensPass(camera, scene){
     vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
     fragmentShader:`
       uniform sampler2D tDiffuse, tDepth;
-      uniform float uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uHazeOn, uDensity, uMaxMix, uTurb;
+      uniform float uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uHazeOn, uDensity, uMaxMix, uTurb, uTaps;
       uniform mat4 uProjInv, uViewInv;
       uniform vec2 uTexel;
       uniform vec3 uCam, uColor, uMin, uMax;
@@ -61,9 +61,11 @@ export function createLensPass(camera, scene){
         float c0=uDofOn>0.5 ? coc(vUv) : 0.0;
         if(c0>=0.5){
           vec3 acc=col; float wsum=1.0;
-          for(int i=0;i<TAPS;i++){
+          float taps=max(uTaps, 8.0);
+          for(int i=0;i<24;i++){                 // 上限 24（高清档满配），低档提前 break
+            if(float(i)>=taps) break;
             float fi=float(i)+0.5;
-            float r=sqrt(fi/float(TAPS))*c0;
+            float r=sqrt(fi/taps)*c0;            // 螺旋半径按实际点数归一，散点覆盖不变
             float a=fi*2.39996323;
             vec2 uv=vUv+vec2(cos(a),sin(a))*r*uTexel;
             float w=smoothstep(r-1.0, r+0.5, coc(uv));   // 样本自己的弥散圆覆盖到这里才计入
@@ -124,6 +126,8 @@ export function createLensPass(camera, scene){
   const sync=()=>{ u.uDofOn.value=+dofOn; u.uHazeOn.value=+hazeOn; pass.enabled=dofOn || hazeOn || !!pass.sourceTexture; };
   return Object.assign(pass, {
     uniforms:u,
+    /** 景深采样点数（画质档驱动：高清 24 → 低档 10..12） @param {number} n */
+    setTaps(n){ u.uTaps.value=Math.max(8, Math.min(24, Math.round(n))); },
     /** @param {boolean} on */
     setDof(on){ dofOn=on; sync(); },
     /** @param {boolean} on */

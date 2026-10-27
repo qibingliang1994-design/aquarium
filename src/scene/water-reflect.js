@@ -42,6 +42,7 @@ export function createWaterReflect({ renderer, scene, camera, waterMesh, waterUn
 
   let tier = reflectTier(0);
   /** @type {boolean|null} */ let force = null;
+  let parity = 0;            // 隔帧渲染倒影内容的相位（首个奇/偶由 0 起：第一帧就渲，避免空纹理）
 
   function setOn(/** @type {number} */ v){ waterUniforms.uReflectOn.value = v; }
   function fitTarget(){
@@ -123,30 +124,34 @@ export function createWaterReflect({ renderer, scene, camera, waterMesh, waterUn
       if(!Number.isFinite(pe[2]+pe[6]+pe[10]+pe[14])){ setOn(0); return; }
 
       const roots = hideRoots();
-      const vis = roots.map(o=>o.visible);
-      for(const o of roots) o.visible = false;
-      const waterWas = waterMesh.visible;
-      waterMesh.visible = false;
-      savedSky.copy(sky.dome.position);
-      sky.place(virtual.position);
+      // 隔帧渲倒影内容：RT 里只有静态景物（鱼群在本 pass 中隐藏），30Hz 更新视觉无差，
+      // 省一半的全场景重渲；采样矩阵仍每帧更新，转动视角时倒影照常贴合
+      if((parity++ & 1)===0){
+        const vis = roots.map(o=>o.visible);
+        for(const o of roots) o.visible = false;
+        const waterWas = waterMesh.visible;
+        waterMesh.visible = false;
+        savedSky.copy(sky.dome.position);
+        sky.place(virtual.position);
 
-      const prevTarget = renderer.getRenderTarget();
-      const prevNu = renderer.shadowMap.needsUpdate;
-      const prevXr = renderer.xr.enabled;
-      renderer.getViewport(viewport);
-      renderer.shadowMap.needsUpdate = false;
-      renderer.xr.enabled = false;
-      renderer.setRenderTarget(rt);
-      renderer.clear();
-      try{ renderer.render(scene, virtual); }
-      finally {
-        renderer.xr.enabled = prevXr;
-        renderer.shadowMap.needsUpdate = prevNu;
-        renderer.setRenderTarget(prevTarget);
-        renderer.setViewport(viewport);
-        for(let i=0;i<roots.length;i++) roots[i].visible = vis[i];
-        waterMesh.visible = waterWas;
-        sky.place(savedSky);
+        const prevTarget = renderer.getRenderTarget();
+        const prevNu = renderer.shadowMap.needsUpdate;
+        const prevXr = renderer.xr.enabled;
+        renderer.getViewport(viewport);
+        renderer.shadowMap.needsUpdate = false;
+        renderer.xr.enabled = false;
+        renderer.setRenderTarget(rt);
+        renderer.clear();
+        try{ renderer.render(scene, virtual); }
+        finally {
+          renderer.xr.enabled = prevXr;
+          renderer.shadowMap.needsUpdate = prevNu;
+          renderer.setRenderTarget(prevTarget);
+          renderer.setViewport(viewport);
+          for(let i=0;i<roots.length;i++) roots[i].visible = vis[i];
+          waterMesh.visible = waterWas;
+          sky.place(savedSky);
+        }
       }
       waterUniforms.uReflectMtx.value.copy(textureMatrix);
       setOn(1);

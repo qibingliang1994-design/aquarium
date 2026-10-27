@@ -60,6 +60,7 @@ export class School {
   /** @type {THREE.Object3D[]} */ fishes=[];
   /** @type {THREE.AnimationMixer[]} */ mixers=[];
   /** @type {{ swim:any, fast:any, bite:any }[]} */ actions=[];
+  /** @type {Map<string,any>|null} */ _matCache=null;   // 同物种共享的装饰材质（按模板材质 uuid）
 
   // capacity：可容纳的最大条数（预分配实例/状态数组，addFish 原地入缸不用重建）
   /** @param {FishSpec} spec @param {Obstacle[]} obstacles @param {GlbData|null} glbData @param {SchoolOpts} [opts] */
@@ -184,10 +185,26 @@ export class School {
     // 无骨骼动画的静态模型才做程序化尾摆，每条鱼独立相位
     const ph={ value:0 };
     const sway=this.swimClip ? null : { phaseU:ph, L:spec.L, amp:spec.amp, waveK:spec.waveK };
+    // 材质共享：动画鱼逐鱼的着色完全一致 → 同物种共用一份装饰材质（196 个材质实例 → 每物种 ~4 份），
+    // three 只在材质切换时重传 uniform，蒙皮鱼群的绘制提交开销大幅下降。
+    // 例外：锦鲤要逐鱼冷暖微调、静态尾摆模型要逐鱼相位 uniform——仍走逐鱼克隆。
+    const shared = this.swimClip && spec.id!=='koi';
+    this._matCache ??= new Map();
     obj.traverse((/** @type {any} */ o)=>{
       if(!o.isMesh) return;
-      o.castShadow=true; o.frustumCulled=false;
+      // 小鱼不投影（L<0.2 的鱼群阴影在沙面上几乎不可见，却占阴影 pass 一半的蒙皮绘制）
+      o.castShadow=spec.L>=0.2; o.frustumCulled=false;
       const deco=(/** @type {any} */ m)=>{
+        if(shared){
+          let s=this._matCache.get(m.uuid);
+          if(!s){
+            s=m.clone();
+            s.side=THREE.DoubleSide;           // 鳍片是单面几何：双面渲染，避免背向时整片消失
+            decorateFishMaterial(s, { causticK:this.causticK, sway });
+            this._matCache.set(m.uuid, s);
+          }
+          return s;
+        }
         const c=m.clone();
         c.side=THREE.DoubleSide;               // 鳍片是单面几何：双面渲染，避免背向时整片消失
         if(spec.id==='koi'){                   // 同一张贴图克隆出多条锦鲤：冷暖微调，避免"复制粘贴"

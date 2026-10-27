@@ -37,25 +37,54 @@ describe('createQuality', () => {
     expect(monitor.level).toBe(1);
     t = run(monitor, 20, 3.3, t);             // 再 3.3s → 再降
     expect(monitor.level).toBe(2);
-    run(monitor, 20, 30, t);                  // 长时间低帧率 → 降到最低
+    run(monitor, 20, 40, t);                  // 长时间低帧率 → 降到最低
     expect(monitor.level).toBe(LEVELS.length - 1);
-    expect(applied.at(-1)).toMatchObject({ level: 4, glass: 'low', bloom: false, ratio: 1, pixels: 1.4e6, shadowHz: 8 });
+    expect(applied.at(-1)).toMatchObject({ level: 6, glass: 'low', bloom: false, ratio: 0.9, pixels: 1.2e6, shadowHz: 8 });
   });
 
-  it('帧率回升后逐级恢复（8 秒升一级，不越级）', () => {
+  it('帧率回升后逐级恢复（冷却期过后逐级回升，不越级）', () => {
     const { monitor } = make();
-    let t = run(monitor, 20, 30);             // 先压到最低
+    let t = run(monitor, 20, 40);             // 先压到最低（L5 进入 45 秒冷却）
     expect(monitor.level).toBe(LEVELS.length - 1);
-    t = run(monitor, 60, 9, t);               // 9s 高帧率（≥16 个样本）→ 升 1 级
-    expect(monitor.level).toBe(3);
-    run(monitor, 60, 60, t);                  // 持续高帧率 → 回到 0
+    t = run(monitor, 60, 9, t);               // 冷却期内：按住不升
+    expect(monitor.level).toBe(6);
+    t = run(monitor, 60, 9, t + 46);          // 越过冷却期 → 升 1 级
+    expect(monitor.level).toBe(5);
+    run(monitor, 60, 90, t);                  // 持续高帧率 → 回到 0（其余档位的冷却早已过期）
     expect(monitor.level).toBe(0);
   });
 
-  it('迟滞：帧率在 40~55 之间不升不降', () => {
+  it('防拉锯：刚被降离的档位在冷却期内不回升，过期后恢复', () => {
     const { monitor } = make();
     monitor.force(2);
-    run(monitor, 47, 30);
+    let t = run(monitor, 20, 3.3);            // L2 → L3（L2 进入 45 秒冷却）
+    expect(monitor.level).toBe(3);
+    t = run(monitor, 60, 10, t);              // 高帧率 10 秒：本该升回 L2，被冷却按住
+    expect(monitor.level).toBe(3);
+    run(monitor, 60, 10, t + 40);             // 时间推进越过冷却期后再升
+    expect(monitor.level).toBe(2);
+  });
+
+  it('底部探索：下半区档位稳定 ≥50 FPS 达 30 秒 → 向上试一级', () => {
+    const { monitor } = make();
+    monitor.force(6);
+    run(monitor, 52, 29);                     // 29 秒：还差一点
+    expect(monitor.level).toBe(6);
+    run(monitor, 52, 6);                      // 攒满 30 秒 → 升到 L5
+    expect(monitor.level).toBe(5);
+  });
+
+  it('底部探索不适用于上半区（高清/均衡的保持带就是保持）', () => {
+    const { monitor } = make();
+    monitor.force(2);
+    run(monitor, 52, 45);
+    expect(monitor.level).toBe(2);
+  });
+
+  it('迟滞：帧率在 42~57 之间不升不降', () => {
+    const { monitor } = make();
+    monitor.force(2);
+    run(monitor, 50, 30);
     expect(monitor.level).toBe(2);
   });
 
@@ -81,7 +110,7 @@ describe('createQuality', () => {
     monitor.force(2);
     monitor.reapply();
     expect(applied).toHaveLength(3);
-    expect(applied.at(-1)).toEqual({ level: 2, label: '均衡', ratio: 1.25, glass: 'high', bloom: true, pixels: 3.2e6, shadowHz: 12 });
+    expect(applied.at(-1)).toEqual({ level: 2, label: '均衡', ratio: 1.6, glass: 'high', bloom: true, pixels: 3.4e6, shadowHz: 16 });
   });
 });
 

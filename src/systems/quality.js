@@ -12,22 +12,30 @@
 
 /** @typedef {{ label:string, glass:'high'|'low', bloom:boolean, pixels:number|null, shadowHz:number }} QualityLevel */
 
-/** 每一级的标签与开关。pixels = 画布像素预算（null = 不限，用基准 dpr；标定 = 各档像素比在 1080p
- *  窗口下的实际画布像素，大窗口由此立即缩、不必等帧率阶梯）；shadowHz = 阴影贴图刷新率
- *  （软阴影 + 慢鱼：20Hz 与 30Hz 肉眼无差，但每档都省下蒙皮鱼群整组重投影的 GPU 时间）
+/** 每一级的标签与开关。pixels = 画布像素预算（null = 不限，用基准 dpr）；shadowHz = 阴影贴图刷新率
+ *  （软阴影 + 慢鱼：低频无感，每档都省蒙皮鱼群整组重投影的 GPU 时间）。
+ *  7 级细阶梯：相邻档画布像素只差 15~25%——升一级不再把帧率砸穿降档线
+ *  （旧 5 级在均衡→流畅间有像素断崖，实测在两档间无限拉锯）
  *  @type {QualityLevel[]} */
 export const LEVELS=[
   { label:'高清', glass:'high', bloom:true,  pixels:null,   shadowHz:20 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:4.6e6,  shadowHz:16 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:3.2e6,  shadowHz:12 },
-  { label:'流畅', glass:'low',  bloom:true,  pixels:2.0e6,  shadowHz:10 },
-  { label:'极速', glass:'low',  bloom:false, pixels:1.4e6,  shadowHz:8 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:4.2e6,  shadowHz:18 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:3.4e6,  shadowHz:16 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:2.7e6,  shadowHz:14 },
+  { label:'流畅', glass:'low',  bloom:true,  pixels:2.1e6,  shadowHz:12 },
+  { label:'流畅', glass:'low',  bloom:true,  pixels:1.6e6,  shadowHz:10 },
+  { label:'极速', glass:'low',  bloom:false, pixels:1.2e6,  shadowHz:8 },
 ];
-/** 像素比上限（第二道闸；budgetRatio 算出的值再被它夹一次，小窗口保持原行为） */
-const RATIOS=[null, 1.5, 1.25, 1, 1];
-/** 升降阈值收窄成 40~55 的窄带：旧 32~50 死区会让 35 FPS 的档位永远不动（实测 M1 全屏卡在均衡 34 FPS）。
- *  帧率总应收敛到 45+；回升放宽到 8 秒（特效便宜了，回升更安全） */
-const DOWN_FPS=40, UP_FPS=55, DOWN_N=6, UP_N=16, GRACE_SECS=4;
+/** 像素比上限（第二道闸；budgetRatio 算出的值再被它夹一次，小窗口上平滑过渡） */
+const RATIOS=[null, 1.8, 1.6, 1.4, 1.2, 1, 0.9];
+/** 降档 42 / 升档 57 的窄带：帧率总应收敛到 45+；降 3 秒生效，升 7 秒（先确认真的稳） */
+const DOWN_FPS=42, UP_FPS=57, DOWN_N=6, UP_N=14, GRACE_SECS=4;
+/** 防拉锯：刚被降级离开的档位 45 秒内不回升——那一档已被证明带不动，等负载真的变化再试 */
+const TABOO_SECS=45;
+/** 底部探索：下半区（level≥3）若稳定 ≥50 FPS 达 30 秒且冷却已过，向上试一级——
+ *  否则"够用但不到 57"的机器会永远停在最低档（bloom 都不开），白瞎画质。
+ *  最坏每分钟一次温和试探，配合冷却不会回到拉锯 */
+const EXPLORE_FPS=50, EXPLORE_N=60;
 /** 像素比下限：再低的档画面会糊到影响观赏，宁可降特效 */
 const MIN_RATIO=0.6;
 
@@ -43,7 +51,8 @@ export function budgetRatio(budget, w, h, base){
  * @param {{ baseRatio:number, onLevel:(q:{level:number,label:string,ratio:number,glass:'high'|'low',bloom:boolean,pixels:number|null,shadowHz:number})=>void }} opts
  */
 export function createQuality({ baseRatio, onLevel }){
-  let level=0, low=0, high=0;
+  let level=0, low=0, high=0, steady=0;
+  let tabooLevel=-1, tabooUntil=0;               // 升降防拉锯：被降离的档位 + 冷却截止时刻
   const emit=()=>onLevel({ level, ...LEVELS[level], ratio:RATIOS[level]??baseRatio });
   emit();                                        // 初始应用一次（同步基准像素比）
 
@@ -53,15 +62,29 @@ export function createQuality({ baseRatio, onLevel }){
     /** 每 0.5 秒一次：fps=实测帧率，t=启动以来的真实秒数（模拟时间在低帧率下会被 dt clamp 拖慢，不能当门槛钟） @param {number} fps @param {number} t */
     sample(fps, t){
       if(t<GRACE_SECS) return;
-      if(fps<DOWN_FPS){ low++; high=0; }
-      else if(fps>UP_FPS){ high++; low=0; }
-      else { low=0; high=0; }
-      if(low>=DOWN_N && level<LEVELS.length-1){ level++; low=0; high=0; emit(); }
-      else if(high>=UP_N && level>0){ level--; low=0; high=0; emit(); }
+      if(fps<DOWN_FPS){ low++; high=0; steady=0; }
+      else if(fps>UP_FPS){ high++; low=0; steady=0; }
+      else {                                     // 42~57 保持带：够用但不满——底部档位攒探索资格
+        low=0; high=0;
+        steady = fps>=EXPLORE_FPS ? steady+1 : 0;
+      }
+      if(low>=DOWN_N && level<LEVELS.length-1){
+        tabooLevel=level; tabooUntil=t+TABOO_SECS;   // 这一档带不动：冷却期内不再回来
+        level++; low=0; high=0; steady=0; emit();
+      }
+      else if(high>=UP_N && level>0){
+        if(level-1===tabooLevel && t<tabooUntil){ high=0; return; }   // 拉锯保护
+        level--; low=0; high=0; steady=0; emit();
+      }
+      else if(steady>=EXPLORE_N && level>=3 && level>0
+              && !(level-1===tabooLevel && t<tabooUntil)){
+        level--; low=0; high=0; steady=0; emit();     // 底部探索：稳定够快就向上试一级
+      }
     },
     /** 调试/测试用：直接设级别 @param {number} lv */
     force(lv){
       const v=Math.max(0, Math.min(LEVELS.length-1, Math.floor(lv)));
+      tabooLevel=-1; tabooUntil=0;                // 人工指定视为清空冷却
       if(v===level) return;
       level=v; low=0; high=0; emit();
     },

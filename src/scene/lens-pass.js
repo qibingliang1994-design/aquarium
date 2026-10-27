@@ -29,7 +29,7 @@ export function createLensPass(camera, scene){
   const g=TANK.glass;
   const mat=new THREE.ShaderMaterial({
     uniforms:{
-      tDiffuse:{ value:null }, tDepth:{ value:null },
+      tDiffuse:{ value:null }, tDepth:{ value:null }, tHalf:{ value:null },
       uNear:{ value:0.05 }, uFar:{ value:60 },
       uProjInv:{ value:new THREE.Matrix4() }, uViewInv:{ value:new THREE.Matrix4() },
       uTexel:{ value:new THREE.Vector2() }, uScale:{ value:1 },
@@ -43,14 +43,17 @@ export function createLensPass(camera, scene){
     },
     vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
     fragmentShader:`
-      uniform sampler2D tDiffuse, tDepth;
+      uniform sampler2D tDiffuse, tDepth, tHalf;
       uniform float uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uHazeOn, uDensity, uMaxMix, uTurb, uTaps;
       uniform mat4 uProjInv, uViewInv;
       uniform vec2 uTexel;
       uniform vec3 uCam, uColor, uMin, uMax;
       varying vec2 vUv;
       float viewZ(float d){ d=d*2.0-1.0; return 2.0*uNear*uFar/(uFar+uNear-d*(uFar-uNear)); }
-      float coc(vec2 uv){ return min(abs(1.0/uFocus-1.0/viewZ(texture2D(tDepth, uv).r))*uK*uScale, uMaxR*uScale); }
+      // 景深的弥散圆与螺旋采样都读半分辨率副本（tHalf：rgb=场景色，a=原始深度）：
+      // 散焦像素每点 2 次全分辨率随机采样在 4M 像素下带宽爆炸（实测 +29 FPS），
+      // 半分辨率让采样量减半且缓存命中翻两番——散景本来就是模糊，视觉无损
+      float coc(vec2 uv){ return min(abs(1.0/uFocus-1.0/viewZ(texture2D(tHalf, uv).a))*uK*uScale, uMaxR*uScale); }
       void main(){
         vec4 src=texture2D(tDiffuse, vUv);
         vec3 col=src.rgb;
@@ -69,7 +72,7 @@ export function createLensPass(camera, scene){
             float a=fi*2.39996323;
             vec2 uv=vUv+vec2(cos(a),sin(a))*r*uTexel;
             float w=smoothstep(r-1.0, r+0.5, coc(uv));   // 样本自己的弥散圆覆盖到这里才计入
-            acc+=texture2D(tDiffuse, uv).rgb*w; wsum+=w;
+            acc+=texture2D(tHalf, uv).rgb*w; wsum+=w;
           }
           col=acc/wsum;
         }
@@ -95,9 +98,23 @@ export function createLensPass(camera, scene){
   const quad=new FullScreenQuad(mat);
   const u=mat.uniforms;
 
+  /* 半分辨率副本（颜色 + 深度打包进 alpha）：景深螺旋的全部采样源 */
+  const downMat=new THREE.ShaderMaterial({
+    uniforms:{ tDiffuse:{value:null}, tDepth:{value:null} },
+    vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
+    fragmentShader:`uniform sampler2D tDiffuse, tDepth; varying vec2 vUv;
+      void main(){ gl_FragColor=vec4(texture2D(tDiffuse,vUv).rgb, texture2D(tDepth,vUv).x); }`,
+    depthTest:false, depthWrite:false });
+  const downQuad=new FullScreenQuad(downMat);
+  const rtHalf=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType,depthBuffer:false});
+  u.tHalf.value=rtHalf.texture;
+
   class LensPass extends Pass {
     /** @param {number} w @param {number} h */
-    setSize(w, h){ u.uTexel.value.set(1/w, 1/h); u.uScale.value=h/1000; }
+    setSize(w, h){
+      u.uTexel.value.set(1/w, 1/h); u.uScale.value=h/1000;
+      rtHalf.setSize(Math.max(2,Math.round(w/2)), Math.max(2,Math.round(h/2)));
+    }
     /** 水体合成 pass（water-pass.js）开启时，颜色源切到它的输出；深度永远读场景目标（水面网格不写深度，
      *  合成也不写深度，场景深度始终有效）。null = 直接读 readBuffer。切换后重算 enabled：
      *  背着颜色源时即使景深/雾化全关也必须保持启用（见 sync）
@@ -113,10 +130,16 @@ export function createLensPass(camera, scene){
       u.uCam.value.setFromMatrixPosition(camera.matrixWorld);
       // 雾色就是当前水色（昼夜/主题都由 daynight 改 scene.fog.color），稍提亮免得后排发黑
       if(scene.fog) u.uColor.value.copy(scene.fog.color).multiplyScalar(1.35);
+      if(u.uDofOn.value>0.5){                 // 景深开着才需要半分辨率副本
+        downMat.uniforms.tDiffuse.value=u.tDiffuse.value;
+        downMat.uniforms.tDepth.value=readBuffer.depthTexture;
+        renderer.setRenderTarget(rtHalf);
+        downQuad.render(renderer);
+      }
       renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
       quad.render(renderer);
     }
-    dispose(){ mat.dispose(); quad.dispose(); }
+    dispose(){ mat.dispose(); quad.dispose(); downMat.dispose(); downQuad.dispose(); rtHalf.dispose(); }
   }
   const pass=new LensPass();
   let dofOn=true, hazeOn=true, focus=-1;

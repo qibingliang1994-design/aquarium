@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
-import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, swimLimits, SWIM } from './steering.js';
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, lureAcc, swimLimits, SWIM } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { TANK } from '../../scene/tank.js';
@@ -22,6 +22,7 @@ const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
 const _eyeLocal=new THREE.Matrix4(), _eyeM=new THREE.Matrix4();
 
 const BITE_DUR=0.35;                // 咬食动作时长（秒）
+const NIBBLE_R=0.14;                // 距光点这么近算"咬到"（逗鱼模式）
 const FLOW_PUSH=0.55;               // 水流把鱼往下游推的比例（相对 env.current）
 const REGROUP_SECS=6;               // 惊散后向鱼群中心回聚的时长
 const _center=new THREE.Vector3();
@@ -347,6 +348,7 @@ export class School {
     // 食欲决定是否觅食与感知半径；惊吓期间不觅食
     const hunting=spec.hunts && ctx.pellets.length>0 && fear<0.15 && appetite>0.02;
     const senseR=spec.senseR*appetite;
+    const lure=ctx.lure && ctx.lure.k>0.02 ? ctx.lure : null;   // 逗鱼光点（受惊的鱼不玩）
     const sleepY=spec.band[0]+(spec.band[1]-spec.band[0])*0.3;
     // 惊吓消退后：短时向全群中心回聚（局部 Boids 聚合半径不足以把散开的鱼拉回）
     let regroup=0;
@@ -403,13 +405,23 @@ export class School {
         _acc.add(_v1.subVectors((/** @type {any} */ R).p,p).multiplyScalar(3));
       }
       if(this.gulpCool[i]>0) this.gulpCool[i]-=dt;
+      let targeting=false;
       if(hunting && !resting && this.gulpCool[i]<=0){   // 觅食
         const bottomFeeder=spec.hug!=null;
         const best=huntTarget(p, ctx.pellets, senseR, bottomFeeder ? -Infinity : spec.band[0]+0.05, bottomFeeder);
         if(best){
+          targeting=true;
           const bd=p.distanceTo(best.p);
           _acc.addScaledVector(_v1.subVectors(best.p,p).normalize(), 2.6);
           if(bd<0.13 && ctx.feeder.consume(best)){ this._bite(i); ctx.onEat?.(this,i); }
+        }
+      }
+      if(lure && !resting && !targeting && fear<0.3){   // 逗鱼：追光点盘旋，凑近轻咬一口
+        const d=lureAcc(p, lure, _acc);
+        if(d>=0 && d<NIBBLE_R && Math.random()<dt*1.6){
+          this.biteT[i]=BITE_DUR;
+          this.vel[i].addScaledVector(this.smv[i], spec.maxSpeed*0.35);
+          lure.nibble();
         }
       }
 

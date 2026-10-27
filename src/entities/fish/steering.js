@@ -204,3 +204,19 @@ export function huntTarget(p, pellets, senseR, minY=-Infinity, bottomOk=true){
   }
   return best;
 }
+
+/** 逗鱼光点：感知范围内的鱼被吸向光点，并叠加切向分量绕着光点盘旋（越近吸力越强）。
+ * 返回到光点的距离（超出范围 / 强度为 0 返回 -1，不加任何力）
+ * @param {THREE.Vector3} p @param {{p:THREE.Vector3, k:number, range:number}} lure @param {THREE.Vector3} acc */
+export function lureAcc(p, lure, acc){
+  _v.subVectors(lure.p, p);
+  const d=_v.length();
+  if(d>lure.range || d<1e-4) return -1;
+  _v.divideScalar(d);
+  const w=lure.k*(1-0.55*d/lure.range);        // 距离权重：贴着光点最疯
+  acc.addScaledVector(_v, 2.8*w);              // 吸向光点
+  acc.x+=-_v.z*1.05*w;                         // 切向：绕光点打转（盘旋而不是挤成一坨）
+  acc.z+= _v.x*1.05*w;
+  acc.y+=Math.sin(d*9)*0.15*w;                 // 轻微起伏，像在啄光
+  return d;
+}

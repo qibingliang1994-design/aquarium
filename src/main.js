@@ -9,6 +9,7 @@ import { createDayNight } from './scene/daynight.js';
 import { setCausticsEnabled } from './scene/caustics.js';
 import { createEffects } from './systems/effects.js';
 import { Feeder } from './systems/feeder.js';
+import { createLure } from './systems/lure.js';
 import { SoundEngine } from './systems/sound.js';
 import { createQuality, budgetRatio } from './systems/quality.js';
 import { createAmbience } from './systems/ambience.js';
@@ -43,7 +44,7 @@ import { installDebug } from './debug.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.1';
+const VERSION='v2.2';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
@@ -66,6 +67,7 @@ const focusPt=new THREE.Vector3();
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
 const { bubbles, snow, ripples, precip }=createEffects({ tankGroup, air, sandHeight:groundY, waterY:TANK.waterY, scene });
 const feeder=new Feeder({ tankGroup, sandHeight:groundY, waterY:TANK.waterY, ripples });
+const lure=createLure({ tankGroup, camera, canvas:renderer.domElement });   // 逗鱼光点（按钮 / P 开关）
 
 /* ---------- 场景基础：昼夜 / 存档 / 模型预加载 ---------- */
 /** @type {any[]} */ const schools=[];         // 两个数组都由 runtime 原地维护
@@ -121,6 +123,7 @@ function applyTankChrome(id){
   const b=boundsFor(id), style=TANK_STYLES[id] ?? TANK_STYLES.classic, rig=style.rig;
   fishGrid=createFishGrid(0.7, b.grid);
   feeder.setHalf(b.feed.x, b.feed.z);
+  lure.setBounds(b);
   input?.setBounds(b);
   if(rig){ controls.minDistance=rig.min; controls.maxDistance=rig.max; camera.near=rig.near; camera.far=rig.far; }
   else { controls.minDistance=1; controls.maxDistance=11; camera.near=0.05; camera.far=60; }
@@ -159,12 +162,23 @@ if(!isWriter) toast('水族箱已在另一个窗口打开：这里可以观赏�
 else if(store.readOnly) toast('存档来自更新的版本：本次的修改不会被保存');
 else if(store.recovered) toast('水景存档无法读取，已备份并恢复为默认水景');
 
-/* ---------- 交互：喂食 / 识鱼 / 敲玻璃 ---------- */
+/* ---------- 交互：喂食 / 识鱼 / 敲玻璃 / 逗鱼 ---------- */
 const fishCard=createFishCard({ camera, schools, getCare:()=>runtime.care, getSceneId:()=>runtime.doc.id });
 input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, feeder, sound,
-  isBlocked:()=>editor?.active });
+  isBlocked:()=>editor?.active || lure.on });     // 逗鱼时点击让位给光点（不喂食/识鱼/敲玻璃）
 input.setBounds(boundsFor(runtime.doc.tank));
 $('bFeed').addEventListener('click',()=>input.feedAt(randomFeedPoint()));
+
+/* ---------- 逗鱼模式：光标化作水中光点，引导鱼群追逐盘旋 ---------- */
+const bPlay=/** @type {HTMLButtonElement} */ ($('bPlay'));
+function setPlay(/** @type {boolean} */ on){
+  lure.set(on);
+  bPlay.classList.toggle('on',on);
+  bPlay.setAttribute('aria-pressed',String(on));
+  if(on) toast('逗鱼模式：移动光标，引导鱼群追逐光点');
+}
+bPlay.addEventListener('click',()=>{ sound.ensure(); setPlay(!lure.on); });
+lure.setOnNibble(()=>sound.pling());
 
 /* ---------- 相机预设 ---------- */
 const CAM_PRESETS=[
@@ -207,7 +221,7 @@ bLight.addEventListener('click',()=>{
 /* ---------- 底部操作提示：自然水域没有玻璃，双击改叫"拍水面" ---------- */
 function setHint(/** @type {boolean} */ natural){
   const el=document.getElementById('hint');
-  if(el) el.textContent=`拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击${natural ? '拍水面' : '敲玻璃'}`;
+  if(el) el.textContent=`拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击${natural ? '拍水面' : '敲玻璃'} · P 逗鱼`;
 }
 
 /* ---------- 缩略图：固定正面机位渲染一帧，裁成 16:9 小图（与玩家当前视角无关） ---------- */
@@ -275,7 +289,7 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
 
 /* ---------- 造景编辑器 / 水景选择 ---------- */
 editor=createSceneEditor({ canvas:renderer.domElement, camera, controls, runtime, store, tweenCam, toast, captureThumb,
-  onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); runtime.setBatching(false); applyWaterMode(); },   // 俯视时水面挡造景；拆批+关水恢复逐件拾取
+  onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); if(lure.on) setPlay(false); runtime.setBatching(false); applyWaterMode(); },   // 俯视时水面挡造景；拆批+关水恢复逐件拾取
   onExit:(/** @type {any} */ saved)=>{
     syncHud(); runtime.setBatching(true); applyWaterMode();   // 编辑结束立即重批+重开水体（apply 已跑过，这里补同步）
     if(saved) ambience.afterSave();
@@ -341,8 +355,8 @@ onWeather=(/** @type {any} */ st)=>{
 addEventListener('pointerdown',()=>sound.ensure(),{ once:true });
 installBackup({ toast });                         // 设置弹层里的存档导出/导入
 
-/* ---------- PWA：生产构建注册 Service Worker（离线可玩），dev 不介入 ---------- */
-if(import.meta.env.PROD && 'serviceWorker' in navigator){
+/* ---------- PWA：生产构建注册 Service Worker（离线可玩），dev / npm run serve 不介入 ---------- */
+if(import.meta.env?.PROD && 'serviceWorker' in navigator){
   navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('[pwa] 注册失败', err));
 }
 
@@ -360,6 +374,7 @@ addEventListener('keydown',e=>{
     if(photo.on) photo.set(false);
   }
   if((e.key==='h'||e.key==='H') && !e.repeat && !(e.target instanceof HTMLInputElement)) photo.press();
+  if((e.key==='p'||e.key==='P') && !e.repeat && !(e.target instanceof HTMLInputElement)){ sound.ensure(); setPlay(!lure.on); }
 });
 
 /* ================================================================
@@ -453,7 +468,8 @@ function frame(){
   runtime.setGloss(care.glossK());            // 里程碑领完后的余量换光泽（同值不重设）
   const appetite=care.appetite();
   const active=feeder.pellets;
-  U.excite.value+=((active.length?appetite:0)-U.excite.value)*Math.min(1,dt*1.4);
+  // 兴奋度：有饲料 → 食欲上限（饿 → 疯抢，饱 → 懒散）；逗鱼光点 → 固定的玩耍兴奋（也会叫醒夜眠的鱼）
+  U.excite.value+=((Math.max(active.length?appetite:0, lure.on?0.55:0))-U.excite.value)*Math.min(1,dt*1.4);
   if(!input) return;
   const shake=input.update(dt, t);
   // 夜间睡眠：喂食与惊吓都会把鱼叫醒
@@ -462,8 +478,9 @@ function frame(){
   const flow=/** @type {any} */ (TANK_STYLES[runtime.doc.tank])?.env?.current ?? 0;   // 溪流/小河的水流
   feeder.flow=flow; snow.flow=flow; U.flow.value=flow;
   feeder.wafers=schools.some(s=>s.spec.hug!=null && s.spec.count>0) ? 3 : 0;   // 有底栖鱼才投沉底片
+  lure.update(dt, t);                            // 光点视觉/位置先就位，鱼群本帧就追得上
   const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools, current:flow,
-    appetite, fear:input.fear, sleep, onEat, grid:fishGrid };
+    appetite, fear:input.fear, sleep, onEat, grid:fishGrid, lure };
   rebuildFishGrid(fishGrid, schools);             // 共享统一网格：同种/异种 pair 查询走邻域
   for(const s of schools) s.update(dt,ctx);
 
@@ -524,7 +541,7 @@ addEventListener('resize',()=>{
   quality.reapply();                              // 像素预算依赖窗口尺寸，resize 后重算当前档的实际像素比
 });
 
-installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass,
+installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass, lure,
   bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   sky, reflect,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,

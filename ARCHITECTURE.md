@@ -365,6 +365,17 @@
   树干、松冠和灯石走物件批处理；草叶和枫叶是 InstancedMesh，`systems/shore-lod.js` 按现有五档减 `count`，`seed%3===0` 的加密草丛在第 3 档起整丛隐藏。
   石灯的火室发光和点光源在反射 pass 之前由 `glowShore` 按昼夜点亮，所以倒影里也是亮的。树皮 / 叶 / 地衣是 Poly Haven CC0 的 1K WebP（`public/tex/README.md`）。
   潮湿度沿用 `injectWet`，雨天压暗树皮、叶、灯石和已经接过潮湿度的地面。
+- 逗鱼光点（v2.2）：`systems/lure.js` `createLure({ tankGroup, camera, canvas })` —— dock「逗鱼」按钮或
+  P 键开关，开启后光标射线投到水面下 0.28 的水平面（钳进当前缸 `boundsFor().feedClick`，换缸时
+  `setBounds` 跟随），光点 = 高亮小球 + 加色光晕 + 10 粒环绕光尘 + 一盏 PointLight，缓动跟随光标。
+  第一次 pointermove 落点前 `k` 恒为 0（鱼群不追、mesh 不显示）。追逐力是 `steering.js` 的纯函数
+  `lureAcc(p, lure, acc)`（吸引 + 切向盘旋 + 轻微起伏，越近越强，超出 range 返回 -1，单测覆盖）；
+  `School.update` 经 `ctx.lure` 使用：受惊（fear>0.3）不玩、追到饲料时让位、凑近 0.14 内概率轻咬
+  （复用 Attack 混合 + `lure.nibble()` 闪一下光、`sound.pling()` 限流 120ms）。逗鱼期间点击让位
+  （`isBlocked: editor || lure.on`），兴奋度抬到 0.55（会把夜眠的鱼叫醒）。调试钩子：
+  `play(on)` / `playState()` / `playAt(x,y,z)` / `nibbles(0)`。
+  顺手修复：`main.js` 的 `import.meta.env.PROD` 在 `npm run serve`（裸源码）下是 undefined 会抛错，
+  改为 `import.meta.env?.PROD`。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

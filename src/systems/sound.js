@@ -54,6 +54,12 @@ export class SoundEngine {
     this._lastCrunch=this.ctx.currentTime;
     this._noise(0.05, 2200+Math.random()*1400, 3, 0.09);
   }
+  pling(){                        // 逗鱼：鱼咬到光点的清脆短高音（限流 120ms，鱼多时不吵）
+    if(!this.ctx) return;
+    if(this.ctx.currentTime-(this._lastPling??-1)<0.12) return;
+    this._lastPling=this.ctx.currentTime;
+    this._tone(1400+Math.random()*600, 2300+Math.random()*500, 0.1, 0.05);
+  }
   knock(){                        // 敲玻璃：低沉闷响 + 玻璃高频脆响
     this._tone(170,70,0.22,0.32);
     this._tone(1300,700,0.06,0.05);

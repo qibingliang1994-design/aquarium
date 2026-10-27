@@ -39,6 +39,11 @@ export function installDebug(/** @type {any} */  d){
     setSatiety:(/** @type {number} */ v)=>{ care().satiety=v; updateCareHud(); },
     appetite:()=>+care().appetite().toFixed(3),
     fear:()=>input.fear,
+    // —— 逗鱼光点：play(on) 开关；playAt(x,y,z) 直接摆放；nibbles() 鱼咬光点计数（传 0 归零）——
+    play:(/** @type {boolean} */ on)=>{ d.lure.set(on); return d.lure.on; },
+    playState:()=>{ const L=/** @type {any} */ (d.lure); return { on:L.on, k:+L.k.toFixed(3), p:L.p.toArray().map((/** @type {any} */ v)=>+v.toFixed(3)) }; },
+    playAt:(/** @type {number} */ x,/** @type {number} */ y,/** @type {number} */ z)=>{ d.lure.set(true); d.lure.place(x,y,z); return d.lure.p.toArray(); },
+    nibbles:(/** @type {number} */ reset)=>d.lure.nibbleCount(reset),
     sleep:()=>+sleep().toFixed(3),
     tapGlass:(/** @type {number} */ x,/** @type {number} */ y)=>input.tapGlass(x,y),
     growthOf:(/** @type {number} */ si,/** @type {number} */ ii)=>({ target:+schools[si].growthTarget[ii].toFixed(3), now:+schools[si].growth[ii].toFixed(3) }),

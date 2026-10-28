@@ -92,6 +92,15 @@
   <label class="switch-row"><span>自动昼夜循环</span><input type="checkbox" id="setCycle" role="switch"/><i class="switch"></i></label>
   <label class="switch-row"><span>跟随本地时间<small>8:00 开灯 · 21:30 关灯</small></span><input type="checkbox" id="setClock" role="switch"/><i class="switch"></i></label>
   <p class="pop-title">画面</p>
+  <label class="select-row"><span>画质</span>
+    <select id="setQuality" aria-label="画质">
+      <option value="auto">自动（推荐）</option>
+      <option value="0">高清</option>
+      <option value="2">均衡</option>
+      <option value="4">流畅</option>
+      <option value="6">极速</option>
+    </select>
+  </label>
   <label class="slider-row"><span class="sr-head"><em>灯光亮度<small>缸灯强弱 · 100% 为默认</small></em><b></b></span><input type="range" id="setLamp" min="0" max="1.5" step="0.01"/></label>
   <label class="slider-row"><span class="sr-head"><em>水色浓淡<small>水体吸收 · 越高越浓</small></em><b></b></span><input type="range" id="setAbsorb" min="0.1" max="1" step="0.01"/></label>
   <label class="slider-row"><span class="sr-head"><em>光柱<small>水中光束 · 随造景剪影</small></em><b></b></span><input type="range" id="setShafts" min="0" max="1" step="0.01"/></label>

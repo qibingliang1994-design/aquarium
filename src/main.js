@@ -44,7 +44,7 @@ import { installDebug } from './debug.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.2.2';
+const VERSION='v2.2.3';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
@@ -91,12 +91,17 @@ loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
 /** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true,
-  weatherMode:'sunny', weatherI:0.7, weatherAuto:false, weatherWet:0, clarity:0.88 };
+  weatherMode:'sunny', weatherI:0.7, weatherAuto:false, weatherWet:0, clarity:0.88, qualityMode:'auto' };
 try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
 settings.lamp=Math.min(1.5, Math.max(0, +settings.lamp||1));   // 旧存档/坏值兜底：0~1.5，1=默认
 Object.assign(settings, sanitizeWeather(settings));
 if(typeof settings.clarity!=='number' || !Number.isFinite(settings.clarity)) settings.clarity=0.88;
 else settings.clarity=Math.min(1, Math.max(0.35, settings.clarity));
+{ // 画质模式：'auto' 或档位号（0..6，必须是合法档位），坏值回自动
+  const q=/** @type {any} */ (settings.qualityMode);
+  const lv=Number(q);
+  settings.qualityMode = q==='auto' || (Number.isInteger(lv) && lv>=0 && lv<=6 && String(lv)===String(q)) ? q : 'auto';
+}
 const weather=createWeather(settings);
 const saveSettings=()=>{ if(!canWrite()) return; try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
@@ -336,6 +341,7 @@ const settingsPanel=createSettingsPanel({ settings, onChange:(/** @type {string}
   if(key==='shafts') waterPass.setShafts(qualityBloom ? value : 0);
   if(key==='dof') lens.setDof(!!value && qualityBloom);   // 画质最低档时与光柱一致：保持关闭
   if(key==='lamp') dayNight.setLamp(value);
+  if(key==='qualityMode') applyQualityLock();     // 手动锁档 / 切回自动
   if(key==='weatherMode') weather.set(String(value));
   if(key==='weatherI') weather.set(weather.mode, /** @type {number} */ (value));
   if(key==='weatherAuto') weather.setAuto(!!value);
@@ -417,6 +423,12 @@ const quality=createQuality({
     runtime.applyShore(q.level);
   },
 });
+
+// 手动画质锁：'auto' 交给阶梯，数字档位直接锁定（不再采样自动升降）
+function applyQualityLock(){
+  if(settings.qualityMode!=='auto') quality.force(Number(settings.qualityMode));
+}
+if(settings.qualityMode!=='auto') applyQualityLock();
 
 const onEat=(/** @type {any} */ school, /** @type {number} */ i)=>{ school.setGrowth(i, runtime.care.eat(school.spec.id,i)); sound.crunch(); };
 function updateCareHud(){                // 圆环 pathLength=100：dashoffset = 100 - 百分比
@@ -527,10 +539,10 @@ function frame(){
   if(rawDt<=0.5) fpsTime+=rawDt; else fpsFrames=0;
   if(fpsTime>=0.5){
     const fps=Math.round(fpsFrames/fpsTime);
-    statsEl.textContent=`${fps} FPS · ${runtime.fishTotal()} 条鱼 · ${quality.label}模式 · ${VERSION}`;
+    statsEl.textContent=`${fps} FPS · ${runtime.fishTotal()} 条鱼 · ${quality.label}${settings.qualityMode==='auto' ? '模式' : '·锁定'} · ${VERSION}`;
     fpsFrames=0; fpsTime=0;
     updateCareHud();
-    quality.sample(fps, realT);   // 门槛/迟滞按真实秒计：低帧率下模拟时间会被 clamp 拖慢
+    if(settings.qualityMode==='auto') quality.sample(fps, realT);   // 门槛/迟滞按真实秒计：低帧率下模拟时间会被 clamp 拖慢
   }
 }
 renderer.setAnimationLoop(frame);

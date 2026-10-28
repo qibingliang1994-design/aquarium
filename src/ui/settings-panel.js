@@ -18,6 +18,7 @@ const SLIDERS = [
 /** 下拉：onChange(key, 字符串) */
 const SELECTS = [
   ['setWeather','weatherMode'],
+  ['setQuality','qualityMode'],
 ];
 /** 互斥的开关：打开一个时另一个自动关掉（自动昼夜循环 ↔ 跟随本地时间） */
 const EXCLUSIVE = /** @type {Record<string, string>} */ ({ cycle:'clock', clock:'cycle' });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, SWIM, swimLimits, sepRadius, crossRadius,
-  createFishGrid, rebuildFishGrid } from '../src/entities/fish/steering.js';
+  createFishGrid, rebuildFishGrid, columnBand } from '../src/entities/fish/steering.js';
 
 const V = (x=0, y=0, z=0) => new THREE.Vector3(x, y, z);
 // 最小 spec（字段与 SPECIES 一致，只给本函数用到的）
@@ -210,5 +210,21 @@ describe('crossSeparate', () => {
     crossSeparate(big, 0, schools, b2, grid);
     expect(b1.length()).toBe(0);
     expect(b2.length()).toBe(0);
+  });
+});
+
+describe('columnBand', () => {
+  it('经典沙面保持原水层和 0.4 硬下限，深碗才拉开', () => {
+    const band = /** @type {[number,number]} */ ([0.73, 1.6]);
+    const classic = columnBand(band, 0.28, 1.66, 0.05, undefined);
+    expect(classic.band).toEqual(band);
+    expect(classic.floor).toBeGreaterThanOrEqual(0.4);
+    const deep = columnBand(band, 0.12, 1.66, 0.05, undefined);
+    expect(deep.band[0]).toBeLessThan(band[0]);
+    expect(deep.band[1]).toBeLessThanOrEqual(1.66);
+    expect(deep.floor).toBeLessThan(0.4);
+    const hug = columnBand(band, 0.12, 1.66, 0.05, 0.03);
+    expect(hug.band).toEqual(band);
+    expect(hug.floor).toBeCloseTo(0.12 + 0.025 + 0.02, 5);
   });
 });

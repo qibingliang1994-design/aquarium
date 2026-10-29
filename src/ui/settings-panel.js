@@ -71,7 +71,9 @@ export function createSettingsPanel({ settings, onChange }){
   }
 
   function place(){
-    const r = btn.getBoundingClientRect(), w = pop.offsetWidth;
+    const more = document.getElementById('bMore');
+    const anchor = more && getComputedStyle(more).display!=='none' ? more : btn;
+    const r = anchor.getBoundingClientRect(), w = pop.offsetWidth;
     pop.style.left = `${clamp(r.left+r.width/2-w/2, GAP, innerWidth-w-GAP)}px`;
     pop.style.bottom = `${innerHeight-r.top+GAP}px`;
   }

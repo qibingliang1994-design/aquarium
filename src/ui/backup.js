@@ -34,16 +34,34 @@ export function validateSave(raw){
   return Object.keys(items).length ? { app:MAGIC, version:VERSION, items } : null;
 }
 
-/** 用存档整体替换现有 aquarium.* 键（先清后写，避免新旧场景混杂）。
- * 写入失败（存储满）时抛错，由调用方提示。
+/** 用存档整体替换现有 aquarium.* 键。
+ * 先把旧键留在内存里，新内容全部写成功后才删掉存档里没有的旧键。
+ * 任何 setItem / removeItem 失败都把内存里的旧键写回去再抛错，避免配额中途失败把进度清掉。
  * @param {StorageLike} ls @param {{ items:Record<string,string> }} payload @returns {number} 写入的键数 */
 export function applySave(ls, payload){
-  for(let i=ls.length-1;i>=0;i--){
+  /** @type {Record<string,string>} */
+  const prev={};
+  for(let i=0;i<ls.length;i++){
     const k=ls.key(i);
-    if(k && k.startsWith(PREFIX)) ls.removeItem(k);
+    if(k && k.startsWith(PREFIX)) prev[k]=ls.getItem(k)??'';
   }
-  for(const [k,v] of Object.entries(payload.items)) ls.setItem(k,v);
-  return Object.keys(payload.items).length;
+  const next=payload.items;
+  const restore=()=>{
+    for(const k of Object.keys(next)) if(!(k in prev)){
+      try{ ls.removeItem(k); }catch{ /* 恢复时尽力删掉半截新键 */ }
+    }
+    for(const [k,v] of Object.entries(prev)){
+      try{ ls.setItem(k,v); }catch{ /* 恢复时尽力写回旧值 */ }
+    }
+  };
+  try{
+    for(const [k,v] of Object.entries(next)) ls.setItem(k,v);
+    for(const k of Object.keys(prev)) if(!(k in next)) ls.removeItem(k);
+  }catch(err){
+    restore();
+    throw err;
+  }
+  return Object.keys(next).length;
 }
 
 /** 导出文件名：aquarium-存档-YYYYMMDD-HHmm */

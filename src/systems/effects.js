@@ -73,6 +73,7 @@ class Bubbles {
 
 class MarineSnow {
   flow=0;                        // 水流速度（+x）
+  hx=1.8; hz=0.62;               // 回绕半宽。默认是经典缸；大池塘由 setArea 放开
   /** @param {any} opts */
   constructor({ tankGroup }){
     this.N=900;                    // 池子按开缸浊度的 3 倍分配；平时只画前 BASE 颗（setDensity）
@@ -117,12 +118,25 @@ class MarineSnow {
   }
   /** 悬浮颗粒可见数量倍率 1..3（开缸浊度） @param {number} k */
   setDensity(k){ this.geo.setDrawRange(0, Math.round(this.BASE*Math.min(3, Math.max(1, k)))); }
+  /** 换缸时把颗粒铺进当前水面矩形。半宽与经典缸相同时不重撒 @param {number} hx @param {number} hz */
+  setArea(hx, hz){
+    if(!(hx>0) || !(hz>0) || (hx===this.hx && hz===this.hz)) return;
+    this.hx=hx; this.hz=hz;
+    const p=this.geo.attributes.position.array;
+    for(let i=0;i<this.N;i++){
+      p[i*3]=(Math.random()*2-1)*hx;
+      p[i*3+2]=(Math.random()*2-1)*hz;
+    }
+    this.geo.attributes.position.needsUpdate=true;
+  }
   update(/** @type {number} */ dt, /** @type {number} */ t){
     const p=this.geo.attributes.position.array;
+    const hx=this.hx, hz=this.hz;
     for(let i=0;i<this.N;i++){
       p[i*3+1]-=this.sp[i]*dt*8;
       p[i*3]+=Math.sin(t*0.4+i)*0.00012+this.flow*dt;
-      if(p[i*3]>1.8) p[i*3]-=3.6; else if(p[i*3]<-1.8) p[i*3]+=3.6;   // 顺流漂出一侧后从另一侧回来
+      if(p[i*3]>hx) p[i*3]-=hx*2; else if(p[i*3]<-hx) p[i*3]+=hx*2;   // 顺流漂出一侧后从另一侧回来
+      if(p[i*3+2]>hz) p[i*3+2]-=hz*2; else if(p[i*3+2]<-hz) p[i*3+2]+=hz*2;
       if(p[i*3+1]<0.42) p[i*3+1]=1.62;
     }
     this.geo.attributes.position.needsUpdate=true;

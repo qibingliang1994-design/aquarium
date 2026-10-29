@@ -10,6 +10,7 @@ import { ribbons } from '../scenes/items/leaf-shapes.js';
 import { bladeMat, bladeDepth } from '../scenes/items/plants.js';
 import { makeRockGeo } from '../scenes/items/natural-geo.js';
 import { reedGeo } from '../scenes/items/wetland.js';
+import { shellCount } from '../systems/shell-lod.js';
 
 /* ================================================================
  * 自然水域外壳：池塘 / 溪流 / 小河
@@ -142,7 +143,20 @@ function swayInstances(/** @type {any} */ geo, /** @type {any[]} */ pts, /** @ty
     ph[i]=rng()*6.283;
   });
   geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph,1));
+  mesh.userData.shellFull=pts.length;
   return mesh;
+}
+
+/** 按画质档减外壳实例（草/芦苇/卵石/浮叶/成组岸石）。地形网格不动。
+ * @param {THREE.Object3D|null|undefined} root @param {number} level */
+export function applyShellDensity(root, level){
+  if(!root) return;
+  root.traverse((/** @type {any} */ o)=>{
+    const full=o.userData?.shellFull;
+    if(o.isInstancedMesh && full) o.count=shellCount(full, level);
+    const rock=o.userData?.shellRock;
+    if(rock) o.visible=rock.i<shellCount(rock.n, level);
+  });
 }
 
 /** 大户外池塘：不规则岸线 + 石缘 + 碗形底 + 四周地面。鱼的矩形内腔由 volume 决定，这里只负责看得到的地形。
@@ -208,6 +222,7 @@ function buildOutdoor(waterY){
       im.setMatrixAt(i, m.compose(v.set(x, bed(x, z)-sc*0.12, z), q, s.set(sc, sc*rrange(rng, 0.45, 0.75), sc*rrange(rng, 0.8, 1.15))));
     }
     im.castShadow=im.receiveShadow=true;
+    im.userData.shellFull=rockN;
     group.add(im);
   }
 
@@ -231,6 +246,7 @@ function buildOutdoor(waterY){
       im.setColorAt(i, c.setHex(pal[i%pal.length]).multiplyScalar(rrange(rng, 0.85, 1.1)));
     });
     im.receiveShadow=true;
+    im.userData.shellFull=pts.length;
     group.add(im);
   }
 
@@ -273,6 +289,7 @@ function buildOutdoor(waterY){
       im.setColorAt(i, c.setHex(rng()<0.3 ? 0x7a5a2e : 0x3f6a2a).multiplyScalar(rrange(rng, 0.85, 1.12)));
     });
     im.receiveShadow=true;
+    im.userData.shellFull=padPts.length;
     group.add(im);
   }
 
@@ -304,14 +321,16 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
   injectCaustics(rockMat, 0.55, 'rock');
   injectSurfaceDetail(rockMat, { freq:14, k:0.45, ao:0.35, key:'rockdet' });
   injectWet(rockMat, 'rock');
-  for(const pt of scatter(rng, H, waterY, K.rocks, (h)=>h>waterY-0.35 && h<waterY+0.35, 1.6)){
+  const rockPts=scatter(rng, H, waterY, K.rocks, (h)=>h>waterY-0.35 && h<waterY+0.35, 1.6);
+  rockPts.forEach((pt,i)=>{
     const r=rrange(rng,0.22,0.5), g=makeRockGeo(r, Math.floor(rng()*1e6), 'river');
     g.scale(1, rrange(rng,0.55,0.85), rrange(rng,0.8,1.1));
     const m=new THREE.Mesh(g, rockMat);
     m.position.set(pt.x, pt.h-r*0.18, pt.z); m.rotation.y=rng()*6.283;
     m.castShadow=m.receiveShadow=true;
+    m.userData.shellRock={ i, n:rockPts.length };
     group.add(m);
-  }
+  });
   // 卵石：浅滩与水线
   {
     const pts=scatter(rng, H, waterY, K.pebbles, (h)=>h<waterY+0.1, 1.2);
@@ -327,6 +346,7 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
       mesh.setColorAt(i, c.setHex(pal[Math.floor(rng()*pal.length)]).multiplyScalar(rrange(rng,0.85,1.1)));
     });
     mesh.receiveShadow=true; mesh.castShadow=true;
+    mesh.userData.shellFull=pts.length;
     group.add(mesh);
   }
   // 浮叶：浅滩水面上零星的睡莲叶（矩形外，不挡鱼）
@@ -337,6 +357,7 @@ export function buildNaturalShell(kind, dims, { waterY, sandHeight }){
     injectFloat(padMat, 'shorePad');                   // 随水面波动
     const mesh=new THREE.InstancedMesh(pad, padMat, pts.length);
     const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), v=new THREE.Vector3(), up=new THREE.Vector3(0,1,0), c=new THREE.Color();
+    mesh.userData.shellFull=pts.length;
     pts.forEach((pt,i)=>{
       const k=rrange(rng,0.07,0.15);
       q.setFromAxisAngle(up, rng()*6.283);

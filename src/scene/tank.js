@@ -5,7 +5,7 @@ import { U } from '../uniforms.js';
 import { WAVE_GLSL } from './water-wave.js';
 import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
-import { DEPTH_MAX } from './natural-shells.js';
+import { DEPTH_MAX, applyShellDensity } from './natural-shells.js';
 import { createSkirtMaterial } from './substrate.js';
 import { surfacePair, onTexPair } from '../scenes/items/surface-tex.js';
 import { boundsFor } from '../scenes/tank-bounds.js';
@@ -432,5 +432,7 @@ let floorGlowMat;
 }
 room.push(backdrop);
 setShell('classic');
-  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat, setSandColors, setBackdrop, shell, setShell };
+  return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat, setSandColors, setBackdrop, shell, setShell,
+    /** 自然水域外壳的草/石密度跟画质档。玻璃缸上没有标记，遍历是空操作 @param {number} level */
+    applyDensity(level){ if(shell.group) applyShellDensity(shell.group, level); } };
 }

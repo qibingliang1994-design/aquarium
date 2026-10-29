@@ -3,16 +3,17 @@ import { reflectTier, reflectDim, REFLECT_TIERS } from '../src/systems/reflect.j
 import { weatherFrame } from '../src/systems/weather.js';
 
 describe('reflectTier', () => {
-  it('五档从大到小，最低档关闭', () => {
-    expect(REFLECT_TIERS).toHaveLength(5);
+  it('七档从大到小，只在极速档关闭', () => {
+    expect(REFLECT_TIERS).toHaveLength(7);
     let prev = Infinity;
-    for(let i=0;i<4;i++){
+    for(let i=0;i<6;i++){
       const t = reflectTier(i);
       expect(t.on).toBe(true);
       expect(t.size).toBeLessThan(prev);
       prev = t.size;
     }
-    expect(reflectTier(4)).toEqual({ on:false, size:0 });
+    expect(reflectTier(5).on).toBe(true);
+    expect(reflectTier(6)).toEqual({ on:false, size:0 });
     expect(reflectTier(99)).toEqual({ on:false, size:0 });
     expect(reflectTier(Number.NaN).on).toBe(true);
   });

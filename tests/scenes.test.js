@@ -212,6 +212,24 @@ describe('createSceneStore', () => {
     expect(r.items).toHaveLength(PRESETS.find(p => p.id === 'pond').items.length);
   });
 
+  it('写盘失败时新建、改名、删除都回滚', () => {
+    const store = createSceneStore();
+    const ids = store.list().map(s => s.id);
+    const name = store.active().name;
+    vi.stubGlobal('localStorage', {
+      getItem: k => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => { if (k === 'aquarium.scenes') throw new Error('quota'); mem.set(k, String(v)); },
+      removeItem: k => mem.delete(k),
+    });
+    expect(store.create('不会留下', 'fresh')).toBeNull();
+    expect(store.rename(store.activeId, '改不成')).toBe(false);
+    const victim = store.list()[1].id;
+    expect(store.remove(victim)).toBe(false);
+    expect(store.get(victim)).not.toBeNull();
+    expect(store.active().name).toBe(name);
+    expect(store.list().map(s => s.id)).toEqual(ids);
+  });
+
   it('至少保留一个场景，数量有上限', () => {
     const store = createSceneStore();
     for (const s of store.list().slice(1)) store.remove(s.id);

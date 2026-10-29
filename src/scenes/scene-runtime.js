@@ -274,6 +274,33 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     /** 光泽度变化时刷新全部鱼群（School 内部去重，同值不重设材质） */
     setGloss(/** @type {number} */ k){ for(const s of /** @type {any[]} */ (schools)) s.setGloss(k); },
     applyShore,
+    /** 自然水域外壳散布密度（草/卵石/岸石）。玻璃缸无标记 @param {number} level */
+    applyShell(level){ tank.applyDensity?.(level); },
+    /** 后台模型到位后，把还在用程序化身体的该物种换成 GLB，并接上原来的位置和游速 @param {string} speciesId */
+    useModel(speciesId){
+      const idx=schools.findIndex((/** @type {any} */ s)=>s.spec.id===speciesId);
+      if(idx<0 || schools[idx].glbMode || !glbMap[speciesId] || !care) return false;
+      const prev=schools[idx];
+      const base=SPECIES.find(s=>s.id===speciesId);
+      if(!base) return false;
+      const spec={ ...base, count:prev.spec.count };
+      const b=boxOf();
+      const s=new School(spec, obstacles, glbMap[speciesId], {
+        growth:care.growthArray(spec.id), capacity:FISH_MAX[spec.id] ?? spec.count, gloss:care.glossK(),
+        swim:b.swim, yCeil:b.yCeil, waterY:b.waterY });
+      const n=Math.min(s.spec.count, prev.pos.length);
+      for(let i=0;i<n;i++){
+        s.pos[i].copy(prev.pos[i]); s.vel[i].copy(prev.vel[i]); s.smv[i].copy(prev.smv[i]);
+        s.yaw[i]=prev.yaw[i]; s.bank[i]=prev.bank[i];
+        s.growth[i]=prev.growth[i]; s.growthTarget[i]=prev.growthTarget[i];
+      }
+      s.update(0, { obstacles, pellets:[], excite:0, time:0, schools });
+      tankGroup.add(s.group);
+      prev.dispose();
+      schools[idx]=s;
+      onSchools?.();
+      return true;
+    },
     glowShore,
     setShoreVisible,
   };

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
-import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, lureAcc, swimLimits, SWIM } from './steering.js';
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, lureAcc, swimLimits, columnBand, SWIM } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { TANK } from '../../scene/tank.js';
@@ -41,6 +41,7 @@ function shareSkeleton(obj){
     if(!s.bones.every((/** @type {any} */ b,/** @type {number} */ j)=>b===s0.bones[j])) continue;
     if(!s.boneInverses.every((/** @type {any} */ m,/** @type {number} */ j)=>m.equals(s0.boneInverses[j]))) continue;
     sk[k].skeleton=s0;
+    s.dispose();                                 // 丢掉的那份骨骼贴图不会随 JS 对象回收
   }
 }
 
@@ -367,7 +368,7 @@ export class School {
     const hunting=spec.hunts && ctx.pellets.length>0 && fear<0.15 && appetite>0.02;
     const senseR=spec.senseR*appetite;
     const lure=ctx.lure && ctx.lure.k>0.02 ? ctx.lure : null;   // 逗鱼光点（受惊的鱼不玩）
-    const sleepY=spec.band[0]+(spec.band[1]-spec.band[0])*0.3;
+    const sleepK=0.3;
     // 惊吓消退后：短时向全群中心回聚（局部 Boids 聚合半径不足以把散开的鱼拉回）
     let regroup=0;
     if(this.regroupT>0){
@@ -385,7 +386,9 @@ export class School {
       // 底栖贴底停顿：定时趴沙 2~3 秒
       const R=this.rest?this.rest[i]:null;
       // 水层下界：底栖种（hug）贴着沙面起伏，其余按 band
-      const floorY=spec.hug!=null ? groundY(p.x,p.z)+spec.hug+spec.H*0.5 : spec.band[0];
+      const sandHere=groundY(p.x,p.z);
+      const col=columnBand(spec.band, sandHere, this.yCeil, spec.H, spec.hug);
+      const floorY=spec.hug!=null ? sandHere+spec.hug+spec.H*0.5 : col.band[0];
       let resting=false;
       if(R){
         R.t-=dt;
@@ -405,7 +408,7 @@ export class School {
         const hold=FLOW_PUSH*Math.abs(flow)*(1+0.35*Math.sin(ctx.time*0.35+i*2.3));
         _acc.x+=(-Math.sign(flow)*hold-v.x)*1.2*social;
       }
-      if(sleep>0) _acc.y+=(sleepY-p.y)*0.8*sleep;  // 夜间沉向水层带下部休息
+      if(sleep>0) _acc.y+=(col.band[0]+(col.band[1]-col.band[0])*sleepK-p.y)*0.8*sleep;  // 夜间沉向水层带下部休息
       if(regroup>0) _acc.addScaledVector(_v1.subVectors(_center,p), regroup);
       if(spec.territory && !hunting){                // 领地盘旋（觅食时让位）：椭圆，缸深方向窄，整圈都在活动范围内
         const [tx, , tz, rx, rzRaw]=spec.territory;     // [x, y(未用), z, x 半径, z 半径]
@@ -416,7 +419,7 @@ export class School {
         else if(d<0.5){ _acc.x+=ex/d*0.5; _acc.z+=ez/d*0.5; }                  // 防塌中心
         _acc.x+=(-ez/d)*0.45*rx/Math.max(rx,rz); _acc.z+=(ex/d)*0.45*rz/Math.max(rx,rz);   // 切向绕圈
       }
-      boundaryAcc(p, spec.band, _acc, this.lim, floorY);   // 边界软约束
+      boundaryAcc(p, col.band, _acc, this.lim, floorY);   // 边界软约束
       obstacleAcc(p, ctx.obstacles, _acc);        // 障碍
       if(resting){                                // 趴底：忽略社交力，弹簧锚定沙面
         _acc.set(0,0,0);
@@ -457,9 +460,9 @@ export class School {
       if(flow && !resting) p.x+=flow*dt*FLOW_PUSH; // 水流推送（鱼要一直逆游才能保持位置）
       if(resting) v.multiplyScalar(1-Math.min(1,dt*3));   // 趴底阻尼
       // 硬约束：不出玻璃、不钻沙（沙面按高度场，趴底时可以贴近）
-      const sandY=groundY(p.x,p.z);
+      const sandY=sandHere;
       p.x=clamp(p.x,-this.lim.x-0.06,this.lim.x+0.06);
-      p.y=clamp(p.y, resting ? sandY+0.03 : Math.max(sandY+spec.H*0.5+0.02, spec.hug!=null ? 0 : 0.4), this.yCeil);
+      p.y=clamp(p.y, resting ? sandY+0.03 : col.floor, this.yCeil);
       p.z=clamp(p.z,-this.lim.z-0.06,this.lim.z+0.06);
       speedSum+=v.length();
 

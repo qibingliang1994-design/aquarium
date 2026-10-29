@@ -1,5 +1,6 @@
 // @ts-check
 import * as THREE from 'three';
+import { clamp } from '../../utils.js';
 import { SWIM as SWIM_BOUNDS, DEFAULT_BOUNDS } from '../../scenes/tank-bounds.js';
 
 /* ================================================================
@@ -167,6 +168,20 @@ export const SWIM=SWIM_BOUNDS;
 /** 某体长的鱼的水平软边界半宽：大鱼离玻璃更远（转身时头尾不撞玻璃）
  * @param {number} L @param {{x:number,z:number}} [swim] */
 export function swimLimits(L, swim=SWIM){ return { x:swim.x-0.5*L, z:swim.z-0.3*L }; }
+
+/** 经典缸沙面不低于约 0.2。更深的碗底才把活动水层按水柱拉开，浅缸保持原 band 和 0.4 硬下限。
+ * @param {[number,number]} band @param {number} sandY @param {number} yCeil @param {number} bodyH @param {number|undefined} hug
+ * @returns {{ band:[number,number], floor:number }} */
+export function columnBand(band, sandY, yCeil, bodyH, hug){
+  const clearance=sandY+bodyH*0.5+0.02;
+  if(hug!=null) return { band, floor:clearance };
+  if(!(sandY<0.2)) return { band, floor:Math.max(clearance, 0.4) };
+  const src0=0.4, src1=1.66, span=src1-src0;
+  const map=(/** @type {number} */ y)=>clearance+clamp((y-src0)/span, 0, 1)*(yCeil-clearance);
+  const lo=map(band[0]);
+  const hi=Math.max(lo+0.05, Math.min(yCeil-0.02, map(band[1])));
+  return { band:[lo, hi], floor:clearance };
+}
 
 /** 缸体软边界（swimLimits 内 0.14 起弹簧；y 为 band 水层带，floor 可抬高下界——底栖种按沙面算）
  * @param {THREE.Vector3} p @param {[number,number]} band @param {THREE.Vector3} acc

@@ -74,4 +74,26 @@ describe('applySave', () => {
     applySave(/** @type {any} */ (b), payload);
     expect(b.dump()).toEqual(a.dump());
   });
+
+  it('写入中途失败时恢复旧键，不留下半截新档', () => {
+    const ls = makeLS({
+      'aquarium.settings': 'old-settings',
+      'aquarium.scenes': 'old-scenes',
+      'keep-me': 'yes',
+    });
+    const orig = ls.setItem;
+    ls.setItem = (k, v) => {
+      if (k === 'aquarium.care.sc-9') throw new Error('quota');
+      orig(k, v);
+    };
+    expect(() => applySave(ls, { items: {
+      'aquarium.settings': 'new-settings',
+      'aquarium.care.sc-9': '{}',
+    } })).toThrow(/quota/);
+    expect(ls.dump()).toEqual({
+      'keep-me': 'yes',
+      'aquarium.settings': 'old-settings',
+      'aquarium.scenes': 'old-scenes',
+    });
+  });
 });

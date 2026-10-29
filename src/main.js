@@ -39,6 +39,7 @@ import { createPhotoMode } from './ui/photo-mode.js';
 import { createWaterPass } from './scene/water-pass.js';
 import { createScaledRenderPass } from './scene/render-scale.js';
 import { installDebug } from './debug.js';
+import { holdDialog, releaseDialog } from './ui/dialog.js';
 
 /* ================================================================
  * 组合根：创建各模块、接线 DOM、驱动主循环
@@ -85,12 +86,12 @@ const store=createSceneStore();
 // 预加载骨骼动画模型（失败物种自动回退程序化鱼）。
 // 渐进启动：只先等"当前场景用到的物种"，其余后台补载进同一个 map（后续建 School 自然用上）
 const presentIds=Object.entries(store.active().fish).filter(([,n])=>n>0).map(([id])=>id);
-const glbMap=await loadSpeciesModels(SPECIES, { only:presentIds });
-console.info('[fish] GLB loaded:', presentIds.filter(id=>/** @type {any} */ (glbMap)[id]).join(', ')||'none (procedural fallback)');
-loadSpeciesModels(SPECIES, { skip:presentIds }).then(rest=>{
-  Object.assign(glbMap, rest);
-  console.info('[fish] 其余物种 GLB 已后台就绪:', Object.keys(rest).filter(k=>/** @type {any} */ (rest)[k]).join(', ')||'none');
-});
+// 锦鲤单文件 2.5MB，不挡首帧：先用程序化身体，模型到了再原位换上
+const DEFER_GLB=new Set(['koi']);
+const blocking=presentIds.filter(id=>!DEFER_GLB.has(id));
+const glbMap=await loadSpeciesModels(SPECIES, { only:blocking });
+console.info('[fish] GLB loaded:', blocking.filter(id=>/** @type {any} */ (glbMap)[id]).join(', ')||'none (procedural fallback)');
+const restModels=loadSpeciesModels(SPECIES, { skip:blocking });
 
 /* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
 /** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true,
@@ -129,6 +130,7 @@ function applyTankChrome(id){
   const b=boundsFor(id), style=TANK_STYLES[id] ?? TANK_STYLES.classic, rig=style.rig;
   fishGrid=createFishGrid(0.7, b.grid);
   feeder.setHalf(b.feed.x, b.feed.z);
+  snow.setArea(b.swim.x, b.swim.z);
   lure.setBounds(b);
   input?.setBounds(b);
   if(rig){ controls.minDistance=rig.min; controls.maxDistance=rig.max; camera.near=rig.near; camera.far=rig.far; }
@@ -141,6 +143,11 @@ const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, 
   onTank:(/** @type {any} */ t, /** @type {string} */ id)=>{ dayNight.setTank(t); setHint(t.kind==='natural'); applyWaterMode(); applyTankChrome(id); },
   onSchools:()=>dayNight.refresh() });
 runtime.apply(store.active(), { fresh:true });
+restModels.then(rest=>{
+  Object.assign(glbMap, rest);
+  for(const id of DEFER_GLB) if(rest[id]) runtime.useModel(id);
+  console.info('[fish] 其余物种 GLB 已后台就绪:', Object.keys(rest).filter(k=>/** @type {any} */ (rest)[k]).join(', ')||'none');
+});
 dayNight.setLamp(settings.lamp);               // 灯光亮度（设置面板滑杆），先于昼夜状态应用
 dayNight.jump(settings.night||0);              // 启动即应用已保存的昼晚状态
 dayNight.setWeather(weather.frame());          // 存档里的天气（默认晴天 = 恒等）
@@ -213,8 +220,10 @@ const bLight=/** @type {HTMLButtonElement} */ ($('bLight'));
 function syncLightButton(){              // 按钮显示"点击后会切到"的状态
   const night=dayNight.target>0.5;
   bLight.classList.toggle('is-night',night);
-  /** @type {HTMLElement} */ (bLight.querySelector('span')).textContent=night?'日间':'夜间';
+  const lightLabel=night?'日间':'夜间';
+  /** @type {HTMLElement} */ (bLight.querySelector('span')).textContent=lightLabel;
   bLight.title=night?'切换到日光':'切换到月光';
+  bLight.setAttribute('aria-label', lightLabel);
 }
 syncLightButton();
 bLight.addEventListener('click',()=>{
@@ -241,12 +250,14 @@ function captureThumb(){
   composer.render();
   camera.position.copy(keepP); camera.quaternion.copy(keepQ);
   const src=renderer.domElement, w=320, h=180, c=document.createElement('canvas');
-  if(!src.width || !src.height) return null;   // 画布尺寸为 0（窗口被最小化/隐藏）时不拍
+  if(!src.width || !src.height){ composer.render(); return null; }   // 画布尺寸为 0 时不拍，但把画面画回去
   c.width=w; c.height=h;
   let sw=src.width, sh=src.height, sx=0, sy=0;
   if(sw/sh>w/h){ sw=sh*w/h; sx=(src.width-sw)/2; } else { sh=sw*h/w; sy=(src.height-sh)/2; }
   /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
-  return c.toDataURL('image/jpeg', 0.8);
+  const url=c.toDataURL('image/jpeg', 0.8);
+  composer.render();                             // 同一轮里把画面画回玩家机位，避免缩略图闪一帧
+  return url;
 }
 /** @type {number|undefined} */ let thumbTimer;
 function scheduleThumb(){                  // 没有缩略图的场景：开场运镜结束后自动补拍一张
@@ -315,9 +326,13 @@ $('bEdit').addEventListener('click',()=>editor.enter());
 
 /* ---------- 帮助 / 图鉴 ---------- */
 const helpEl=$('help');
-$('bHelp').addEventListener('click',()=>{ helpEl.hidden=false; });
-$('helpClose').addEventListener('click',()=>{ helpEl.hidden=true; });
-helpEl.addEventListener('click',e=>{ if(e.target===helpEl) helpEl.hidden=true; });
+const castEl=helpEl.querySelector('.help-cast');
+if(castEl) castEl.textContent='缸中居民：'+SPECIES.map(s=>SPECIES_META[s.id]?.name).filter(Boolean).join(' · ');
+const openHelp=()=>holdDialog(helpEl, '#helpClose');
+const closeHelp=()=>{ if(!helpEl.hidden) releaseDialog(helpEl); };
+$('bHelp').addEventListener('click', openHelp);
+$('helpClose').addEventListener('click', closeHelp);
+helpEl.addEventListener('click',e=>{ if(e.target===helpEl) closeHelp(); });
 const guideEl=$('encyclopedia');
 const syncBondHud=()=>{                       // 图鉴页脚的亲密度进度
   const c=runtime.care, lv=c.bondLevel;
@@ -325,8 +340,8 @@ const syncBondHud=()=>{                       // 图鉴页脚的亲密度进度
     ? `亲密度 Lv.${lv} · ${c.bondProgress()>=1 ? '鱼儿们容光焕发' : '鱼群渐渐泛起光泽'}`
     : `亲密度 Lv.${lv} · 距离下一位新朋友 ${Math.round(c.bondProgress()*100)}%`;
 };
-const openGuide=()=>{ guideEl.hidden=false; guideEl.setAttribute('aria-hidden','false'); syncBondHud(); syncEncyclopediaCounts(runtime.doc.fish); requestAnimationFrame(renderEncyclopediaPreviews); };
-const closeGuide=()=>{ guideEl.hidden=true; guideEl.setAttribute('aria-hidden','true'); };
+const openGuide=()=>{ holdDialog(guideEl, '#guideClose'); guideEl.setAttribute('aria-hidden','false'); syncBondHud(); syncEncyclopediaCounts(runtime.doc.fish); requestAnimationFrame(renderEncyclopediaPreviews); };
+const closeGuide=()=>{ if(guideEl.hidden) return; releaseDialog(guideEl); guideEl.setAttribute('aria-hidden','true'); };
 $('bGuide').addEventListener('click',openGuide);
 $('guideClose').addEventListener('click',closeGuide);
 guideEl.addEventListener('click',e=>{ if(e.target===guideEl) closeGuide(); });
@@ -375,7 +390,7 @@ addEventListener('keydown',e=>{
   if(editor.active) return;                    // 编辑器有自己的快捷键
   if(e.key==='Escape'){
     if(!guideEl.hidden) closeGuide();
-    helpEl.hidden=true;
+    closeHelp();
     if(picker.isOpen) picker.close();
     fishCard.hide(); settingsPanel.close();
     if(photo.on) photo.set(false);
@@ -423,6 +438,7 @@ const quality=createQuality({
     precip.setLevel(q.level);
     reflect.setLevel(q.level);
     runtime.applyShore(q.level);
+    runtime.applyShell(q.level);
   },
 });
 

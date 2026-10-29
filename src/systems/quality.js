@@ -12,22 +12,22 @@
 
 /** @typedef {{ label:string, glass:'high'|'low', bloom:boolean, pixels:number|null, shadowHz:number }} QualityLevel */
 
-/** 每一级的标签与开关。pixels = 画布像素预算（null = 不限，用基准 dpr）；shadowHz = 阴影贴图刷新率
- *  （软阴影 + 慢鱼：低频无感，每档都省蒙皮鱼群整组重投影的 GPU 时间）。
+/** 每一级的标签与开关。pixels = 画布像素预算（高清档也预算化：基础 M1 全屏全 Retina 下
+ *  锁高清只有 ~20 FPS，"高清"定义为能稳 60 的最高画质而非无限像素）；shadowHz = 阴影贴图刷新率。
  *  7 级细阶梯：相邻档画布像素只差 15~25%——升一级不再把帧率砸穿降档线
  *  （旧 5 级在均衡→流畅间有像素断崖，实测在两档间无限拉锯）
  *  @type {QualityLevel[]} */
 export const LEVELS=[
-  { label:'高清', glass:'high', bloom:true,  pixels:null,   shadowHz:20 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:4.2e6,  shadowHz:18 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:3.4e6,  shadowHz:16 },
-  { label:'均衡', glass:'high', bloom:true,  pixels:2.7e6,  shadowHz:14 },
-  { label:'流畅', glass:'low',  bloom:true,  pixels:2.1e6,  shadowHz:12 },
-  { label:'流畅', glass:'low',  bloom:true,  pixels:1.6e6,  shadowHz:10 },
-  { label:'极速', glass:'low',  bloom:false, pixels:1.2e6,  shadowHz:8 },
+  { label:'高清', glass:'high', bloom:true,  pixels:2.0e6,  shadowHz:20 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:1.75e6, shadowHz:18 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:1.5e6,  shadowHz:16 },
+  { label:'均衡', glass:'high', bloom:true,  pixels:1.3e6,  shadowHz:14 },
+  { label:'流畅', glass:'low',  bloom:true,  pixels:1.15e6, shadowHz:12 },
+  { label:'流畅', glass:'low',  bloom:true,  pixels:1.0e6,  shadowHz:10 },
+  { label:'极速', glass:'low',  bloom:false, pixels:0.85e6, shadowHz:8 },
 ];
 /** 像素比上限（第二道闸；budgetRatio 算出的值再被它夹一次，小窗口上平滑过渡） */
-const RATIOS=[null, 1.8, 1.6, 1.4, 1.2, 1, 0.9];
+const RATIOS=[null, 1.6, 1.45, 1.3, 1.15, 1.05, 0.9];
 /** 降档 42 / 升档 57 的窄带：帧率总应收敛到 45+；降 3 秒生效，升 7 秒（先确认真的稳） */
 const DOWN_FPS=42, UP_FPS=57, DOWN_N=6, UP_N=14, GRACE_SECS=4;
 /** 防拉锯：刚被降级离开的档位 45 秒内不回升——那一档已被证明带不动，等负载真的变化再试 */

@@ -19,10 +19,10 @@ function make() {
 }
 
 describe('createQuality', () => {
-  it('构造时应用第 0 级（基准 dpr，无像素预算）', () => {
+  it('构造时应用第 0 级（基准 dpr 上限 + 高清档像素预算）', () => {
     const { monitor, applied } = make();
     expect(monitor.level).toBe(0);
-    expect(applied).toEqual([{ level: 0, label: '高清', ratio: 2, glass: 'high', bloom: true, pixels: null, shadowHz: 20 }]);
+    expect(applied).toEqual([{ level: 0, label: '高清', ratio: 2, glass: 'high', bloom: true, pixels: 2.0e6, shadowHz: 20 }]);
   });
 
   it('开场 4 秒内不采样：低帧率不触发降级', () => {
@@ -39,7 +39,7 @@ describe('createQuality', () => {
     expect(monitor.level).toBe(2);
     run(monitor, 20, 40, t);                  // 长时间低帧率 → 降到最低
     expect(monitor.level).toBe(LEVELS.length - 1);
-    expect(applied.at(-1)).toMatchObject({ level: 6, glass: 'low', bloom: false, ratio: 0.9, pixels: 1.2e6, shadowHz: 8 });
+    expect(applied.at(-1)).toMatchObject({ level: 6, glass: 'low', bloom: false, ratio: 0.9, pixels: 0.85e6, shadowHz: 8 });
   });
 
   it('帧率回升后逐级恢复（冷却期过后逐级回升，不越级）', () => {
@@ -110,7 +110,7 @@ describe('createQuality', () => {
     monitor.force(2);
     monitor.reapply();
     expect(applied).toHaveLength(3);
-    expect(applied.at(-1)).toEqual({ level: 2, label: '均衡', ratio: 1.6, glass: 'high', bloom: true, pixels: 3.4e6, shadowHz: 16 });
+    expect(applied.at(-1)).toEqual({ level: 2, label: '均衡', ratio: 1.45, glass: 'high', bloom: true, pixels: 1.5e6, shadowHz: 16 });
   });
 });
 

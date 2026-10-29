@@ -4,7 +4,7 @@
  * - 静态资源（Vite 带哈希的产物、模型、图标）：缓存优先 + 后台更新
  * 仅在生产构建注册（main.js 里以 import.meta.env.PROD 判断），dev 不介入
  * ================================================================ */
-const CACHE = 'aquarium-v2.2.6';
+const CACHE = 'aquarium-v2.2.7';
 const PRECACHE = ['./', './manifest.webmanifest'];
 
 self.addEventListener('install', e => {

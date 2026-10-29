@@ -61,6 +61,7 @@ export class School {
   /** @type {THREE.AnimationMixer[]} */ mixers=[];
   /** @type {{ swim:any, fast:any, bite:any }[]} */ actions=[];
   /** @type {Map<string,any>|null} */ _matCache=null;   // 同物种共享的装饰材质（按模板材质 uuid）
+  _mixPar=0;                                            // 小鱼混合器隔帧更新的相位
 
   // capacity：可容纳的最大条数（预分配实例/状态数组，addFish 原地入缸不用重建）
   /** @param {FishSpec} spec @param {Obstacle[]} obstacles @param {GlbData|null} glbData @param {SchoolOpts} [opts] */
@@ -515,12 +516,15 @@ export class School {
       const ts=(0.75+1.5*(this.avgSpeed/spec.maxSpeed)+0.9*ctx.excite)*(1-0.5*sleep);
       // 动作混合：游动 ↔ 冲刺按惊吓度，咬食按包络临时压过两者（权重归一化混合）
       const fastW=clamp(fear*1.5,0,1);
+      // 小鱼（L<0.2）的动画混合器隔帧更新：30Hz 尾摆在小体型上无感，省一半骨骼矩阵计算
+      this._mixPar^=1;
+      const step=this.spec.L<0.2 && this._mixPar ? 0 : dt;
       for(let i=0;i<this.mixers.length;i++){
         const a=this.actions[i], b=this.biteT[i]>0 ? Math.sin(Math.PI*(1-this.biteT[i]/BITE_DUR)) : 0;
         if(a.fast){ a.fast.setEffectiveWeight(fastW*(1-b)); a.swim.setEffectiveWeight((1-fastW)*(1-b)); }
         else a.swim.setEffectiveWeight(1-b);
         a.bite?.setEffectiveWeight(b);
-        const m=this.mixers[i]; m.timeScale=ts; m.update(dt);
+        if(step>0){ const m=this.mixers[i]; m.timeScale=ts; m.update(step); }
       }
       for(const s of /** @type {any[]} */ (this.swimUniforms)) s.u.value=this.phaseU.value+s.off;
       return;

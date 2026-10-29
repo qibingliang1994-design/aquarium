@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { createGradePass } from './grading.js';
 
@@ -70,9 +69,8 @@ const rim = new THREE.DirectionalLight(0x4a6f8a, 0.35);   // 冷色背光，勾�
 rim.position.set(-2.5, 2.5, -3.5);
 scene.add(rim);
 
-/* ---------- 后期：泛光 ---------- */
+/* ---------- 后期：泛光（RenderPass 由 main 换成 render-scale 的降尺度版本） ---------- */
 const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.26, 0.55, 0.9);
 // 泛光是低频效果：内部 mip 链按最大 768 宽封顶（大窗口/高像素比下省一大截逐像素开销，视觉无感）
 const _bloomSetSize=bloom.setSize.bind(bloom);
@@ -81,14 +79,7 @@ composer.addPass(bloom);
 // OutputPass 已并入调色 pass（ACES+sRGB 在 grading.js 里完成）：链尾少一个全屏 pass
 composer.addPass(createGradePass());
 
-/** 后期链的 MSAA：antialias:true 只作用于最后贴到画布的全屏四边形，场景本身画在 composer 的离屏目标里，
- * 默认 samples=0 → 细草、吊线、鱼鳍边缘全是锯齿。按像素比开 MSAA（高 DPI 屏本身够细，省掉）。
- * 改 samples 后 dispose，three 会在下次使用时按新采样数重建 @param {number} n */
-function setMSAA(n){
-  for(const rt of [composer.renderTarget1, composer.renderTarget2]){
-    if(rt.samples===n) continue;
-    rt.samples=n; rt.dispose();
-  }
-}
-  return { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA };
+  // MSAA 已随 v2.2.7 渲染尺度分离移到场景 RT（render-scale.js 的 setMSAA）；
+  // 后期链都是全屏四边形，不需要多采样
+  return { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim };
 }

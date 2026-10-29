@@ -42,10 +42,11 @@ const HAZE_K=0.24, HAZE_MAX=0.42;
 /**
  * @param {{ camera:THREE.PerspectiveCamera, scene:THREE.Scene, light:THREE.SpotLight,
  *   waterY:number, box:{min:THREE.Vector3, max:THREE.Vector3},
- *   waterUniforms:any }} opts
+ *   waterUniforms:any, sourceRT?:THREE.WebGLRenderTarget|null }} opts
  *   waterUniforms：tank.js 的水面 uniforms（uTime/uFlow/uSky/uDeep/uLamp* 直接共享引用，昼夜/款式更新自动流入）
+ *   sourceRT：渲染尺度分离（render-scale.js）的场景 RT；提供时颜色/深度都从它读（composer 目标不再需要深度纹理）
  */
-export function createWaterPass({ camera, scene, light, waterY, box, waterUniforms }){
+export function createWaterPass({ camera, scene, light, waterY, box, waterUniforms, sourceRT=null }){
   const u = {
     tScene:{value:/** @type {THREE.Texture|null} */ (null)}, tDepth:{value:/** @type {THREE.Texture|null} */ (null)},
     tHalf:{value:/** @type {THREE.Texture|null} */ (null)},
@@ -328,8 +329,8 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     /** @param {any} renderer @param {any} writeBuffer @param {any} readBuffer */
     render(renderer, writeBuffer, readBuffer){
       if(rtHalf.width!==Math.round(renderer.domElement.width/2) || rtHalf.height!==Math.round(renderer.domElement.height/2)) alloc(renderer);
-      u.tScene.value=readBuffer.texture;
-      u.tDepth.value=readBuffer.depthTexture;
+      u.tScene.value=sourceRT ? sourceRT.texture : readBuffer.texture;
+      u.tDepth.value=sourceRT ? /** @type {THREE.DepthTexture} */ (sourceRT.depthTexture) : readBuffer.depthTexture;
       u.uProjInv.value.copy(camera.projectionMatrixInverse);
       u.uViewInv.value.copy(camera.matrixWorld);
       u.uCam.value.setFromMatrixPosition(camera.matrixWorld);
@@ -361,7 +362,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       // 半分辨率副本（景深开着才需要）
       if(u.uDofOn.value>0.5){
         downMat.uniforms.tDiffuse.value=u.tScene.value;
-        downMat.uniforms.tDepth.value=readBuffer.depthTexture;
+        downMat.uniforms.tDepth.value=u.tDepth.value;
         renderer.setRenderTarget(rtHalf);
         downQuad.render(renderer);
       }
@@ -395,13 +396,4 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       u.uFocus.value=focus;
     },
   });
-}
-
-/** composer 的两块离屏目标都挂深度纹理（RenderPass 画进哪块由交换顺序决定；镜头段紧跟其后，读的就是本帧深度）
- * @param {any} composer */
-export function attachDepth(composer){
-  for(const rt of [composer.renderTarget1, composer.renderTarget2]){
-    if(rt.depthTexture) continue;
-    rt.depthTexture=new THREE.DepthTexture(rt.width, rt.height);
-  }
 }

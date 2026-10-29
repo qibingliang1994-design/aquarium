@@ -36,20 +36,25 @@ import { installBackup } from './ui/backup.js';
 import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
-import { createWaterPass, attachDepth } from './scene/water-pass.js';
+import { createWaterPass } from './scene/water-pass.js';
+import { createScaledRenderPass } from './scene/render-scale.js';
 import { installDebug } from './debug.js';
 
 /* ================================================================
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.2.6';
+const VERSION='v2.2.7';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
-const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA }=world;
+const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim }=world;
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
+// 渲染尺度分离：场景渲进自己的降尺度 RT（画质档 0.6~0.9），后期链仍全画布分辨率——
+// 场景是每像素成本大头，几何边缘在折射/景深/颗粒下本就不锐；水面/光柱/散景保持全分辨率
+const renderPass=createScaledRenderPass({ scene, camera });
+composer.insertPass(renderPass, 0);
 // 水体合成 + 镜头 pass（学自 aquarium-editor，v2.2.4 与 lens 合并为单 pass）：折射/全内反射/
 // 掠射镜面/阴影光柱/吸收 + 景深（半分辨率螺旋）一体化，玻璃缸专用。
 // 读 composer A 的颜色+深度 + 自己的半分辨率副本、写 writeBuffer——任何被采样的目标都
@@ -57,9 +62,8 @@ const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floor
 const waterPass=createWaterPass({ camera, scene, light:hoodSpot, waterY:TANK.waterY,
   box:{ min:new THREE.Vector3(-TANK.W/2+TANK.glass, 0.02, -TANK.D/2+TANK.glass),
         max:new THREE.Vector3(TANK.W/2-TANK.glass, TANK.waterY, TANK.D/2+TANK.glass) },
-  waterUniforms });
+  waterUniforms, sourceRT:renderPass.target });
 const lens=waterPass;               // 镜头（景深/雾化）API 已并入水体 pass；保留别名，调用点不变
-attachDepth(composer);
 composer.insertPass(waterPass, 1);
 const focusPt=new THREE.Vector3();
 
@@ -413,7 +417,8 @@ const quality=createQuality({
     waterPass.setShafts(q.bloom ? settings.shafts : 0);   // 光柱 march 是最贵的逐像素步进：最低档停，其余按用户强度
     waterPass.setSteps([14,12,11,10,8,6,5][q.level] ?? 8);  // march 步数随档缩放（贴图化焦散调制后每步也便宜了）
     lens.setTaps([20,18,16,14,12,10,10][q.level] ?? 12);    // 景深采样点数随档缩放（半分辨率 + 弥散圆自适应后 20 点已满配）
-    setMSAA(ratio>=1.75 ? 0 : q.bloom ? 4 : 2);   // 高 DPI 屏不需要；最低一档降到 2x
+    renderPass.setMSAA(0);   // 场景 RT 不开 MSAA：多采样深度纹理的逐帧 resolve 是隐性大开销（实测拖累帧率），几何边缘有渲染尺度+景深兜底
+    renderPass.setScale([0.85,0.8,0.75,0.7,0.68,0.65,0.6][q.level] ?? 0.8);   // 渲染尺度分离：场景降尺度，后期全分辨率
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);
     reflect.setLevel(q.level);
@@ -552,7 +557,7 @@ addEventListener('resize',()=>{
   quality.reapply();                              // 像素预算依赖窗口尺寸，resize 后重算当前档的实际像素比
 });
 
-installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass, lure,
+installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass, lure, renderPass,
   bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   sky, reflect,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,

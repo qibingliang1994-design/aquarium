@@ -39,6 +39,8 @@ export function installDebug(/** @type {any} */  d){
     setSatiety:(/** @type {number} */ v)=>{ care().satiety=v; updateCareHud(); },
     appetite:()=>+care().appetite().toFixed(3),
     fear:()=>input.fear,
+    // —— 渲染尺度分离：场景 RT 的实际尺寸/MSAA/尺度（性能验证用）——
+    sceneRT:()=>{ const rt=/** @type {any} */ (d.renderPass).target; return { size:[rt.width, rt.height], samples:rt.samples }; },
     // —— 逗鱼光点：play(on) 开关；playAt(x,y,z) 直接摆放；nibbles() 鱼咬光点计数（传 0 归零）——
     play:(/** @type {boolean} */ on)=>{ d.lure.set(on); return d.lure.on; },
     playState:()=>{ const L=/** @type {any} */ (d.lure); return { on:L.on, k:+L.k.toFixed(3), p:L.p.toArray().map((/** @type {any} */ v)=>+v.toFixed(3)) }; },

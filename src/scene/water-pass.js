@@ -165,7 +165,9 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
           if(c0>=0.5){
             vec3 acc=texture2D(tScene, refrUv).rgb;
             float wsum=1.0;
-            float taps=max(uTaps, 8.0);
+            // 采样点自适应：弥散圆越大，单点覆盖越大、需要的点数越少（散景本来就在糊）；
+            // 小弥散圆必须密采样（否则出螺旋环纹）。典型背景（c0≈0.6·max）省 ~1/3 采样
+            float taps=clamp(max(uTaps,8.0)*(0.45+0.55*clamp(c0/max(uMaxR*uScale,1.0),0.0,1.0)), 8.0, uTaps);
             for(int i=0;i<24;i++){                 // 上限 24（高清档满配），低档提前 break
               if(float(i)>=taps) break;
               float fi=float(i)+0.5;

@@ -74,9 +74,9 @@ scene.add(rim);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.26, 0.55, 0.9);
-// 泛光是低频效果：内部 mip 链按最大 960 宽封顶（大窗口/高像素比下省一大截逐像素开销，视觉无感）
+// 泛光是低频效果：内部 mip 链按最大 768 宽封顶（大窗口/高像素比下省一大截逐像素开销，视觉无感）
 const _bloomSetSize=bloom.setSize.bind(bloom);
-bloom.setSize=(/** @type {number} */ w,/** @type {number} */ h)=>_bloomSetSize(Math.min(w,960), h*Math.min(1,960/w));
+bloom.setSize=(/** @type {number} */ w,/** @type {number} */ h)=>_bloomSetSize(Math.min(w,768), h*Math.min(1,768/w));
 composer.addPass(bloom);
 // OutputPass 已并入调色 pass（ACES+sRGB 在 grading.js 里完成）：链尾少一个全屏 pass
 composer.addPass(createGradePass());

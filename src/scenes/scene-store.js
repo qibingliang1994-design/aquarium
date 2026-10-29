@@ -98,9 +98,10 @@ export function createSceneStore(){
   const get = id => scenes.find(s=>s.id===id) ?? null;
   /** 插入到 after 之后（复制/新建时紧挨原场景） @param {SceneDoc} doc @param {string} [after] */
   function insert(doc, after){
-    const i = after ? scenes.findIndex(s=>s.id===after) : -1;
-    scenes.splice(i<0 ? scenes.length : i+1, 0, doc);
-    persist();
+    const at = after ? scenes.findIndex(s=>s.id===after) : -1;
+    const index = at<0 ? scenes.length : at+1;
+    scenes.splice(index, 0, doc);
+    if(!persist()){ scenes.splice(index, 1); return null; }
     return doc;
   }
 
@@ -111,7 +112,12 @@ export function createSceneStore(){
     active: () => cloneDoc(/** @type {SceneDoc} */ (get(activeId))),
     canAdd: () => scenes.length < MAX_SCENES,
     /** @param {string} id */
-    activate(id){ if(get(id)){ activeId=id; persist(); } },
+    activate(id){
+      if(!get(id)) return;
+      const prev = activeId;
+      activeId = id;
+      if(!persist()) activeId = prev;
+    },
     /** 保存（新增或覆盖），返回清洗后的文档 @param {SceneDoc} doc */
     save(doc){
       const clean = sanitizeDoc({ ...doc, updatedAt:Date.now() });
@@ -133,29 +139,47 @@ export function createSceneStore(){
       delete copy.presetId;
       copy.items.forEach(it=>{ it.id = newId('it'); });
       if(thumbs[id]){ thumbs[copy.id]=thumbs[id]; writeThumbs(); }
-      return cloneDoc(insert(copy, id));
+      const inserted = insert(copy, id);
+      if(!inserted){
+        if(thumbs[copy.id]){ delete thumbs[copy.id]; writeThumbs(); }
+        return null;
+      }
+      return cloneDoc(inserted);
     },
     /** @param {string} name @param {string} theme @returns {SceneDoc|null} */
     create(name, theme){
       if(scenes.length>=MAX_SCENES) return null;
-      return cloneDoc(insert(emptyDoc(name, theme)));
+      const inserted = insert(emptyDoc(name, theme));
+      return inserted ? cloneDoc(inserted) : null;
     },
     /** 至少保留一个场景；删当前场景时切到相邻场景 @param {string} id */
     remove(id){
       if(scenes.length<=1 || !get(id)) return false;
       const i = scenes.findIndex(s=>s.id===id);
+      const removed = scenes[i];
+      const prevActive = activeId;
+      const thumb = thumbs[id];
       scenes.splice(i,1);
       if(activeId===id) activeId = scenes[Math.max(0,i-1)].id;
-      delete thumbs[id]; writeThumbs();
+      delete thumbs[id];
+      if(!persist()){
+        scenes.splice(i, 0, removed);
+        activeId = prevActive;
+        if(thumb!==undefined) thumbs[id] = thumb;
+        return false;
+      }
+      writeThumbs();
       if(!readOnly && canWrite()) try{ localStorage.removeItem(careKey(id)); }catch(err){ console.warn('[scenes] 清理饲养存档失败', err); }
-      persist();
       return true;
     },
     /** @param {string} id @param {string} name */
     rename(id, name){
       const d = get(id); const n = name.trim().slice(0,16);
       if(!d || !n) return false;
-      d.name = n; persist(); return true;
+      const prev = d.name;
+      d.name = n;
+      if(!persist()){ d.name = prev; return false; }
+      return true;
     },
     /** 回到预设的造景与鱼群（保留名称以外的一切都按预设） @param {string} id */
     reset(id){

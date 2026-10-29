@@ -181,6 +181,24 @@ input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, f
   isBlocked:()=>editor?.active || lure.on });     // 逗鱼时点击让位给光点（不喂食/识鱼/敲玻璃）
 input.setBounds(boundsFor(runtime.doc.tank));
 $('bFeed').addEventListener('click',()=>input.feedAt(randomFeedPoint()));
+const bMore=/** @type {HTMLButtonElement} */ ($('bMore'));
+const dockMore=$('dockMore');
+function closeDockMore(){ dockMore.hidden=true; bMore.setAttribute('aria-expanded','false'); }
+bMore.addEventListener('click',e=>{
+  e.stopPropagation();
+  if(!dockMore.hidden){ closeDockMore(); return; }
+  dockMore.hidden=false;
+  bMore.setAttribute('aria-expanded','true');
+  const r=bMore.getBoundingClientRect(), w=dockMore.offsetWidth;
+  dockMore.style.left=`${Math.max(8, Math.min(r.right-w, innerWidth-w-8))}px`;
+  dockMore.style.bottom=`${innerHeight-r.top+8}px`;
+});
+$('moreSettings').addEventListener('click',e=>{ e.stopPropagation(); closeDockMore(); $('bSettings').click(); });
+$('moreHelp').addEventListener('click',e=>{ e.stopPropagation(); closeDockMore(); $('bHelp').click(); });
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(!dockMore.hidden && t instanceof Node && !dockMore.contains(t) && !bMore.contains(t)) closeDockMore();
+});
 
 /* ---------- 逗鱼模式：光标化作水中光点，引导鱼群追逐盘旋 ---------- */
 const bPlay=/** @type {HTMLButtonElement} */ ($('bPlay'));
@@ -391,6 +409,7 @@ addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     if(!guideEl.hidden) closeGuide();
     closeHelp();
+    closeDockMore();
     if(picker.isOpen) picker.close();
     fishCard.hide(); settingsPanel.close();
     if(photo.on) photo.set(false);

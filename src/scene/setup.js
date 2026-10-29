@@ -5,7 +5,6 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
 import { createGradePass } from './grading.js';
 
 export function createWorld(){
@@ -79,7 +78,7 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 const _bloomSetSize=bloom.setSize.bind(bloom);
 bloom.setSize=(/** @type {number} */ w,/** @type {number} */ h)=>_bloomSetSize(Math.min(w,960), h*Math.min(1,960/w));
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
+// OutputPass 已并入调色 pass（ACES+sRGB 在 grading.js 里完成）：链尾少一个全屏 pass
 composer.addPass(createGradePass());
 
 /** 后期链的 MSAA：antialias:true 只作用于最后贴到画布的全屏四边形，场景本身画在 composer 的离屏目标里，

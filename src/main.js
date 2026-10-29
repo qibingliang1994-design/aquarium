@@ -36,32 +36,31 @@ import { installBackup } from './ui/backup.js';
 import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
-import { createLensPass, attachDepth } from './scene/lens-pass.js';
-import { createWaterPass } from './scene/water-pass.js';
+import { createWaterPass, attachDepth } from './scene/water-pass.js';
 import { installDebug } from './debug.js';
 
 /* ================================================================
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.2.3';
+const VERSION='v2.2.4';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
 const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, setMSAA }=world;
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
-const lens=createLensPass(camera, scene);       // 景深 + 水体纵深：紧跟 RenderPass，在泛光之前（线性 HDR）
-// 水体合成 pass（学自 aquarium-editor）：折射/全内反射/掠射镜面/阴影光柱/吸收一体化，玻璃缸专用。
-// 读 composer A 的颜色+深度、写私有 rtWater（needsSwap=false）→ lens 颜色源切到 rtWater、深度仍读 A——
-// 任何被采样的目标都不在当前绘制目标上，不踩深度反馈环
+// 水体合成 + 镜头 pass（学自 aquarium-editor，v2.2.4 与 lens 合并为单 pass）：折射/全内反射/
+// 掠射镜面/阴影光柱/吸收 + 景深（半分辨率螺旋）一体化，玻璃缸专用。
+// 读 composer A 的颜色+深度 + 自己的半分辨率副本、写 writeBuffer——任何被采样的目标都
+// 不在当前绘制目标上，不踩深度反馈环；也省掉一次全分辨率中间 RT 的写+读
 const waterPass=createWaterPass({ camera, scene, light:hoodSpot, waterY:TANK.waterY,
   box:{ min:new THREE.Vector3(-TANK.W/2+TANK.glass, 0.02, -TANK.D/2+TANK.glass),
-        max:new THREE.Vector3(TANK.W/2-TANK.glass, TANK.waterY, TANK.D/2-TANK.glass) },
-  waterUniforms, turbUniform:lens.uniforms.uTurb });
+        max:new THREE.Vector3(TANK.W/2-TANK.glass, TANK.waterY, TANK.D/2+TANK.glass) },
+  waterUniforms });
+const lens=waterPass;               // 镜头（景深/雾化）API 已并入水体 pass；保留别名，调用点不变
 attachDepth(composer);
 composer.insertPass(waterPass, 1);
-composer.insertPass(lens, 2);
 const focusPt=new THREE.Vector3();
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
@@ -117,9 +116,7 @@ let waterOn=true;                                // 水体合成总开关（__aq
 function applyWaterMode(){
   const nat=isNatural(runtime.doc.tank);
   const on=waterOn && !nat && !editor?.active;   // 玻璃缸且非编辑态才走合成水面
-  waterPass.enabled=on;
-  lens.setSource(on ? waterPass.output : null);  // lens 颜色源：合成输出 / 直接读场景目标
-  lens.setHaze(false);                           // 水体吸收由合成 pass 接管（自然水域本就关，网格+水深贴图自管）
+  waterPass.setWaterOn(on);                      // 合并后的单 pass 恒启用：关 = 退化为纯镜头（DOF/雾化照常）
   waterMesh.visible=!editor?.active && (nat || !on);   // 缸走合成时藏网格；自然水域与回退态用网格
 }
 /** 换缸：饲料边界、点击范围、邻域网格、相机远近一起跟当前缸型走。input 还没建好时先跳过

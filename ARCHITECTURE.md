@@ -408,6 +408,19 @@
      半分辨率 RT（一次 blit），螺旋采样全部读半分辨率（采样量减半、缓存命中翻两番），
      散景本就是模糊，视觉无损（近焦怼鱼验证：无黑块、虚化正常）。
   5. bloom 封顶 1280→960。阈值 42/57（降 3 秒 / 升 7 秒）。
+- 后期链合并（v2.2.4，"极致性能"第二轮：高清档同机 25→52 FPS）：
+  1. **水体合成 + 镜头 pass 合一**（water-pass.js 吸收 lens-pass.js，文件已删）：两个全屏 pass
+     意味着一次全分辨率中间 RT（rtWater）的写+读。合并后单着色器顺序：折射偏移 → 景深螺旋
+     **围绕偏移后的中心**采样（散焦与折射物理正确地复合）→ 菲涅尔/全内反射/掠射镜面/吸收/光柱/
+     弯月线 → 雾化。`setWaterOn(false)`（自然水域/编辑器俯视）时退化为纯镜头。main 里 `lens`
+     成为 waterPass 的别名，全部调用点（focusOn/setDof/setTaps/uniforms.uTurb）不变。
+  2. **OutputPass 并入调色 pass**（grading.js 链尾）：ACES + sRGBTransferOETF 直接调用
+     ShaderMaterial 内置前奏里的函数（教训：自己再 `#include <tonemapping_pars_fragment>` 会
+     重复定义编译失败黑屏——前奏已包含，直接调即可），少一个全屏 pass。
+  3. 像素缩放实验定方向：5.37M px 25 FPS / 2.23M px 49 FPS → 线性拟合 ≈ 6.5ms 固定 + 6.2ms/Mpx，
+     证明是纯像素受限 → 优化全部瞄准每像素成本与 pass 数量。
+  4. 验证：玻璃缸/自然水域/编辑器三路径无黑块无报错；自动画质稳停高清档 52-54 FPS（66 秒 0 换档）；
+     材质桶画像证明静态场景各桶都是免费（成本在 pass 链与像素数，不在几何）。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

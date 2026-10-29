@@ -41,6 +41,7 @@ function shareSkeleton(obj){
     if(!s.bones.every((/** @type {any} */ b,/** @type {number} */ j)=>b===s0.bones[j])) continue;
     if(!s.boneInverses.every((/** @type {any} */ m,/** @type {number} */ j)=>m.equals(s0.boneInverses[j]))) continue;
     sk[k].skeleton=s0;
+    s.dispose();                                 // 丢掉的那份骨骼贴图不会随 JS 对象回收
   }
 }
 

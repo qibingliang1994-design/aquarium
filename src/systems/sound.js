@@ -3,9 +3,10 @@
 export class SoundEngine {
   constructor(){ this.ctx=null; this.master=null; this.enabled=true; this._blipTimer=1; }
   ensure(){                       // 必须在用户手势后调用（浏览器自动播放策略）
-    if(this.ctx) return;
+    if(this.ctx){ if(this.ctx.state==='suspended') void this.ctx.resume(); return; }
     const AC=window.AudioContext||/** @type {any} */ (window).webkitAudioContext; if(!AC) return;
     this.ctx=new AC();
+    if(this.ctx.state==='suspended') void this.ctx.resume();
     this.master=this.ctx.createGain();
     this.master.gain.value=this.enabled?1:0;
     this.master.connect(this.ctx.destination);

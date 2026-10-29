@@ -1,5 +1,6 @@
 // @ts-check
 import { THEMES, THEME_IDS } from '../scenes/themes.js';
+import { holdDialog, releaseDialog } from './dialog.js';
 import { fishTotal } from '../scenes/scene-doc.js';
 import { TANK_STYLES } from '../scenes/tank-styles.js';
 
@@ -17,8 +18,8 @@ export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, to
   /** @type {string|null} */ let confirmId=null;
   /** @type {string|null} */ let renameId=null;
 
-  const open=()=>{ confirmId=null; renameId=null; render(); modal.hidden=false; };
-  const close=()=>{ modal.hidden=true; };
+  const open=()=>{ confirmId=null; renameId=null; render(); holdDialog(modal, '#scenesClose'); };
+  const close=()=>{ if(!modal.hidden) releaseDialog(modal); };
   $('scenesClose').addEventListener('click', close);
   modal.addEventListener('click',e=>{ if(e.target===modal) close(); });
 
@@ -52,7 +53,10 @@ export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, to
     if(renameId===doc.id){
       const input=document.createElement('input');
       input.maxLength=16; input.value=doc.name;
+      let closed=false;
       const done=(/** @type {boolean} */ ok)=>{
+        if(closed) return;
+        closed=true;
         if(ok && store.rename(doc.id, input.value)) onRenamed(doc.id);
         renameId=null; render();
       };

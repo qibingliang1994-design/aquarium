@@ -102,7 +102,8 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
         x=Math.cos(a)*(b.place.x+(b.shore.x-b.place.x)*k);
         z=Math.sin(a)*(b.place.z+(b.shore.z-b.place.z)*k);
       }else{
-        x=(Math.random()*2-1)*1.3; z=Math.random()*0.7-0.3;
+        const hx=Math.max(1.3, b.place.x*0.65), zSpan=Math.max(0.7, b.place.z*0.9);
+        x=(Math.random()*2-1)*hx; z=(Math.random()-0.4)*zSpan;
       }
       const d=Math.min(9, ...doc.items.map((/** @type {any} */ o)=>Math.hypot(o.x-x,o.z-z)-ITEM_META[o.type].radius*o.s-radius));
       if(d>bestD){ bestD=d; best={ x, z }; }
@@ -233,6 +234,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   addEventListener('keydown',e=>{
     if(!active) return;
     const typing=e.target instanceof HTMLInputElement && e.target.type!=='range';
+    if(typing) return;                       // 名称框里 Ctrl+Z 撤销文字，不撤销整缸
     const mod=e.ctrlKey||e.metaKey, k=e.key.toLowerCase();
     if(mod && k==='z'){ e.preventDefault(); undoRedo(e.shiftKey); return; }
     if(mod && k==='y'){ e.preventDefault(); undoRedo(true); return; }
@@ -261,7 +263,10 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   function editCam(){
     const side=innerWidth>760, free=side ? (innerWidth-PANEL_W)/innerWidth : 1;
     const tanH=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
-    const dist=Math.max(4.4, 3.05/(tanH*camera.aspect*free), 1.5/tanH);   // 前缘离相机更近、透视下更宽，留足余量
+    const b=boundsFor(doc.tank);
+    const wantX=Math.max(3.05, b.shore.x, b.place.x);   // 小缸仍是原来的取景；大池塘把岸线放进画面
+    const wantZ=Math.max(1.5, b.shore.z, b.place.z);
+    const dist=Math.max(4.4, wantX/(tanH*camera.aspect*free), wantZ/tanH);
     const shift=side ? (PANEL_W/innerWidth)*dist*tanH*camera.aspect : 0;
     return { pos:[-shift, 0.5+dist*Math.sin(EDIT_PITCH), dist*Math.cos(EDIT_PITCH)], tgt:[-shift, 0.5, 0] };
   }

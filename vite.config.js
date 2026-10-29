@@ -19,6 +19,14 @@ if (process.platform === 'win32') {
 
 export default defineConfig({
   base: './',          // 产物可部署在任意子路径
+  plugins: [{
+    name: 'strip-dev-importmap',
+    apply: 'build',
+    transformIndexHtml(html){
+      // import map 只给 npm run serve 的裸模块用；打进 dist 会指向 jsDelivr，和离线产物不一致
+      return html.replace(/<script type="importmap">[\s\S]*?<\/script>\s*/, '');
+    },
+  }],
   build: {
     target: 'es2022',
   },

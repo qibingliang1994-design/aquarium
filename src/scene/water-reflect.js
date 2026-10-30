@@ -15,6 +15,7 @@ const CLIP_BIAS = 0.003;
  *   waterMesh:THREE.Object3D, waterUniforms:any, sky:{ place:(v:THREE.Vector3)=>void, dome:THREE.Object3D },
  *   hideRoots:()=>THREE.Object3D[] }} opts */
 export function createWaterReflect({ renderer, scene, camera, waterMesh, waterUniforms, sky, hideRoots }){
+  /** @type {boolean[]} */ const rootVis = [];
   const rt = new THREE.WebGLRenderTarget(16, 16, {
     type:THREE.UnsignedByteType, depthBuffer:true, samples:0,
   });
@@ -127,8 +128,7 @@ export function createWaterReflect({ renderer, scene, camera, waterMesh, waterUn
       // 隔帧渲倒影内容：RT 里只有静态景物（鱼群在本 pass 中隐藏），30Hz 更新视觉无差，
       // 省一半的全场景重渲；采样矩阵仍每帧更新，转动视角时倒影照常贴合
       if((parity++ & 1)===0){
-        const vis = roots.map(o=>o.visible);
-        for(const o of roots) o.visible = false;
+        for(let i=0;i<roots.length;i++){ rootVis[i] = roots[i].visible; roots[i].visible = false; }
         const waterWas = waterMesh.visible;
         waterMesh.visible = false;
         savedSky.copy(sky.dome.position);
@@ -148,7 +148,7 @@ export function createWaterReflect({ renderer, scene, camera, waterMesh, waterUn
           renderer.shadowMap.needsUpdate = prevNu;
           renderer.setRenderTarget(prevTarget);
           renderer.setViewport(viewport);
-          for(let i=0;i<roots.length;i++) roots[i].visible = vis[i];
+          for(let i=0;i<roots.length;i++) roots[i].visible = rootVis[i];
           waterMesh.visible = waterWas;
           sky.place(savedSky);
         }

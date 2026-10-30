@@ -171,14 +171,19 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   function glowShore(/** @type {number} */ k){
     const night=k*k, show=k>0.4;
     let glow=null, flies=null;
-    for(const e of live.values()){
+    for(const e of /** @type {Iterable<any>} */ (live.values())){
       if(e.item.type!=='lantern') continue;
       glow=glow ?? lanternGlow();
       flies=flies ?? fireflyMat();
-      e.root.traverse((/** @type {any} */ o)=>{
-        if(o.userData?.shoreLight) o.intensity=night*2.2;
-        if(o.isPoints) o.visible=show;
-      });
+      if(!e.lamps){                              // 首次遍历后缓存灯与萤火虫引用，之后每帧只写值
+        e.lamps=[]; e.flies=[];
+        e.root.traverse((/** @type {any} */ o)=>{
+          if(o.userData?.shoreLight) e.lamps.push(o);
+          if(o.isPoints) e.flies.push(o);
+        });
+      }
+      for(const o of e.lamps) o.intensity=night*2.2;
+      for(const o of e.flies) o.visible=show;
     }
     if(glow) glow.emissiveIntensity=0.04+night*2.4;
     if(flies) flies.opacity=show ? Math.min(0.95, (k-0.4)/0.35) : 0;

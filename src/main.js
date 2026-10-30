@@ -428,8 +428,14 @@ renderer.info.autoReset=false;                    // 整帧统计（含阴影/�
 
 /* ---------- 自然水域：天空穹顶 + 平面反射（玻璃缸不走这里） ---------- */
 const sky=createSky({ renderer, scene, hemi });
+/** @type {any[]} */ const reflectRoots=[];
 const reflect=createWaterReflect({ renderer, scene, camera, waterMesh, waterUniforms, sky,
-  hideRoots:()=>[...schools.map(s=>s.group), ...precip.parts] });
+  hideRoots:()=>{                                 // 复用数组：反射 pass 每帧调用
+    reflectRoots.length=0;
+    for(const s of schools) reflectRoots.push(s.group);
+    for(const p of precip.parts) reflectRoots.push(p);
+    return reflectRoots;
+  } });
 
 /* ---------- 自动画质：阶梯降级（像素预算+像素比上限 → 1.25/1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
 const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
@@ -541,7 +547,7 @@ function frame(){
   sound.update(dt, settings.bubbles && air.on);
   snow.update(dt,t);
   ripples.update(dt);
-  const wxNow=weather.frame();
+  const wxNow=weather.frame();                   // 每帧只算一次天气帧
   precip.update(dt, wxNow, t);
   editor.update(t);
   const natural=isNatural(runtime.doc.tank);

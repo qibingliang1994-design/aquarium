@@ -33,12 +33,17 @@ export class Feeder {
     tankGroup.add(this.crumbMesh);
     /** @type {any[]} */ this.crumbs=new Array(this.CN).fill(null);
     this.crumbHead=0;
+    /** @type {any[]} */ this._active=[];   // pellets 的复用数组（每帧只读一次，免得逐帧 filter 分配）
   }
   /** 当前缸的饲料硬边界（半宽）。默认 2.2×0.8，和改前的字面量一致 @param {number} x @param {number} z */
   setHalf(x, z){ this.hx=x; this.hz=z; }
   // 切换场景时清空水中饲料与碎屑
   clear(){ this.items.fill(null); this.crumbs.fill(null); }
-  get pellets(){ return this.items.filter(it=>it && !it.eaten && it.age<28); }
+  get pellets(){
+    const out=this._active; out.length=0;
+    for(const it of this.items) if(it && !it.eaten && it.age<28) out.push(it);
+    return out;
+  }
   spawn(/** @type {THREE.Vector3} */ center){
     this.ripples.spawn(center.x, center.z);
     setTimeout(()=>this.ripples.spawn(center.x+0.06, center.z-0.05), 260);

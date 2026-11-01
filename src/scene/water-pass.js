@@ -396,6 +396,8 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     setWaterOn(on){ u.uWaterOn.value=on?1:0; },
     /** 景深开关 @param {boolean} on */
     setDof(on){ u.uDofOn.value=+on; },
+    /** 景深强度倍率（缸型驱动：ADA 作品照是全景深，后景草要和前景一样清楚） @param {number} k */
+    setDofScale(k){ u.uK.value=DOF_K*k; },
     /** 水体纵深雾化（调试 A/B 用；正常接线恒关——玻璃缸由吸收接管，自然水域水面自管） @param {boolean} on */
     setHaze(on){ u.uHazeOn.value=+on; },
     /** 景深采样点数（画质档驱动：高清 24 → 低档 10） @param {number} n */

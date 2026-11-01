@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shoreLod } from '../src/systems/shore-lod.js';
+import { shoreLod, plantKeep } from '../src/systems/shore-lod.js';
 
 describe('岸边画质档', () => {
   it('高清满叶并保留加密草丛，极速只留骨架', () => {
@@ -18,5 +18,13 @@ describe('岸边画质档', () => {
     expect(shoreLod(4).extra).toBe(false);
     expect(shoreLod(Number.NaN)).toEqual(shoreLod(0));
     expect(shoreLod(9).grass).toBe(shoreLod(6).grass);
+  });
+
+  it('缸内水草：高清全留，逐档单调变稀，最低档仍留一半以上', () => {
+    expect(plantKeep(0)).toBe(1);
+    for (let l = 1; l <= 6; l++) expect(plantKeep(l)).toBeLessThan(plantKeep(l - 1));
+    expect(plantKeep(6)).toBeGreaterThan(0.5);
+    expect(plantKeep(Number.NaN)).toBe(1);
+    expect(plantKeep(12)).toBe(plantKeep(6));
   });
 });

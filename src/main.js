@@ -49,7 +49,7 @@ const VERSION='v2.3.0';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
-const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim }=world;
+const { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, grade }=world;
 const tank=createTank(scene);
 const { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat }=tank;
 // 渲染尺度分离：场景渲进自己的降尺度 RT（画质档 0.6~0.9），后期链仍全画布分辨率——
@@ -133,6 +133,9 @@ function applyTankChrome(id){
   snow.setArea(b.swim.x, b.swim.z);
   lure.setBounds(b);
   input?.setBounds(b);
+  waterPass.setDofScale(style.dof ?? 1);
+  grade.uniforms.uSat.value=style.grade?.[0] ?? 1.08;          // 调色随缸型：ADA 作品照更艳、反差更大
+  grade.uniforms.uContrast.value=style.grade?.[1] ?? 1.06;
   if(rig){ controls.minDistance=rig.min; controls.maxDistance=rig.max; camera.near=rig.near; camera.far=rig.far; }
   else { controls.minDistance=1; controls.maxDistance=11; camera.near=0.05; camera.far=60; }
   camera.updateProjectionMatrix();
@@ -219,11 +222,21 @@ const CAM_PRESETS=[
   { pos:[1.3,1.0,3.0], tgt:[0.3,0.95,0] },
 ];
 /** @type {any} */ let camTween=null; let camIdx=0;
+const FOV0=camera.fov;                           // 缺省视角；机位可带 fov（作品照用长焦），切到别的机位时缓回缺省
+/** 机位 fit:[半宽, 半高, 前玻璃 z]：按当前画面宽高比与该机位的 fov，把相机推到"缸宽正好撑满画面、水体高度也装得下"的距离
+ * （作品照机位用，窄屏不会裁掉两侧，宽屏不会离得太远） @param {any} p */
+function camPos(p){
+  if(!p.fit) return p.pos;
+  const [hw, hh, z0]=p.fit, t=Math.tan(THREE.MathUtils.degToRad((p.fov ?? FOV0)/2));
+  return [p.pos[0], p.pos[1], z0+Math.max(hw/(t*camera.aspect), hh/t)];
+}
 function tweenCam(/** @type {any} */ preset, /** @type {number} */ dur=1.4){
   camTween={ from:camera.position.clone(), fromT:controls.target.clone(),
-    to:new THREE.Vector3(...preset.pos), toT:new THREE.Vector3(...preset.tgt), t:0, dur };
+    to:new THREE.Vector3(...camPos(preset)), toT:new THREE.Vector3(...preset.tgt), t:0, dur,
+    fov0:camera.fov, fov1:preset.fov ?? FOV0 };
 }
-controls.addEventListener('start',()=>{ camTween=null; });
+const setFov=(/** @type {number} */ f)=>{ if(camera.fov!==f){ camera.fov=f; camera.updateProjectionMatrix(); } };
+controls.addEventListener('start',()=>{ if(camTween) setFov(camTween.fov1); camTween=null; });   // 手动接管：视角直接落到目标值
 // 自然水域没有前玻璃，机位改为俯视水面；大户外池塘用自己的一组（更远、更高）
 const camPresets=()=>{
   const st=TANK_STYLES[runtime.doc.tank];
@@ -515,6 +528,7 @@ function frame(){
     const k=Math.min(1,camTween.t/camTween.dur), e=1-Math.pow(1-k,3);
     camera.position.lerpVectors(camTween.from,camTween.to,e);
     controls.target.lerpVectors(camTween.fromT,camTween.toT,e);
+    setFov(camTween.fov0+(camTween.fov1-camTween.fov0)*e);
     if(k>=1) camTween=null;
   }
   controls.update();

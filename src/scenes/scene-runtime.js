@@ -15,7 +15,7 @@ import { careKey } from './scene-store.js';
 import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
 import { ITEM_META } from './item-meta.js';
 import { boundsFor } from './tank-bounds.js';
-import { shoreLod } from '../systems/shore-lod.js';
+import { shoreLod, plantKeep } from '../systems/shore-lod.js';
 import { lanternGlow, fireflyMat } from './items/shore.js';
 
 /* ================================================================
@@ -64,7 +64,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
     tank.setSandColors(t.sand[0], t.sand[1], t.sandTex, t.skirt);
-    tank.setBackdrop(t.backdrop, t.art);
+    tank.setBackdrop(t.backdrop, t.art, t.screen);
     for(let i=0;i<GRAVEL_N;i++) gravel.setColorAt(i, c.setHex(t.gravel[(i*7)%t.gravel.length]));
     if(gravel.instanceColor) gravel.instanceColor.needsUpdate=true;
     onTheme?.(t);
@@ -86,9 +86,11 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   function limitsOf(/** @type {any} */ e){
     const it=e.item, c=Math.abs(Math.cos(it.rot)), sn=Math.abs(Math.sin(it.rot));
     const meta=ITEM_META[it.type];
-    const pad=(meta?.group==='plant') ? 0.09 : 0.03;
+    // 水草是软的：叶尖可以贴着玻璃（真缸后景草都顶着后玻璃长），只按包络的 55% 让开；
+    // 外圈斜伸的叶会把包络撑得很大，全量让开会把后景草整丛挤到缸中间。石头的包络含外挂的苔团与不规则凸角，按 85%
+    const kx=meta?.group==='plant' ? 0.55 : meta?.group==='stone' ? 0.85 : 1;
     const b=boxOf();
-    const hx=(e.ext.x*c+e.ext.z*sn)*it.s+pad, hz=(e.ext.x*sn+e.ext.z*c)*it.s+pad;
+    const hx=(e.ext.x*c+e.ext.z*sn)*it.s*kx+0.03, hz=(e.ext.x*sn+e.ext.z*c)*it.s*kx+0.03;
     const land=!!meta?.land && (b.shore.x>b.place.x+1e-4 || b.shore.z>b.place.z+1e-4);
     if(land) return { x:Math.max(0.15, b.shore.x-hx), z:Math.max(0.15, b.shore.z-hz) };
     return { x:Math.min(b.place.x, Math.max(0.15, b.glassInner.x-hx)),
@@ -154,12 +156,15 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     applyShore(shoreLevel);
   }
 
-  /** 草叶 / 枫叶按画质档减实例；加密草丛（seed%3===0）在低档整丛隐藏。InstancedMesh 不进批处理 */
+  /** 植被按画质档减实例：岸边草叶 / 枫叶，加密草丛（seed%3===0）在低档整丛隐藏；缸内水草丛按 plantKeep 变稀（每丛至少一株）。
+   * InstancedMesh 不进批处理 */
   function applyShore(/** @type {number} */ level){
     shoreLevel=level;
-    const lod=shoreLod(level);
+    const lod=shoreLod(level), keep=plantKeep(level);
     for(const e of live.values()){
       e.root.traverse((/** @type {any} */ o)=>{
+        const pl=o.userData?.plant;
+        if(pl && o.isInstancedMesh){ o.count=clamp(Math.round(pl.full*keep), 1, pl.full); return; }
         const sh=o.userData?.shore;
         if(!sh || !o.isInstancedMesh) return;
         if(sh.extra && !lod.extra){ o.visible=false; return; }

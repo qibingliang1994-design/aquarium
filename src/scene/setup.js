@@ -81,9 +81,10 @@ const _bloomSetSize=bloom.setSize.bind(bloom);
 bloom.setSize=(/** @type {number} */ w,/** @type {number} */ h)=>_bloomSetSize(Math.min(w,768), h*Math.min(1,768/w));
 composer.addPass(bloom);
 // OutputPass 已并入调色 pass（ACES+sRGB 在 grading.js 里完成）：链尾少一个全屏 pass
-composer.addPass(createGradePass());
+const grade=createGradePass();
+composer.addPass(grade);
 
   // MSAA 已随 v2.2.7 渲染尺度分离移到场景 RT（render-scale.js 的 setMSAA）；
   // 后期链都是全屏四边形，不需要多采样
-  return { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim };
+  return { renderer, scene, camera, controls, hemi, hoodSpot, fillLight, waterGlow, composer, bloom, rim, grade };
 }

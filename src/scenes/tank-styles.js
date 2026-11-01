@@ -15,10 +15,11 @@
 /** @typedef {{ pos:[number,number,number], angle:number, penumbra:number, decay:number, distance:number, near:number, far:number, fit?:number }} SunRig */
 /** @typedef {{ W:number, H:number, D:number, glass:number, waterY:number }} TankVolume */
 /** @typedef {{ min:number, max:number, near:number, far:number }} CamRig */
-/** @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean,
+/** dof：景深强度倍率（缺省 1；ADA 作品照近乎全景深）；grade：[饱和度, 反差]（缺省 1.08 / 1.06，调色尾段）
+ * @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean, dof?:number, grade?:[number,number],
  *   light:{ spotCol:number, spotK:number, spotY:number, strip:number, sun?:SunRig },
  *   env?:WaterEnv, volume?:TankVolume, shore?:{ x:number, z:number }, rig?:CamRig,
- *   cams?:{pos:number[], tgt:number[]}[], thumb?:{pos:number[], tgt:number[]} }} TankStyle */
+ *   cams?:{pos:number[], tgt:number[], fit?:number[], fov?:number}[], thumb?:{pos:number[], tgt:number[]} }} TankStyle */
 
 /** @type {Record<string, TankStyle>} */
 export const TANK_STYLES = {
@@ -32,8 +33,18 @@ export const TANK_STYLES = {
     light:{ spotCol:0xffe6c4, spotK:0.95, spotY:2.12, strip:0xffdcae } },
   ming:    { label:'明式红木', hint:'紫檀推光漆框 · 翘头灯檐与宫灯 · 回纹明式柜', kind:'tank',
     light:{ spotCol:0xffe2b8, spotK:0.95, spotY:2.5, strip:0xffd6a0 } },
-  ada:     { label:'ADA 水景缸', hint:'超白无框 · 玻璃出入水 Lily Pipe · 方形吊灯 · 白蜡木柜', kind:'tank',
-    light:{ spotCol:0xf6f8ff, spotK:1.15, spotY:2.68, strip:0xf4f8ff } },
+  // 首个机位是"作品照"：正对前玻璃、视高在水体中部，缸宽撑满画面（IAPLC 作品都这样拍），第二个才是带柜子吊灯的全景。
+  // fit：[半宽, 半高, 前玻璃 z]，main 按画面宽高比推出相机距离（pos 的 z 只是占位）；
+  // fov 26：作品照是远处长焦拍的，透视压平、两侧玻璃几乎看不见（45° 时侧玻璃各占半幅画面的近四成）
+  ada:     { label:'ADA 水景缸', hint:'超白无框 · 玻璃出入水 Lily Pipe · 方形吊灯 · 白蜡木柜', kind:'tank', dof:0.35, grade:[1.24, 1.1],
+    light:{ spotCol:0xf6f8ff, spotK:1.5, spotY:2.68, strip:0xf4f8ff },   // 作品照的水草是被顶灯打亮的：比别的缸型亮一截，压得住身后的背光屏
+    cams:[
+      { pos:[0,1.1,4.7],   tgt:[0,1.06,0], fit:[2.38, 0.95, 0.9], fov:26 },
+      { pos:[0,1.55,6.1],  tgt:[0,1.05,0]  },
+      { pos:[5.6,1.4,2.1], tgt:[0,1.0,0]   },
+      { pos:[0.0,4.7,3.2], tgt:[0,0.8,0]   },
+      { pos:[1.3,1.0,3.0], tgt:[0.3,0.95,0] },
+    ] },
   pond:    { label:'山野池塘', hint:'草岸芦苇 · 水面清澈见底 · 静水', kind:'natural',
     light:{ spotCol:0xfff0d4, spotK:3.6, spotY:4.4, strip:0 },
     env:{ bg:0x9dbfcc, fog:0x93b6bf, fogD:0.026, hemi:0.6, fill:0.4, env:0.55, clear:1, current:0 } },

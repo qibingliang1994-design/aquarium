@@ -5,8 +5,9 @@
  * ================================================================ */
 
 /** @typedef {{ label:string, fog:number, glow:number, sky:[number,number,number], deep:[number,number,number],
- *   sand:[number,number], sandTex?:string, backdrop:string, gravel:number[], hint?:string, art?:'ink'|'screen',
+ *   sand:[number,number], sandTex?:string, backdrop:string, gravel:number[], hint?:string, art?:'ink'|'screen', screen?:'sky',
  *   skirt?:{ edge?:number, gran?:boolean, base?:number } }} Theme */
+// screen（仅 art:'screen'）：背光屏光型——缺省中部近白的白光屏，'sky' 上亮下深的钴蓝屏
 // skirt：透过前玻璃看到的底床截面分层（substrate.js）——edge 上层占比，gran 上层画成圆粒水草泥，base 下层底肥 / 火山石色
 /* art：背光幕画面（缺省 = 纯色辉光；'ink' = 水墨远山；'screen' = ADA 式背光磨砂屏，亮而均匀）
  * sandTex：缸底沙面照片贴图（public/tex/，缺省 = 大磯沙）；沙色仍由 sand 两色经顶点色混入 */
@@ -56,11 +57,11 @@ export const THEMES = {
     sand:[0x6e5a44,0x4c3d2d], backdrop:'176,214,222', skirt:{ edge:0.58, gran:true, base:0x9c8c76 },
     gravel:[0x5a4a3a,0x463a2e,0x6e5e4c,0x3c3128,0x7a6a58],
   },
-  // 深蓝背景：缸后贴深钴蓝背景板，浅色苔石与草原在上面跳出来（致敬 IAPLC 2008《Mount. Donha》）
+  // 深蓝背景：缸后的背光屏打成上亮下深的钴蓝，浅色苔石与草原在上面跳出来（致敬 IAPLC 2008《Mount. Donha》）
   azure: {
-    label:'深蓝背景', hint:'深钴蓝背景板 · 深褐水草泥 · 清水', sandTex:'s_aquasoil',
+    label:'深蓝背景', hint:'钴蓝背光屏 · 深褐水草泥 · 清水', art:'screen', screen:'sky', sandTex:'s_aquasoil',
     fog:0x0a2140, glow:0x3f7fd0, sky:[0.42,0.58,0.82], deep:[0.02,0.06,0.16],
-    sand:[0x6e5a44,0x4c3d2d], backdrop:'48,96,190', skirt:{ edge:0.58, gran:true, base:0x9c8c76 },
+    sand:[0x6e5a44,0x4c3d2d], backdrop:'46,100,205', skirt:{ edge:0.58, gran:true, base:0x9c8c76 },
     gravel:[0x5a4a3a,0x463a2e,0x6e5e4c,0x3c3128,0x7a6a58],
   },
 };

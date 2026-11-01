@@ -75,7 +75,7 @@ export function buildBranchWood(/** @type {any} */ rng, /** @type {number} */ se
 /** 倒木（粗沉木）：粗而深色，只分一级短杈，一头扎沙一头斜搭起来；几根交错成一堆 */
 export function buildLogWood(/** @type {any} */ rng, /** @type {number} */ seed){
   return growWood(rng, seed, { bark:{ cBark:0x6a5a4c, cDark:0x2a2018, cBleach:0x8a7c6c },   // 顶点色只给明暗与沟纹，色相交给树皮照片（深褐）
-    r0:0.08, len:[1.15,1.35], elev:[0.32,0.55], depth:1, spread:[0.22,0.36], bend:0.3, mat:logMat(), blunt:0.55 });
+    r0:0.08, len:[1.15,1.4], elev:[0.3,0.72], depth:1, spread:[0.22,0.36], bend:0.3, mat:logMat(), blunt:0.55 });   // 仰角 17°~41°：陡的几根撑起木堆的高处
 }
 
 // 照片贴图（public/tex/，CC0）：层岩 = Poly Haven marble_cliff_04，苔藓 = ambientCG Moss002，倒木树皮 = Poly Haven bark_brown_02
@@ -90,7 +90,7 @@ const mossTuftMat = () => shared('mat:mossTuft', ()=>{
   const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95});
   injectCaustics(m, 0.45, 'mosstuft');
   injectSurfaceDetail(m, { freq:150, k:0.5, ao:0.4, key:'mosstuftdet' });  // 照片之上再加一层更细的绒毛噪声
-  injectSurfaceTex(m, { name:'m_moss', scale:5.5, k:1.6, gain:1.7, key:'moss', world:true });
+  injectSurfaceTex(m, { name:'m_moss', scale:5.5, k:1.6, gain:2.1, key:'moss', world:true });   // 原作的苔是亮黄绿
   return m;
 });
 export const logMat = () => shared('mat:logWood', ()=>{
@@ -121,7 +121,8 @@ const tuftGeo = () => shared('geo:mossTuft', ()=>{
   return g;
 });
 
-/** 苔石：2~3 块浅色层岩逐级叠起（基准半径 0.2），每块顶面削平成台，台面与缓坡长满苔藓垫、陡壁露出浅色岩面 */
+/** 苔石：2~3 块浅色柱状层岩逐级叠起（基准半径 0.2），每块顶面削平成台、侧面有竖向裂隙与横向层阶，
+ * 台面与缓坡长满苔藓垫、陡壁露出浅色岩面 */
 export function buildMossRock(/** @type {any} */ rng, /** @type {number} */ seed){
   const r=0.2, group=new THREE.Group(), o=(seed%389)*0.61;
   const deep=new THREE.Color(0x2c4a1e), tc=new THREE.Color();
@@ -131,8 +132,20 @@ export function buildMossRock(/** @type {any} */ rng, /** @type {number} */ seed
   let base=-r*0.04, w=1, ox=0, oz=0;
   for(let b=0;b<tiers;b++){
     const g=makeRockGeo(r, seed+53+b*17, 'pale');
-    const sx=rrange(rng,1.0,1.3)*w, sy=rrange(rng,1.35,1.8)*w, sz=rrange(rng,0.8,1.0)*w;
+    // 柱状：原作的石头是一根根竖长的石柱并起来、再逐级叠高，高宽比接近 2
+    const sx=rrange(rng,0.95,1.2)*w, sy=rrange(rng,1.9,2.5)*w, sz=rrange(rng,0.8,1.0)*w;
     g.scale(sx, sy, sz);
+    // 竖向裂隙：绕竖轴等分出几道深浅不一的竖槽，槽线随高度轻微摆动，岩面像几根石柱挤在一起
+    {
+      const p=g.attributes.position, nG=4+Math.floor(rng()*4), gph=rng()*6.283;
+      for(let i=0;i<p.count;i++){
+        const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+        const th=Math.atan2(z/sz, x/sx)+(vnoise(y*5+o, b*3.1)-0.5)*0.7;
+        const gv=Math.pow(0.5+0.5*Math.cos(th*nG+gph), 10)*(0.5+vnoise(th*1.7+o, b*2.3));
+        const dk=1-0.13*gv;
+        p.setX(i, x*dk); p.setZ(i, z*dk);
+      }
+    }
     g.computeBoundingBox();
     // 顶面削平：块状层岩，顶上留出平台给苔垫
     const bb0=/** @type {THREE.Box3} */ (g.boundingBox), cap=bb0.min.y+(bb0.max.y-bb0.min.y)*0.78;
@@ -186,7 +199,7 @@ export function buildMossRock(/** @type {any} */ rng, /** @type {number} */ seed
     q.setFromUnitVectors(UP, n.lerp(UP,0.6).normalize());   // 绒团顺着坡面，但比石面更平
     s.set(sz*rrange(pr,1.0,1.4), sz*rrange(pr,0.55,0.85), sz*rrange(pr,1.0,1.4));
     tuft.setMatrixAt(k, m.compose(pos,q,s));
-    tuft.setColorAt(k, col.setRGB(rrange(pr,0.78,1.05), rrange(pr,0.8,1.02), rrange(pr,0.7,0.95)));
+    tuft.setColorAt(k, col.setRGB(rrange(pr,0.85,1.12), rrange(pr,0.92,1.12), rrange(pr,0.55,0.8)));
   }
   if(tuft.instanceColor) tuft.instanceColor.needsUpdate=true;
   group.add(tuft);

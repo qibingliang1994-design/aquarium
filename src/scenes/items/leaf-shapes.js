@@ -106,6 +106,105 @@ export function stemPlant(rng, { height, nodes, leafLen, leafW, cStem, cLow, cHi
   return mergeGeometries(parts);
 }
 
+/** 单根茎 + 若干轮生叶的公共部分：返回未合并的零件（茎没有 UV，叶也删掉 UV，合并要求属性一致）
+ * @param {any} rng @param {{ top:number, nodes:number, from:number, whorl:number, leaf:(k:number)=>any, cStem:number, r0?:number }} o */
+function whorlStem(rng, { top, nodes, from, whorl, leaf, cStem, r0=0.003 }){
+  const parts=[];
+  const stem=new THREE.CylinderGeometry(r0*0.7, r0, top, 3, 1).translate(0, top/2, 0);
+  const sc=new Float32Array(stem.attributes.position.count*3);
+  _c.set(cStem); for(let i=0;i<sc.length;i+=3){ sc[i]=_c.r; sc[i+1]=_c.g; sc[i+2]=_c.b; }
+  stem.setAttribute('color', new THREE.BufferAttribute(sc,3));
+  stem.deleteAttribute('uv'); parts.push(stem);
+  for(let j=0;j<nodes;j++){
+    const k=from+(1-from)*(j+0.5)/nodes;            // 0..1 沿茎的相对高度（只在 from 以上长叶）
+    const off=j*0.7+rng()*0.4;
+    for(let w=0;w<whorl;w++){
+      const g=makeLeaf(leaf(k));
+      g.deleteAttribute('uv');
+      g.rotateY(off+w*Math.PI*2/whorl+rrange(rng,-0.15,0.15));
+      g.translate(0, top*k, 0);
+      parts.push(g);
+    }
+  }
+  return parts;
+}
+
+const _q=new THREE.Quaternion(), _up=new THREE.Vector3(0,1,0), _d=new THREE.Vector3(), _p=new THREE.Vector3(), _n=new THREE.Vector3();
+/** 一根细茎段（3 棱，无 UV），从 a 到 b @param {THREE.Vector3} a @param {THREE.Vector3} b @param {number} r @param {number} col */
+function stick(a, b, r, col){
+  _d.subVectors(b, a); const L=_d.length();
+  const g=new THREE.CylinderGeometry(r*0.7, r, L, 3, 1).translate(0, L/2, 0);
+  g.applyQuaternion(_q.setFromUnitVectors(_up, _d.normalize())).translate(a.x, a.y, a.z);
+  const sc=new Float32Array(g.attributes.position.count*3);
+  _c.set(col); for(let i=0;i<sc.length;i+=3){ sc[i]=_c.r; sc[i+1]=_c.g; sc[i+2]=_c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(sc,3));
+  g.deleteAttribute('uv');
+  return g;
+}
+
+/** 圆顶灌丛：修剪后的有茎草（圆叶节节菜 / 珍珠草）。修剪会让每根茎在剪口处分出几个侧芽，
+ * 所以叶子几乎全挤在圆顶表面：几十根光秃的茎从椭圆底面长到包络下方，各自分出 3~4 个短梢，
+ * 短梢沿圆顶外法线方向散开、节间很密、每节一轮小叶，梢尖叶片收拢；叶色由梢基 cLow 转梢尖 cHigh。
+ * 表面是一整层细碎小叶，里面只有暗色的茎。每片叶 4 个三角形
+ * @param {any} rng @param {any} opts */
+export function bushMass(rng, { rx, rz, h, stems, tips=3, nodes=5, tipLen=0.12, leafLen, leafW, whorl=4, round=false, cStem, cLow, cHigh }){
+  const parts=[];
+  for(let s=0;s<stems;s++){
+    // 包络点：在上半椭球面上取方向（偏向顶部），外法线 n
+    const a=rng()*Math.PI*2, el=Math.acos(Math.pow(rng(), 0.7))*0.92;      // el：离天顶的角，偏小 = 偏顶
+    const sx=Math.sin(el)*Math.cos(a), sz=Math.sin(el)*Math.sin(a), sy=Math.cos(el);
+    _p.set(sx*rx, sy*h, sz*rz);
+    _n.set(sx/rx, sy/h, sz/rz).normalize();
+    const head=_p.clone().addScaledVector(_n, -tipLen*0.85);
+    head.y=Math.max(head.y, 0.04);
+    const base=new THREE.Vector3(head.x*0.55+rrange(rng,-0.02,0.02), 0, head.z*0.55+rrange(rng,-0.02,0.02));
+    parts.push(stick(base, head, 0.0028, cStem));
+    const nt=tips+(rng()<0.4 ? 1 : 0);
+    for(let t=0;t<nt;t++){
+      // 侧芽方向：外法线附近的一个锥里随机，长度略有长短（圆顶表面毛茸茸而不是一张壳）
+      _d.set(_n.x+rrange(rng,-0.55,0.55), _n.y+rrange(rng,-0.35,0.45), _n.z+rrange(rng,-0.55,0.55)).normalize();
+      const dir=_d.clone(), L=tipLen*rrange(rng,0.75,1.2);
+      const tip=[];
+      tip.push(stick(new THREE.Vector3(0,0,0), new THREE.Vector3(0,L,0), 0.002, cStem));
+      for(let j=0;j<nodes;j++){
+        const k=(j+0.5)/nodes;                         // 0 梢基 → 1 梢尖
+        _a.set(cLow).lerp(_b.set(cHigh), Math.pow(k,1.3)); const hex=_a.getHex();
+        const sz2=(0.75+0.45*Math.sin(Math.PI*Math.min(1,k*1.15)))*rrange(rng,0.85,1.12);
+        for(let w=0;w<whorl;w++){
+          const g=makeLeaf({ len:leafLen*sz2, width:leafW*sz2, tilt:0.95-0.6*k+rrange(rng,-0.12,0.12), bend:0.35,
+            round, fold:0.25, cBase:hex, cTip:hex, segs:2, cols:1 });
+          g.deleteAttribute('uv');
+          g.rotateY(j*0.785+w*Math.PI*2/whorl);          // 十字对生：相邻两节错开 45°
+          g.translate(0, L*k, 0);
+          tip.push(g);
+        }
+      }
+      const g=mergeGeometries(tip);
+      for(const p of tip) p.dispose();
+      g.applyQuaternion(_q.setFromUnitVectors(_up, dir));
+      g.translate(head.x+rrange(rng,-0.01,0.01), head.y, head.z+rrange(rng,-0.01,0.01));
+      parts.push(g);
+    }
+  }
+  return mergeGeometries(parts);
+}
+
+/** 星芒有茎草（星状刺蕊草）：直茎，每节一轮 6~8 片细长针叶近乎水平地散开，越往上叶越长，
+ * 茎顶几轮叠成一颗星芒；叶色下深上亮黄绿 @param {any} rng @param {any} opts */
+export function starStem(rng, { height, nodes, leafLen, leafW, whorl=7, cStem, cLow, cHigh }){
+  const top=height*rrange(rng,0.85,1.1);
+  const sub=whorlStem(rng, { top, nodes, from:0.12, whorl, cStem, r0:0.004,
+    leaf:(/** @type {number} */ k)=>{
+      _a.set(cLow).lerp(_b.set(cHigh), Math.pow(k,1.6)); const hex=_a.getHex();
+      const crown=k>0.9 ? 0.7 : 0.45+0.55*k;         // 茎顶最上一两轮略短，收成星心
+      return { len:leafLen*crown*rrange(rng,0.85,1.15), width:leafW, tilt:k>0.9 ? 0.75 : 1.05+rrange(rng,-0.1,0.1),
+        bend:0.35, fold:0.1, cBase:hex, cTip:hex, segs:3, cols:1 };
+    } });
+  const g=mergeGeometries(sub);
+  for(const p of sub) p.dispose();
+  return g;
+}
+
 /** 矮生地毯：一簇圆叶小草（叶片多、几乎平铺），整体半球形 */
 /** @param {any} rng @param {any} opts */
 export function carpetClump(rng, { n, radius, colors }){

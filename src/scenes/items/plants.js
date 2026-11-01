@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { makeRng, rrange } from '../../utils.js';
 import { shared, injectSway, UP } from './common.js';
-import { rosette, ribbons, stemPlant, carpetClump } from './leaf-shapes.js';
+import { rosette, ribbons, stemPlant, carpetClump, bushMass, starStem } from './leaf-shapes.js';
 
 /* ================================================================
  * 水草丛：一丛 = 一个 InstancedMesh，实例 = 一株（植株单元几何见 leaf-shapes.js）
@@ -26,10 +26,20 @@ const PLANTS = {
   red:      { n:11, spread:[0.11,0.1], s:[0.75,1.2], unit:(/** @type {any} */ rng)=>stemPlant(rng, { height:0.42, nodes:11, leafLen:0.07, leafW:0.022,
               cStem:0x6b3a24, cLow:0x3f6a2a, cHigh:0xd0503a }) },
   // 绿宫廷：高大的绿色有茎草，顶梢转黄绿，成片种在后景能一直长到水面
-  stemGreen:{ n:18, spread:[0.17,0.12], s:[0.75,1.15], unit:(/** @type {any} */ rng)=>stemPlant(rng, { height:0.72, nodes:16, leafLen:0.1, leafW:0.03,
+  stemGreen:{ n:28, spread:[0.18,0.12], s:[0.75,1.15], unit:(/** @type {any} */ rng)=>stemPlant(rng, { height:0.98, nodes:20, leafLen:0.1, leafW:0.03,
               cStem:0x3f6a2a, cLow:0x2f6a2a, cHigh:0xa8cf52 }) },
+  // 圆叶节节菜：几十根细茎挤成一团修剪过的圆顶，细碎小叶，顶梢转橙红（自然水景的红色焦点）
+  // 圆顶灌丛与草毯不投影（noCast）：叶子都贴着自身表面，阴影图里只是一团，省掉阴影 pass 里几万个三角形
+  rotala:   { n:2, spread:[0.06,0.05], s:[0.85,1.15], noCast:true, unit:(/** @type {any} */ rng)=>bushMass(rng, { rx:0.24, rz:0.17, h:0.8, stems:34, tips:3, nodes:4,
+              tipLen:0.11, leafLen:0.034, leafW:0.022, whorl:2, round:true, cStem:0x5a3a22, cLow:0x6a6a2a, cHigh:0xe0603a }) },
+  // 珍珠草：极细小叶密生的浅绿圆顶，填在沉木下、有茎草前面做过渡
+  pearl:    { n:2, spread:[0.07,0.05], s:[0.85,1.15], noCast:true, unit:(/** @type {any} */ rng)=>bushMass(rng, { rx:0.22, rz:0.16, h:0.5, stems:34, tips:3, nodes:5,
+              tipLen:0.1, leafLen:0.024, leafW:0.011, whorl:2, cStem:0x3c6a2a, cLow:0x2e6a2a, cHigh:0xa8de64 }) },
+  // 星状刺蕊草：每节一轮细长针叶水平散开，茎顶叠成星芒，亮黄绿；后景右侧成片
+  star:     { n:16, spread:[0.16,0.12], s:[0.8,1.2], unit:(/** @type {any} */ rng)=>starStem(rng, { height:0.78, nodes:12, leafLen:0.11, leafW:0.0065,
+              cStem:0x4a7a2a, cLow:0x3a742c, cHigh:0xdcee6a }) },
   // 迷你矮珍珠：圆叶小草簇，铺成前景地毯
-  carpet:   { n:9, spread:[0.28,0.12], s:[0.9,1.3], unit:(/** @type {any} */ rng)=>carpetClump(rng, { n:56, radius:0.1,
+  carpet:   { n:9, spread:[0.28,0.12], s:[0.9,1.3], noCast:true, unit:(/** @type {any} */ rng)=>carpetClump(rng, { n:56, radius:0.1,
               colors:[[0x2c6a2a,0x6ec34c],[0x2f7430,0x82d05a]] }) },
   // 牛毛毡：极细的针状叶成簇直立，一片连成草原（ADA 岩组缸的标准前中景）；低面数，单丛株数多
   hairgrass:{ n:18, spread:[0.32,0.16], s:[0.8,1.3], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:28, len:[0.12,0.3], width:0.0038, twist:0.3,
@@ -98,8 +108,9 @@ export function buildPlant(type, rng){
   const geo=unitGeo(type, Math.floor(rng()*VARIANTS)).clone();
   const mesh=new THREE.InstancedMesh(geo, bladeMat(), n);
   mesh.customDepthMaterial=bladeDepth();
-  mesh.castShadow=true; mesh.receiveShadow=true;
+  mesh.castShadow=!spec.noCast; mesh.receiveShadow=true;
   mesh.frustumCulled=false;          // 摆动会超出包围盒
+  mesh.userData.plant={ full:n };    // 画质档减株（scene-runtime applyShore / shore-lod plantKeep）
   const phases=new Float32Array(n);
   const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), pv=new THREE.Vector3(), col=new THREE.Color();
   for(let i=0;i<n;i++){

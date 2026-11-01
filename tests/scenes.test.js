@@ -73,14 +73,26 @@ describe('场景文档校验', () => {
         const lim = placeLimits(type, s);
         expect(lim.x).toBeGreaterThanOrEqual(0.15);
         expect(lim.z).toBeGreaterThanOrEqual(0.15);
-        const r = meta.radius * s;
-        expect(lim.x).toBe(Math.max(0.15, Math.min(PLACE_BOUNDS.x, GLASS_INNER.x - 0.02 - r)));
-        expect(lim.z).toBe(Math.max(0.15, Math.min(PLACE_BOUNDS.z, GLASS_INNER.z - 0.02 - r)));
+        // 转角 0：x 向占地 = radius，z 向 = depth（缺省同 radius，圆形占地）
+        const r = meta.radius * s, d = (meta.depth ?? meta.radius) * s;
+        expect(lim.x).toBeCloseTo(Math.max(0.15, Math.min(PLACE_BOUNDS.x, GLASS_INNER.x - 0.02 - r)), 9);
+        expect(lim.z).toBeCloseTo(Math.max(0.15, Math.min(PLACE_BOUNDS.z, GLASS_INNER.z - 0.02 - d)), 9);
         // 未触底的轴：占地半径×缩放 + 余量在玻璃内壁之内（触底的超大物件由运行时按真实包络钳制兜底）
         if (lim.x > 0.15) expect(lim.x + r).toBeLessThanOrEqual(GLASS_INNER.x + 1e-9);
-        if (lim.z > 0.15) expect(lim.z + r).toBeLessThanOrEqual(GLASS_INNER.z + 1e-9);
+        if (lim.z > 0.15) expect(lim.z + d).toBeLessThanOrEqual(GLASS_INNER.z + 1e-9);
       }
     }
+  });
+
+  it('placeLimits：长条物件的椭圆占地随转角投到 x / z，圆形物件与转角无关', () => {
+    const s = 1.5, m = ITEM_META.logWood;
+    const a = placeLimits('logWood', s, undefined, 0), b = placeLimits('logWood', s, undefined, Math.PI / 2);
+    expect(a.z).toBeGreaterThan(b.z);          // 横放（沿 x）时进深方向只让开半宽
+    expect(b.x).toBeGreaterThan(a.x);
+    expect(a.z).toBeCloseTo(Math.min(PLACE_BOUNDS.z, GLASS_INNER.z - 0.02 - m.depth * s), 9);
+    const r0 = placeLimits('rock', 1.2, undefined, 0), r1 = placeLimits('rock', 1.2, undefined, 1.1);
+    expect(r1.x).toBeCloseTo(r0.x, 9);
+    expect(r1.z).toBeCloseTo(r0.z, 9);
   });
 
   it('鱼群：单种上限 + 总数上限 + 未知物种忽略', () => {

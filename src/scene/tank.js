@@ -327,51 +327,87 @@ sandParts.push(grains.mesh);
 
 /* ---------- 背景幕（渐变，增加纵深） ---------- */
 // 水景缸常见的"背光幕"：缸体正后方柔和青色辉光，四周压暗，鱼与水草在其上形成剪影层次
-const bgCanvas=document.createElement('canvas'); bgCanvas.width=512; bgCanvas.height=256;
+// 两种布局（同一块网格，单位平面按布局缩放 / 摆位）：
+//  far  ：远处的背景板（缺省 / 水墨），离后玻璃 1.6，透过玻璃看过去有纵深；板面放大到 12.9×6.9，
+//         不透明核心横向 ±4.5、纵向到 y≈3.6——默认机位和环绕机位看后玻璃四角都落在核心里，缸内不再露出暗边
+//  near ：背光磨砂屏（art='screen'，ADA 作品照的标准做法），紧贴后玻璃、比缸宽出两侧各 0.5、高出缸沿 0.7，
+//         整面后玻璃被均匀打亮；材质色 >1 让它像光源（ACES 在调色尾段压回），外缘一圈羽化成漏光
+const BG_W=1024, BG_H=512;
+const bgCanvas=document.createElement('canvas'); bgCanvas.width=BG_W; bgCanvas.height=BG_H;
 const bgTex=new THREE.CanvasTexture(bgCanvas); bgTex.colorSpace=THREE.SRGBColorSpace;
-// 背光幕重绘（主题色 'r,g,b'）：外圈辉光取主题色的 45% 亮度；art='ink' 画水墨远山（inkMountains）
-function setBackdrop(/** @type {string} */ rgb, /** @type {string} */ art=''){
+const BG_FAR={ w:12.9, h:6.9, y:1.9, z:-2.5, k:1 };
+// near 宽 8.4：作品照机位（z≈4.7）透过两侧玻璃看出去的视线在屏面落到 x≈±3.45，屏要比缸宽出这么多，侧玻璃里也是亮屏
+const BG_NEAR={ w:8.4, h:3.1, y:1.4, z:-TANK.D/2-0.09, k:1.55 };
+/** 背光幕重绘（主题色 'r,g,b'）：缺省 = 暗底 + 主题色辉光；art='ink' 水墨远山；art='screen' 背光磨砂屏（screen 选光型）
+ * @param {string} rgb @param {string} [art] @param {string} [screen] */
+function setBackdrop(rgb, art='', screen=''){
   const ctx=/** @type {CanvasRenderingContext2D} */ (bgCanvas.getContext('2d'));
-  if(art==='ink'){ inkMountains(ctx, rgb); featherEdges(ctx); bgTex.needsUpdate=true; return; }
-  if(art==='screen'){ frostedScreen(ctx, rgb); featherEdges(ctx); bgTex.needsUpdate=true; return; }
-  const g=ctx.createLinearGradient(0,0,0,256);
-  g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
-  ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
-  const dim=rgb.split(',').map((/** @type {string} */ v)=>Math.round(+v*0.45)).join(',');
-  const r=ctx.createRadialGradient(256,150,10,256,150,250);
-  r.addColorStop(0,`rgba(${rgb},0.55)`); r.addColorStop(0.45,`rgba(${dim},0.28)`); r.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
-  featherEdges(ctx);
+  ctx.clearRect(0,0,BG_W,BG_H);
+  const near=art==='screen';
+  ctx.save(); ctx.scale(BG_W/512, BG_H/256);       // 绘制函数按 512×256 的设计尺寸写
+  if(art==='ink') inkMountains(ctx, rgb);
+  else if(near) frostedScreen(ctx, rgb, screen);
+  else {
+    const g=ctx.createLinearGradient(0,0,0,256);
+    g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
+    ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
+    const dim=rgb.split(',').map((/** @type {string} */ v)=>Math.round(+v*0.45)).join(',');
+    const r=ctx.createRadialGradient(256,150,10,256,150,250);
+    r.addColorStop(0,`rgba(${rgb},0.55)`); r.addColorStop(0.45,`rgba(${dim},0.28)`); r.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
+  }
+  ctx.restore();
+  featherEdges(ctx, near);
   bgTex.needsUpdate=true;
+  const L=near ? BG_NEAR : BG_FAR;
+  backdrop.scale.set(L.w, L.h, 1); backdrop.position.set(0, L.y, L.z);
+  backdrop.material.color.setScalar(L.k);
 }
-/** 背光幕四边羽化到透明：缸体外露出的那圈不再是一张有硬边的深色卡片，而是缸光洒在后墙上、化进房间暗处。
- * 缸内（画布横向约 27%~73%、纵向约 35% 以下）保持不透明，所以透过玻璃看到的画面不变
- * @param {CanvasRenderingContext2D} ctx */
-function featherEdges(ctx){
+/** 背光幕外缘羽化到透明：缸体外露出的那圈不是一张有硬边的卡片，而是光洒在后墙上、化进房间暗处。
+ * far：核心（横向 15%~85%、纵向 25% 以下）不透明；near：只羽化最外一圈（x 超出 ±3.6 / 缸沿以上 0.45 起）
+ * @param {CanvasRenderingContext2D} ctx @param {boolean} near */
+function featherEdges(ctx, near){
   const ramp=(/** @type {CanvasGradient} */ g, /** @type {number[][]} */ stops)=>{
     for(const [t,a] of stops) g.addColorStop(/** @type {number} */ (t), `rgba(0,0,0,${a})`);
     return g;
   };
+  const hx=near ? [[0,0],[0.03,0.3],[0.075,1],[0.925,1],[0.97,0.3],[1,0]]
+                : [[0,0],[0.05,0.15],[0.1,0.6],[0.15,1],[0.85,1],[0.9,0.6],[0.95,0.15],[1,0]];
+  const vy=near ? [[0,0],[0.05,0.4],[0.1,1],[1,1]]
+                : [[0,0],[0.08,0.2],[0.17,0.75],[0.25,1],[1,1]];
   ctx.save();
   ctx.globalCompositeOperation='destination-in';
-  ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,512,0), [[0,0],[0.07,0.18],[0.15,0.62],[0.25,1],[0.75,1],[0.85,0.62],[0.93,0.18],[1,0]]);
-  ctx.fillRect(0,0,512,256);
-  ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,0,256), [[0,0],[0.1,0.2],[0.24,0.75],[0.36,1],[1,1]]);
-  ctx.fillRect(0,0,512,256);
+  ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,BG_W,0), hx); ctx.fillRect(0,0,BG_W,BG_H);
+  ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,0,BG_H), vy); ctx.fillRect(0,0,BG_W,BG_H);
   ctx.restore();
 }
-/** ADA 背光磨砂屏：缸后贴的磨砂膜被灯从背后打亮——中下部最亮、往上渐暗，没有图案，
- * 岩石与草的轮廓在上面成剪影。缸外那圈仍由 featherEdges 化进房间暗处
- * @param {CanvasRenderingContext2D} ctx @param {string} rgb */
-function frostedScreen(ctx, rgb){
+/** 背光磨砂屏：缸后的磨砂膜被灯从背后打亮，没有图案，岩石与草的轮廓在上面成剪影。
+ * 光型 ''（缺省，白光屏）：中部最亮近白、往上下略暗；'sky'（深蓝屏）：上亮下深的钴蓝，右上几团淡云似的亮斑
+ * 画布下沿在缸底以下、上沿高出缸沿 0.7（BG_NEAR），水体（沙面到水面）约占纵向 36%~85%
+ * @param {CanvasRenderingContext2D} ctx @param {string} rgb @param {string} screen */
+function frostedScreen(ctx, rgb, screen){
   const [r,g,b]=rgb.split(',').map(Number);
   const c=(/** @type {number} */ k, /** @type {number} */ a=1)=>`rgba(${Math.min(255,r*k)|0},${Math.min(255,g*k)|0},${Math.min(255,b*k)|0},${a})`;
   const v=ctx.createLinearGradient(0,0,0,256);
-  v.addColorStop(0,c(0.32)); v.addColorStop(0.35,c(0.62)); v.addColorStop(0.62,c(0.86)); v.addColorStop(0.8,c(0.8)); v.addColorStop(1,c(0.5));
+  if(screen==='sky'){
+    v.addColorStop(0,c(1.5)); v.addColorStop(0.2,c(1.3)); v.addColorStop(0.45,c(1.0)); v.addColorStop(0.75,c(0.72)); v.addColorStop(1,c(0.5));
+  } else {
+    v.addColorStop(0,c(0.7)); v.addColorStop(0.25,c(0.95)); v.addColorStop(0.55,c(1.05)); v.addColorStop(0.8,c(0.95)); v.addColorStop(1,c(0.6));
+  }
   ctx.fillStyle=v; ctx.fillRect(0,0,512,256);
-  const glow=ctx.createRadialGradient(256,170,8,256,170,220);       // 背光灯管在屏后中下部的光斑
-  glow.addColorStop(0,'rgba(255,255,255,0.32)'); glow.addColorStop(0.5,'rgba(255,255,255,0.1)'); glow.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=glow; ctx.fillRect(0,0,512,256);
+  const blob=(/** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ rx, /** @type {number} */ ry, /** @type {number} */ a)=>{
+    ctx.save(); ctx.translate(x,y); ctx.scale(1, ry/rx);
+    const q=ctx.createRadialGradient(0,0,0,0,0,rx);
+    q.addColorStop(0,`rgba(255,255,255,${a})`); q.addColorStop(0.55,`rgba(255,255,255,${a*0.35})`); q.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=q; ctx.fillRect(-rx,-rx,rx*2,rx*2); ctx.restore();
+  };
+  if(screen==='sky'){
+    // 原作右侧水面下有一片发白的亮带、左上光线更强：几团压扁的柔光斑，像隔着磨砂膜的灯管
+    blob(380,92,120,34,0.22); blob(440,128,80,26,0.16); blob(150,70,150,40,0.14); blob(300,60,90,22,0.12);
+  } else {
+    blob(256,120,260,90,0.42);                     // 屏后灯管的大光斑：中部近白
+    blob(330,110,120,40,0.14);
+  }
 }
 /** 水墨远山：雾色天光底 + 三重山（由远及近墨色渐浓，山脚化入雾里留白）+ 一轮淡日。
  * 透过水体与缸壁看过去是一幅压暗的山水立轴；四周仍压暗，与其他主题的"背光幕"同一个亮度结构
@@ -414,11 +450,10 @@ function inkMountains(ctx, rgb){
   v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,0.75)');
   ctx.fillStyle=v; ctx.fillRect(0,0,512,256);
 }
-setBackdrop('58,138,160');
-const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(8.6,4.6),
+const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
   new THREE.MeshBasicMaterial({map:bgTex, fog:false, transparent:true}));   // 边缘羽化到透明（featherEdges）；仍写深度，镜头 pass 的景深不变
-backdrop.position.set(0,1.5,-2.5);
 scene.add(backdrop);
+setBackdrop('58,138,160');
 
 /* ---------- 缸体外壳（框 / 灯具 / 底柜，随场景款式切换，见 tank-shells.js） ---------- */
 const shell={ id:'', group:null, lightMat:null };

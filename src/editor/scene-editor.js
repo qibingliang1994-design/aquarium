@@ -117,7 +117,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     const facing=FACING.has(type), jitter=(Math.random()*2-1)*0.4;
     const rot=type==='airstone' ? 0 : facing ? (jitter+TAU)%TAU : Math.random()*TAU;
     const s=clamp(1,m.scale[0],m.scale[1]);
-    const lim=placeLimits(type, s, boundsFor(doc.tank));   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
+    const lim=placeLimits(type, s, boundsFor(doc.tank), rot);   // 建形前先按占地半径钳；出厂后 place() 会按真实包络再收
     const it={ id:newId('it'), type, x:clamp(p.x,-lim.x,lim.x), z:clamp(p.z,-lim.z,lim.z), rot,
       s, seed:Math.floor(Math.random()*1e9) };
     commit(d=>d.items.push(it));
@@ -143,7 +143,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
   const rotate=(/** @type {number} */ dir)=>edit(it=>{ it.rot=((it.rot+dir*ROT_STEP)%TAU+TAU)%TAU; });
   const rescale=(/** @type {number} */ k)=>edit(it=>{
     const r=ITEM_META[it.type].scale; it.s=+clamp(it.s*k,r[0],r[1]).toFixed(3);
-    const lim=placeLimits(it.type, it.s, boundsFor(doc.tank));   // 放大后按占地半径回钳，别让包络探出玻璃
+    const lim=placeLimits(it.type, it.s, boundsFor(doc.tank), it.rot);   // 放大后按占地半径回钳，别让包络探出玻璃
     it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
   });
   const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{

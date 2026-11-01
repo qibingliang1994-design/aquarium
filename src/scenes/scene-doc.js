@@ -39,13 +39,14 @@ export function sanitizeItem(raw, bounds){
   if(!meta) return null;
   const rot = num(r.rot, 0) % (Math.PI*2);
   const s = clamp(num(r.s,1), meta.scale[0], meta.scale[1]);
-  const lim = placeLimits(type, s, bounds);   // 按这份文档自己的缸型收进内壁（大池塘不按小缸钳）
+  const rr = rot<0 ? rot+Math.PI*2 : rot;
+  const lim = placeLimits(type, s, bounds, rr);   // 按这份文档自己的缸型收进内壁（大池塘不按小缸钳）；长条物件按转角
   return {
     id: typeof r.id==='string' && r.id ? r.id.slice(0,40) : newId('it'),
     type,
     x: clamp(num(r.x,0), -lim.x, lim.x),
     z: clamp(num(r.z,0), -lim.z, lim.z),
-    rot: rot<0 ? rot+Math.PI*2 : rot,
+    rot: rr,
     s,
     seed: Math.abs(Math.floor(num(r.seed,1))) % 1e9,
   };

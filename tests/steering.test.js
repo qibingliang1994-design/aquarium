@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, SWIM, swimLimits, sepRadius, crossRadius,
-  createFishGrid, rebuildFishGrid, columnBand } from '../src/entities/fish/steering.js';
+  createFishGrid, rebuildFishGrid, columnBand, SEP_Y, COH_Y, wallFlat } from '../src/entities/fish/steering.js';
 
 const V = (x=0, y=0, z=0) => new THREE.Vector3(x, y, z);
 // 最小 spec（字段与 SPECIES 一致，只给本函数用到的）
@@ -43,6 +43,34 @@ describe('boidsAccumulate', () => {
   });
 });
 
+describe('鱼群贴墙压扁（不立成竖柱）', () => {
+  it('flat=1：竖直分离弱于水平、聚合强于水平；flat=0 保持各向同性', () => {
+    expect(SEP_Y).toBeLessThan(1); expect(COH_Y).toBeGreaterThan(1);
+    const s=V(), a=V(), c=V(), vel=[V(), V()];
+    const pair=(d, flat) => { const ah=V(), av=V();
+      boidsAccumulate(0, [V(0,1,0), V(d,1,0)], vel, SPEC, 1, ah, s, a, c, null, null, flat);
+      boidsAccumulate(0, [V(0,1,0), V(0,1+d,0)], vel, SPEC, 1, av, s, a, c, null, null, flat);
+      return [ah.x, av.y]; };
+    const [sx, sy]=pair(0.08, 1);               // 分离半径内：推开（负方向），竖直更弱
+    expect(sx).toBeLessThan(0); expect(sy).toBeLessThan(0);
+    expect(Math.abs(sy)).toBeLessThan(Math.abs(sx));
+    const [cx, cy]=pair(0.4, 1);                // 分离半径外：只剩聚合，竖直拉得更紧
+    expect(cx).toBeGreaterThan(0);
+    expect(cy).toBeCloseTo(cx*COH_Y, 6);
+    const [ix, iy]=pair(0.08, 0);
+    expect(iy).toBeCloseTo(ix, 6);
+  });
+
+  it('wallFlat：缸中间 0，越靠左右玻璃越大，到弹簧起点封顶 1，与 z 无关', () => {
+    const lim=swimLimits(0.15);
+    expect(wallFlat(V(0,1,0), lim)).toBe(0);
+    expect(wallFlat(V(lim.x-0.14,1,0), lim)).toBe(1);
+    expect(wallFlat(V(-lim.x,1,0.5), lim)).toBe(1);
+    const m=wallFlat(V(lim.x-0.44,1,0), lim);
+    expect(m).toBeGreaterThan(0); expect(m).toBeLessThan(1);
+  });
+});
+
 describe('wanderAcc', () => {
   it('同参数结果确定，且确实加了力', () => {
     const a1=V(), a2=V();
@@ -74,6 +102,17 @@ describe('boundaryAcc', () => {
     expect(swimLimits(0.42).x).toBeLessThan(swimLimits(0.17).x);
     expect(SWIM.x).toBeLessThan(2.265);         // 缸内腔半宽
     expect(SWIM.z).toBeLessThan(0.865);
+  });
+
+  it('传入速度：朝左右玻璃游 → 顺着自身 z 向拐弯，往回游或离墙远不加', () => {
+    const lim=swimLimits(0.15), band=[0.6, 1.6], x=lim.x-0.2;
+    const turn=(p, v) => { const a=V(), b=V(); boundaryAcc(p, band, a, lim); boundaryAcc(p, band, b, lim, band[0], v); return b.sub(a); };
+    expect(turn(V(x,1,0), V(0.4,0,0.1)).z).toBeGreaterThan(0);        // 顺着自身 z 向
+    expect(turn(V(-x,1,0), V(-0.4,0,-0.1)).z).toBeLessThan(0);
+    expect(turn(V(x,1,0.3), V(0.4,0,0)).z).toBeLessThan(0);          // 正对玻璃：拐向缸心一侧
+    const back=turn(V(x,1,0), V(-0.4,0,0.1)), far=turn(V(0.5,1,0), V(0.4,0,0.1));
+    expect(back.length()).toBe(0); expect(far.length()).toBe(0);
+    const d=turn(V(x,1,0), V(0.4,0,0.1)); expect(d.x).toBe(0); expect(d.y).toBe(0);   // 只改 z，不碰竖直
   });
 
   it('floor 抬高下界（底栖种贴沙面）', () => {

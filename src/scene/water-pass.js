@@ -50,7 +50,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
   const u = {
     tScene:{value:/** @type {THREE.Texture|null} */ (null)}, tDepth:{value:/** @type {THREE.Texture|null} */ (null)},
     tHalf:{value:/** @type {THREE.Texture|null} */ (null)},
-    uProjInv:{value:new THREE.Matrix4()}, uViewInv:{value:new THREE.Matrix4()},
+    uProjInv:{value:new THREE.Matrix4()}, uViewInv:{value:new THREE.Matrix4()}, uVP:{value:new THREE.Matrix4()},
     uRes:{value:new THREE.Vector2(1,1)}, uCam:{value:new THREE.Vector3()}, uFrame:{value:0},
     // —— 与场景水面共享的 uniform 对象（daynight / setShell / ambience 更新即生效）——
     uTime:waterUniforms.uTime, uFlow:waterUniforms.uFlow, uChop:waterUniforms.uChop,
@@ -82,7 +82,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
     fragmentShader:`
       uniform sampler2D tScene, tDepth, tHalf;
-      uniform mat4 uProjInv, uViewInv;
+      uniform mat4 uProjInv, uViewInv, uVP;
       uniform vec2 uRes, uLampHalf, uLampXZ, uLampXZ2, uTexel;
       uniform vec3 uCam, uSky, uDeep, uLampCol, uSigma, uShaftCol, uLightDir, uMin, uMax, uColor;
       uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb,
@@ -201,7 +201,17 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
             R=r0+(1.0-r0)*pow(1.0-sqrt(max(1.0-sinT*sinT,0.0)),5.0);
             R=mix(R,1.0,smoothstep(0.85,1.0,sinT));
           }
-          vec3 refl=col*0.15;
+          // 没有镜像 RT（相机在缸外、低于水面，隔着前玻璃仰视水面）时用屏幕空间近似：
+          // 反射线在缸内走一段、投回屏幕取当前画面（那里正是缸内的水草 / 鱼 / 水色），出屏退到水色。
+          // 原来是 col*0.15，全反射角度下水面底面成了一整块黑板
+          vec3 rd=reflect(d,n);
+          rd=mix(rd, vec3(1e-4), step(abs(rd), vec3(1e-4)));   // 防 0/0 → NaN（NaN 会被泛光糊成黑块）
+          vec3 tq=(mix(uMin,uMax,step(0.0,rd))-h)/rd;
+          float tx=max(min(min(tq.x,tq.y),tq.z),0.0);
+          vec4 sc=uVP*vec4(h+rd*tx*0.55,1.0);
+          vec2 suv=sc.xy/max(sc.w,1e-4)*0.5+0.5;
+          float onS=step(0.0,sc.w)*step(0.0,suv.x)*step(suv.x,1.0)*step(0.0,suv.y)*step(suv.y,1.0);
+          vec3 refl=mix(uColor*0.8, texture2D(tScene, clamp(suv,vec2(0.001),vec2(0.999))).rgb, onS*0.85);
           if(uMirrorOn>0.5){
             vec4 mc=uMirrorVP*vec4(h+vec3(gr.x,0.0,gr.y)*0.06,1.0);
             vec2 muv=clamp(mc.xy/mc.w*0.5+0.5, vec2(0.001), vec2(0.999));
@@ -333,6 +343,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       u.tDepth.value=sourceRT ? /** @type {THREE.DepthTexture} */ (sourceRT.depthTexture) : readBuffer.depthTexture;
       u.uProjInv.value.copy(camera.projectionMatrixInverse);
       u.uViewInv.value.copy(camera.matrixWorld);
+      u.uVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       u.uCam.value.setFromMatrixPosition(camera.matrixWorld);
       u.uNear.value=camera.near; u.uFar.value=camera.far;
       u.uFrame.value=frame++%64;

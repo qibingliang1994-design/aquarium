@@ -477,6 +477,8 @@
 - 美术第五轮：夜间调色。`uniforms.js` 新增 `U.night`（`daynight.apply` 每次写入昼夜 k），`grading.js` 按它夜间降约 22% 饱和、暗部偏冷蓝：月光下的草不再是荧光绿，整体更像夜景；白天 `uNight=0`，与改前逐值相同。
 - 美术第六轮：自然水域雨天的"搓衣板"水纹。水面着色器的几组正弦在 `uChop` 放大后叠成一排排等距白带；`uClear>0.5` 时用 `uCMap` 低频噪声轻微扭曲波形坐标（±0.2 单位，相位偏移要控制在约 2 rad 内——偏移到 3 单位会叠成指纹状涡纹）并按位置调制波幅（0.4~1.6 倍），条带断开成起伏的涟漪。玻璃缸（`uClear=0`）走原式。
 - 美术第七轮：下雪天的画面。①积雪：`U.snow`（`ambience.update` 在自然水域下雪天约 25 s 堆满、雪停约 40 s 化尽）+ `U.snowY`（`tank.setShell` 写水线），`wet.js` 的 `injectWet` 在 `color_fragment` 里把朝上（世界法线 y）且高于水线的面向雪白混——地面、石头、松针层顶、石灯都自动积雪，水下河床不积；`uSnow=0` 整段跳过。**坑**：three 的 `inverseTransformDirection` 会归一化，不能拿来还原位移，要用 `vec4(-vViewPosition,0.0)*viewMatrix`（第一版因此整个池底也白了）。②雪花：数量 700→1500（`effects.js` `SNOW_N` / `weather.js` `precipBudget`，测试同步），点大小翻倍，原来大场景里几乎看不见。
+- 美术第八轮：自然水域的雾天。原来雾密度 = 场景基础值 × 天气倍率，户外基础只有 0.0045，"薄雾"满强度在十几米的池塘上几乎看不出。`daynight.js` 抽出 `fogDensity()`：自然水域取 `max(基础×倍率, 基础 + (NAT_FOG-基础)×fogAmt)`，`NAT_FOG=0.055`——薄雾天对岸树影半隐、近处鱼仍可见，雨 / 雪天（fogAmt 0.35~0.4）带一层淡雾；玻璃缸仍走倍率，晴天 fogAmt=0 不变。
+- 低机位两处黑块修复：①相机在缸外、低于水面仰视时，水面底面的全内反射没有镜像 RT（`renderMirror` 只在相机进入缸体 x/z 范围才渲），原来退成 `col*0.15`，掠射角下整块发黑像一张黑板。`water-pass.js` 改为屏幕空间近似：反射线在水体盒里走到出口的 55%，用新增的 `uVP` 投回屏幕取当前画面（缸内水草 / 鱼 / 水色），出屏退到雾色；`rd` 分量接近 0 时钳住，防 0/0 产生 NaN 被泛光糊黑。不加额外渲染。②超白缸（`rimless`）缸角的纯黑硅胶缝改透明胶（淡青、opacity 0.32），不再在缸角竖一条黑边；礁缸仍用黑胶配黑框。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

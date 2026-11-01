@@ -70,7 +70,7 @@ function glassEdges(/** @type {any} */ group, /** @type {any} */ mat){
   for(const sx of [-1,1]) box(mat, T, 0.006, D-2*T, sx*(W/2-T/2), H+0.003, 0);
   for(const sx of [-1,1]) for(const sz of [-1,1]) box(mat, T*0.9, H, 0.004, sx*(W/2-T/2), H/2, sz*(D/2+0.001));
 }
-// 玻璃内角的黑色硅胶缝
+// 玻璃内角的硅胶缝（礁缸黑胶、超白缸透明胶，材质由调用方给）
 function siliconeSeams(/** @type {any} */ group, /** @type {any} */ mat){
   const { box }=kit(group);
   const r=0.012;
@@ -108,7 +108,8 @@ const BUILDERS={
   rimless(/** @type {any} */ group){
     const { box }=kit(group);
     glassEdges(group, new THREE.MeshPhysicalMaterial({ color:0x8fd6c2, roughness:0.1, transparent:true, opacity:0.55, clearcoat:1 }));
-    siliconeSeams(group, new THREE.MeshStandardMaterial({ color:0x0b0c0d, roughness:0.6 }));
+    // 超白缸用透明硅胶：原来的纯黑胶缝在缸角竖成一条黑边，跟淡青的超白玻璃边不搭
+    siliconeSeams(group, new THREE.MeshPhysicalMaterial({ color:0xa9c9c2, roughness:0.25, transparent:true, opacity:0.32, depthWrite:false }));
     box(new THREE.MeshStandardMaterial({ color:0x1b1d20, roughness:0.95 }), W+0.02, 0.022, D+0.02, 0, -0.009, 0);
     // 吊灯：拉丝铝灯体 + 下方发光面 + 两根吊线
     const alu=new THREE.MeshStandardMaterial({ color:0xb9bec4, roughness:0.32, metalness:0.9 });

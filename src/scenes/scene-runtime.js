@@ -37,7 +37,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   // 静态物件绘制批处理：同材质网格合批（Draw Calls 大减）；编辑器打开时拆批恢复逐件交互
   const batch=createItemBatch({ renderer, parent:itemsGroup });
   const rootsOf=()=>[...live.values()].map((/** @type {any} */ e)=>e.root);
-  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, lim:{x:number,z:number}, shadow?:THREE.Mesh|null }>} */
+  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, lim:{x:number,z:number}, shadow?:import('./contact-shadow.js').ContactHandle|null }>} */
   const live=new Map();
   /** @type {any} */ let doc=null;
   /** @type {any} */ let care=null;
@@ -194,7 +194,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     for(const e of live.values()){
       if(!ITEM_META[e.item.type]?.land) continue;
       e.root.visible=on;
-      if(e.shadow) e.shadow.visible=on;
+      if(e.shadow) contact.setVisible(e.shadow, on);
     }
     batch.resync(on ? rootsOf() : rootsOf().filter((/** @type {any} */ r)=>r.visible));
   }

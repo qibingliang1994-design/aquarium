@@ -45,7 +45,7 @@ import { holdDialog, releaseDialog } from './ui/dialog.js';
  * 组合根：创建各模块、接线 DOM、驱动主循环
  * 场景（造景/鱼群/水色）由 scenes/ 下的文档驱动，见 scene-runtime.js
  * ================================================================ */
-const VERSION='v2.2.7';
+const VERSION='v2.3.0';
 const $=(/** @type {string} */ id)=>{ const el=document.getElementById(id); if(!el) throw new Error(`missing #${id}`); return el; };
 
 const world=createWorld();
@@ -63,7 +63,7 @@ composer.insertPass(renderPass, 0);
 const waterPass=createWaterPass({ camera, scene, light:hoodSpot, waterY:TANK.waterY,
   box:{ min:new THREE.Vector3(-TANK.W/2+TANK.glass, 0.02, -TANK.D/2+TANK.glass),
         max:new THREE.Vector3(TANK.W/2-TANK.glass, TANK.waterY, TANK.D/2+TANK.glass) },
-  waterUniforms, sourceRT:renderPass.target });
+  waterUniforms, sourceRT:renderPass.source });
 const lens=waterPass;               // 镜头（景深/雾化）API 已并入水体 pass；保留别名，调用点不变
 composer.insertPass(waterPass, 1);
 const focusPt=new THREE.Vector3();
@@ -457,7 +457,8 @@ const quality=createQuality({
     waterPass.setShafts(q.bloom ? settings.shafts : 0);   // 光柱 march 是最贵的逐像素步进：最低档停，其余按用户强度
     waterPass.setSteps([14,12,11,10,8,6,5][q.level] ?? 8);  // march 步数随档缩放（贴图化焦散调制后每步也便宜了）
     lens.setTaps([20,18,16,14,12,10,10][q.level] ?? 12);    // 景深采样点数随档缩放（半分辨率 + 弥散圆自适应后 20 点已满配）
-    renderPass.setMSAA(0);   // 场景 RT 不开 MSAA：多采样深度纹理的逐帧 resolve 是隐性大开销（实测拖累帧率），几何边缘有渲染尺度+景深兜底
+    renderPass.setMSAA(0);   // 场景 RT 不开 MSAA：多采样深度纹理的逐帧 resolve 是隐性大开销（实测拖累帧率），几何边缘靠 edge-aa（FXAA）兜底
+    renderPass.setAA(q.level<=4);   // 边缘抗锯齿（FXAA）：最低两档关
     renderPass.setScale([0.85,0.8,0.75,0.7,0.68,0.65,0.6][q.level] ?? 0.8);   // 渲染尺度分离：场景降尺度，后期全分辨率
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);
@@ -598,7 +599,7 @@ addEventListener('resize',()=>{
   quality.reapply();                              // 像素预算依赖窗口尺寸，resize 后重算当前档的实际像素比
 });
 
-installDebug({ schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass, lure, renderPass,
+installDebug({ composer, schools, obstacles, air, feeder, dayNight, ambience, settings, input, fishCard, runtime, store, editor, camera, controls, waterPass, lure, renderPass,
   bloom, lens, scene, hoodSpot, waterMesh, glassHigh, modelPreviewStats, updateCareHud, switchScene, randomFeedPoint,
   sky, reflect,
   stopCamTween:()=>{ camTween=null; }, renderer, loopFrame:frame, quality,

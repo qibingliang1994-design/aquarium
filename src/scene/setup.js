@@ -5,6 +5,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { createGradePass } from './grading.js';
+import { installProgramSort } from './render-sort.js';
+import { installShadowOnlyLayer } from './shadow-layer.js';
 
 export function createWorld(){
 const app = document.getElementById('app'); if(!app) throw new Error('missing #app');
@@ -15,9 +17,11 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, coarse ? 1.5 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+installShadowOnlyLayer(renderer);                  // 鱼的合并影子代理只在阴影 pass 里出现
 renderer.shadowMap.autoUpdate = false;             // 由 main 的渲染循环按 SHADOW_DT 限频置 needsUpdate
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.98;
+installProgramSort(renderer);                      // 不透明物体按着色器程序分组，少切程序
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();

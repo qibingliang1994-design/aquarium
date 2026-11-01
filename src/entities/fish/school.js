@@ -5,6 +5,8 @@ import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout
 import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, lureAcc, swimLimits, columnBand, SWIM } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
+import { bakeFishPose } from '../../fish/fish-pose.js';
+import { VatFish } from '../../fish/fish-vat.js';
 import { TANK } from '../../scene/tank.js';
 import { groundY } from '../../scene/ground.js';
 // @ts-check
@@ -20,6 +22,7 @@ const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
       _acc=new THREE.Vector3(), _sep=new THREE.Vector3(), _ali=new THREE.Vector3(),
       _coh=new THREE.Vector3(), _dummy=new THREE.Object3D();
 const _eyeLocal=new THREE.Matrix4(), _eyeM=new THREE.Matrix4();
+const _pm=new THREE.Matrix4(), _po=new THREE.Vector3(), _pd=new THREE.Vector3(), _p0=new THREE.Vector3();
 
 const BITE_DUR=0.35;                // 咬食动作时长（秒）
 const NIBBLE_R=0.14;                // 距光点这么近算"咬到"（逗鱼模式）
@@ -59,6 +62,8 @@ export class School {
   /** @type {any} */ causticK=null;
   /** @type {any} */ rest=null;
   /** @type {THREE.Object3D[]} */ fishes=[];
+  /** @type {VatFish|null} */ vat=null;                     // 实例化蒙皮（骨骼位姿贴图）：骨骼动画物种的默认路径
+  /** @type {Float32Array} */ vatT=new Float32Array(0);     // 每条鱼三个片段（游动/冲刺/咬食）的相位 0..1
   /** @type {THREE.AnimationMixer[]} */ mixers=[];
   /** @type {{ swim:any, fast:any, bite:any }[]} */ actions=[];
   /** @type {Map<string,any>|null} */ _matCache=null;   // 同物种共享的装饰材质（按模板材质 uuid）
@@ -90,7 +95,15 @@ export class School {
       this.fishes=[]; this.mixers=[]; this.actions=[]; this.swimUniforms=[];
       this.phaseU={ value: rand(10) };
       this.causticK={ value:0.22 };            // 鱼体焦散强度（applyNight 调节）
-      for(let i=0;i<N;i++) this._glbFish(i);
+      // 骨骼动画物种走实例化蒙皮（每个子网格 1 次绘制）；静态模型 / 超大网格（锦鲤）退回逐条 SkinnedMesh
+      const bake=this.swimClip ? bakeFishPose(this.template, { swim:this.swimClip, fast:this.fastClip, bite:this.biteClip }) : null;
+      if(bake){
+        this.vat=new VatFish(bake, { capacity:this.capacity, causticK:this.causticK, castShadow:spec.L>=0.2, tint:spec.id==='koi' });   // 小鱼不投影：同旧路径
+        this.group.add(this.vat.group);
+        this.vat.setCount(N);
+        this.vatT=new Float32Array(this.capacity*3);
+        for(let i=0;i<N;i++) this._initVatPhase(i);
+      } else for(let i=0;i<N;i++) this._glbFish(i);
     } else {
     // —— 程序化模式（GLB 加载失败的兜底） ——
     const bodyGeo=buildFishBody(spec);          // 眼睛已烘入体网格
@@ -174,12 +187,43 @@ export class School {
     this.pY=new Float32Array(cap).fill(0.5);
     this.obsT=0;
     this.regroupT=0;
-    this.baseScale=this.glbMode ? (this.fishes[0]?.scale.x??1) : 1;
+    this.baseScale=this.glbMode ? (this.template.scale.x??1) : 1;
     this.glossK=-1; this.setGloss(gloss??0);
     this.update(0.016, { obstacles, pellets:[], excite:0, time:0, schools:[] });
   }
 
-  // 克隆一条 GLB 鱼并接好动画（构造与 addFish 共用）
+  // 实例化蒙皮：个体相位错开（游动/冲刺随机，咬食置于片段末尾 = 未在咬）
+  _initVatPhase(/** @type {number} */ i){
+    this.vatT[i*3]=rand(0.8); this.vatT[i*3+1]=rand(0.8); this.vatT[i*3+2]=1;
+    if(this.spec.id==='koi'){                      // 同一张贴图的多条锦鲤：冷暖微调，避免"复制粘贴"（同旧路径）
+      const w=(i%2)?-1:1;
+      this.vat?.setTint(i, 1+w*0.035, 1+w*0.004, 1-w*0.03);
+    }
+  }
+
+  /** 射线选鱼（实例化蒙皮路径）：对每条鱼的椭球体求交，返回最近的 { distance, fid } @param {THREE.Ray} ray */
+  pickRay(ray){
+    const spec=this.spec, vat=this.vat;
+    if(!vat) return null;
+    // 椭球半轴按"包裹节点内"坐标（体长 L / baseScale）；沿朝向 z 为长轴，宽高取 H 与体长比例的较大值
+    const az=spec.L*0.52/this.baseScale, ay=Math.max(spec.H, spec.L*0.28)*0.6/this.baseScale;
+    /** @type {{distance:number, fid:number}|null} */ let best=null;
+    _p0.set(0,0,0);
+    for(let i=0;i<spec.count;i++){
+      _pm.fromArray(vat.matAttr.array, i*16).invert();
+      _po.copy(ray.origin).applyMatrix4(_pm); _po.set(_po.x/ay, _po.y/ay, _po.z/az);
+      _pd.copy(ray.direction).applyMatrix4(_pm).sub(_p0.set(0,0,0).applyMatrix4(_pm)); _pd.set(_pd.x/ay, _pd.y/ay, _pd.z/az);
+      const a=_pd.dot(_pd), b=_po.dot(_pd), c=_po.dot(_po)-1, disc=b*b-a*c;
+      if(!(disc>=0)) continue;                       // 含 NaN（矩阵退化）一并跳过
+      const sq=Math.sqrt(disc);
+      let t=(-b-sq)/a; if(t<0) t=(-b+sq)/a;
+      if(!(t>=0) || (best && t>=best.distance)) continue;
+      best={ distance:t, fid:i };
+    }
+    return best;
+  }
+
+  // 克隆一条 GLB 鱼并接好动画（构造与 addFish 共用；仅静态模型 / 超大网格走这里）
   _glbFish(/** @type {number} */ i){
     const spec=this.spec;
     const obj=SkeletonUtils.clone(this.template);
@@ -272,7 +316,8 @@ export class School {
     this.biteT[i]=0; this.gulpCool[i]=rand(0.5,1.5);
     this.pSpd[i]=0.5; this.pTurn[i]=0.3;
     this.pY[i]=(p.y-0.35)/(this.waterY-0.35);
-    if(this.glbMode) this._glbFish(i);
+    if(this.vat){ this._initVatPhase(i); this.vat.setCount(i+1); }
+    else if(this.glbMode) this._glbFish(i);
     else { this.mesh.count=i+1; this.finMesh.count=i+1; this.eyeMesh.count=(i+1)*2; }
     return i;
   }
@@ -315,6 +360,7 @@ export class School {
   // 场景切换/改鱼群时释放：GLB 模式只释放克隆出来的材质（几何与模板共享），程序化模式全部释放
   dispose(){
     this.group.removeFromParent();
+    if(this.vat){ this.vat.dispose(); return; }   // 材质克隆保留（理由同下）；几何的逐实例属性随 dispose 释放
     if(this.glbMode){
       for(const m of this.mixers) m.stopAllAction();
       // 材质克隆不 dispose：它们没有独占的 GPU 资源，dispose 只会让 three 在最后一个用户释放时删掉着色器程序，
@@ -344,12 +390,31 @@ export class School {
     }
   }
 
+  // 实例化蒙皮的动作混合：三个片段各自相位前进（同旧 mixer 的 timeScale），权重同旧逻辑（和恒为 1）
+  _animVat(/** @type {number} */ dt,/** @type {number} */ ts,/** @type {number} */ fastW){
+    const vat=/** @type {VatFish} */ (this.vat), sl=vat.bake.slots, N=this.spec.count, T=this.vatT;
+    // 小鱼（L<0.2）旧路径的混合器隔帧更新（等效半速）：这里按平均速度等价地每帧推进一半，观感一致且更平滑
+    const k=dt*ts*(this.spec.L<0.2 ? 0.5 : 1);
+    const iS=k/sl.swim.dur, iF=sl.fast ? k/sl.fast.dur : 0, iB=sl.bite ? k/sl.bite.dur : 0;
+    for(let i=0;i<N;i++){
+      const o=i*3;
+      T[o]=(T[o]+iS)%1;
+      if(sl.fast) T[o+1]=(T[o+1]+iF)%1;
+      if(sl.bite && T[o+2]<1) T[o+2]=Math.min(1,T[o+2]+iB);
+      const b=sl.bite && this.biteT[i]>0 ? Math.sin(Math.PI*(1-this.biteT[i]/BITE_DUR)) : 0;
+      const wF=sl.fast ? fastW*(1-b) : 0;
+      vat.setAnim(i, T[o], T[o+1], T[o+2], 1-b-wF, wF, b);
+    }
+    vat.flush();
+  }
+
   // 咬食：向前小冲刺 + （GLB）Attack 动作单次播放
   _bite(/** @type {number} */ i){
     this.biteT[i]=BITE_DUR;
     this.gulpCool[i]=rand(1.4,2.4);
     this.vel[i].addScaledVector(this.smv[i], this.spec.maxSpeed*0.5);
     this.actions?.[i]?.bite?.reset().play();
+    if(this.vat) this.vatT[i*3+2]=0;                 // 咬食片段从头播
   }
 
   update(/** @type {number} */ dt, /** @type {any} */ ctx){
@@ -487,7 +552,15 @@ export class School {
       this.growth[i]+=(this.growthTarget[i]-this.growth[i])*Math.min(1,dt*1.5);
       if(this.biteT[i]>0) this.biteT[i]=Math.max(0,this.biteT[i]-dt);
 
-      if(this.glbMode){
+      if(this.vat){
+        _dummy.position.copy(p);
+        _dummy.scale.setScalar(this.baseScale*this.growth[i]);
+        _v2.copy(p).add(hd);
+        _dummy.lookAt(_v2);
+        _dummy.rotateZ(this.bank[i]*0.5);
+        _dummy.updateMatrix();
+        this.vat.setMatrix(i,_dummy.matrix);
+      } else if(this.glbMode){
         const obj=this.fishes[i];
         obj.position.copy(p);
         obj.scale.setScalar(this.baseScale*this.growth[i]);
@@ -519,6 +592,7 @@ export class School {
       const ts=(0.75+1.5*(this.avgSpeed/spec.maxSpeed)+0.9*ctx.excite)*(1-0.5*sleep);
       // 动作混合：游动 ↔ 冲刺按惊吓度，咬食按包络临时压过两者（权重归一化混合）
       const fastW=clamp(fear*1.5,0,1);
+      if(this.vat){ this._animVat(dt, ts, fastW); return; }
       // 小鱼（L<0.2）的动画混合器隔帧更新：30Hz 尾摆在小体型上无感，省一半骨骼矩阵计算
       this._mixPar^=1;
       const step=this.spec.L<0.2 && this._mixPar ? 0 : dt;

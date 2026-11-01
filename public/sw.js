@@ -7,7 +7,7 @@
  * - 运行时缓存有条数和体积上限，导航页与 manifest 不参与淘汰
  * 仅在生产构建注册（main.js 里以 import.meta.env.PROD 判断），dev 不介入
  * ================================================================ */
-const CACHE = 'aquarium-v2.2.7';
+const CACHE = 'aquarium-v2.3.0';
 const PRECACHE = ['./', './manifest.webmanifest'];
 const MAX_ENTRIES = 80;
 const MAX_BYTES = 32 * 1024 * 1024;

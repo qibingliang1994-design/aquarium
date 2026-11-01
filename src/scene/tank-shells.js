@@ -5,6 +5,7 @@ import { vnoise } from '../utils.js';
 import { isNatural } from '../scenes/tank-styles.js';
 import { buildNaturalShell } from './natural-shells.js';
 import { buildMing } from './ming-shell.js';
+import { mergeStaticMeshes } from './static-merge.js';
 
 /* ================================================================
  * 缸体外壳（随场景切换）：框 / 玻璃边 / 灯具 / 底柜
@@ -204,6 +205,7 @@ export function buildShell(id, dims, world){
   const group=new THREE.Group();
   group.name=`tank-shell-${id}`;
   const lightMat=(/** @type {any} */ (BUILDERS)[id] ?? /** @type {any} */ (BUILDERS).classic)(group);
+  mergeStaticMeshes(group);                        // 共用材质的小盒子合成一个网格：少绘制（阴影 pass 同样受益）
   return { group, lightMat, natural:false };
 }
 

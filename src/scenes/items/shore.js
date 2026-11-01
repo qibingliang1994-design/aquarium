@@ -22,14 +22,14 @@ const NEEDLE = () => shared('mat:needle', () => {
   return m;
 });
 const LEAF = () => shared('mat:maple', () => {
-  const m = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.62, metalness:0, side:THREE.DoubleSide });
+  const m = new THREE.MeshStandardMaterial({ roughness:0.62, metalness:0, side:THREE.DoubleSide });   // 着色走 instanceColor；几何没有 color 属性，开 vertexColors 会整片变黑
   injectSway(m, 0.04, 1.6, 'maple', false, 0.22);
   injectWet(m, 'maple');
   return m;
 });
 const GRASS = () => shared('mat:bankgrass', () => {
   const pair = surfacePair('g_leaf');
-  const m = new THREE.MeshStandardMaterial({ map:pair.map, vertexColors:true, roughness:0.8, metalness:0, side:THREE.DoubleSide });
+  const m = new THREE.MeshStandardMaterial({ map:pair.map, roughness:0.8, metalness:0, side:THREE.DoubleSide });   // 同上：只靠 instanceColor
   onTexPair(pair, (/** @type {any} */ t) => { m.map = t.map; m.needsUpdate = true; });
   injectSway(m, 0.07, 2.2, 'bgrass', false, 0.42);
   injectWet(m, 'bgrass');

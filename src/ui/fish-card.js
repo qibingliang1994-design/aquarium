@@ -22,11 +22,13 @@ export function createFishCard({ camera, schools, getCare, getSceneId }){   // g
     raycaster.setFromCamera(ndc,camera);
     /** @type {any} */ let best=null;
     for(const s of schools){
-      const hit=s.glbMode
-        ? raycaster.intersectObjects(s.group.children,true)[0]
-        : raycaster.intersectObject(s.mesh,false)[0];
+      const hit=s.vat
+        ? s.pickRay(raycaster.ray)
+        : s.glbMode
+          ? raycaster.intersectObjects(s.group.children,true)[0]
+          : raycaster.intersectObject(s.mesh,false)[0];
       if(!hit || (best && hit.distance>=best.distance)) continue;
-      const fid=s.glbMode ? findFishIndex(hit.object) : hit.instanceId;
+      const fid=s.vat ? hit.fid : s.glbMode ? findFishIndex(hit.object) : hit.instanceId;
       best={ distance:hit.distance, fid, school:s };
     }
     return best;

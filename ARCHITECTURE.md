@@ -442,6 +442,34 @@
 - 审查修复：导入存档失败回滚；Service Worker 导航缓存 await、模型/贴图网络优先、运行时缓存上限；
   合并骨架时释放多余骨骼贴图；反射/岸边/降水/外壳散布密度对齐 7 档画质（倒影只在极速档关闭，地形网格不随档重建）；
   锦鲤 GLB 不挡首帧；悬浮颗粒和造景机位跟当前缸；场景列表写盘失败回滚；Pages 工作流先跑 lint/test，部署权限只给 deploy。
+- 低配笔记本 60 帧（v2.3.0，目标：1366×768、CPU 降到 1/4 速度的中低端笔记本上"高清"档稳 60，视觉不退步）：
+  1. **方法**：本机没有弱显卡，CPU 侧用独立 Chrome + CDP（`Emulation.setCPUThrottlingRate` 4×、仿真 1366×768@1x、关垂直同步）
+     做 A/B，帧时间取交替多轮中位数；GPU 侧用 `EXT_disjoint_timer_query_webgl2` 分 pass 计时确认没有回退。
+     **瓶颈是 CPU 提交**：改前经典缸 ~430 次绘制/帧，其中鱼群 196 个 SkinnedMesh 吃掉约 2/3 帧时间
+     （逐条克隆骨架、逐次切材质/传 uniform、阴影 pass 再来一遍）。
+  2. **鱼群实例化蒙皮**（`fish/fish-pose.js` + `fish/fish-vat.js` + `fish/vat-glsl.js`）：骨骼只有 6 根，游动/冲刺/咬食三个片段离线采样成
+     "骨骼 4×3 矩阵 × 帧"的小贴图（矩阵已并入 bindMatrix 与子网格节点变换），每物种每子网格只画一次 InstancedMesh；
+     顶点着色器按实例相位取两帧插值 + 4 骨蒙皮，与 three 自带蒙皮同一套数学（自检 `__aqDebug.vatCheck(si, phase)` 相对误差 ~3e-4，
+     单测 `tests/fish-pose.test.js` 对拍）。位姿贴图与顶点数无关，锦鲤 3.2 万顶点网格同样适用。
+     逐实例属性（矩阵 / 相位 / 权重）同物种所有子网格共用一份缓冲；锦鲤冷暖微调改走 instanceColor。
+     只有无骨骼片段的静态模型（guppy / betta / harlequin）仍走逐条克隆 + 顶点尾摆。
+     拾取改为椭球射线求交（`School.pickRay`），不再逐三角形。
+  3. **半透明双面材质（鳍）**：three 对 transparent+DoubleSide 逐帧切 side 并 `needsUpdate`（每帧重查着色器程序）。
+     鱼鳍拆成固定的 Back + Front 两个网格，顺序结果与原来一致，不再有版本抖动。
+  4. **阴影影子代理**：鱼的所有子网格合成一个"只写深度"的代理网格（`scene/shadow-layer.js`：放在专用图层，仅在阴影 pass 期间
+     给主相机临时开该图层），真实子网格不再投影；实测阴影图与逐子网格投影逐像素一致（百万像素里 3 个边缘差异）。
+  5. **接地暗斑合批**（`scenes/contact-shadow.js`）：每物件一个网格 → 全部共用一个网格 + 一个材质（浓度走顶点 alpha），经典缸 25 次绘制 → 1。
+  6. **缸体外壳静态合批**（`scene/static-merge.js`）：共用材质的不透明小盒子合成一个网格（框/立柱/柜门/格栅），阴影 pass 同样受益。
+  7. **不透明物体按着色器程序排序**（`scene/render-sort.js`）：切程序次数 77 → 46 /帧（本身收益不大，但零风险）。
+  8. **结果**（laptop 档 = 1366×768@1x、CPU 4×，锁高清，交替 A/B 中位数）：经典缸 48.8 → ~15 ms/帧；
+     绘制次数 431 → ~78；九个预设场景稳态 11-14 ms（户外池塘 18 ms，倒影 pass 占 ~4 ms）。GPU 分 pass 总计 1.3 → 1.1 ms，没有回退。
+  9. **没做 / 已知**：户外池塘的平面倒影仍是每帧整套场景重画；鱼的不透明子网格（身体/眼睛/斑纹）仍各一次绘制，
+     合并需要在片元里按部位取材质参数，视觉风险高、留作后续；本机无弱 GPU，GPU 侧收益只能按 pass 计时推断。
+- 水草边缘锯齿修复（v2.3.0）：v2.2.7 把场景 RT 的 MSAA 关了（多采样深度纹理逐帧 resolve +52%）并降尺度渲染，
+  水草/叶片这类细长几何出现明显阶梯锯齿。新增 `scene/edge-aa.js`（FXAA 3.11 质量档精简版，亮度先 l/(1+l) 再开方，HDR 高光不带偏边缘），
+  `render-scale.js` 在场景渲完后对颜色跑一遍、写进独立 RT（`renderPass.source` 给 tank-lens pass 读：抗锯齿后的颜色 + 场景 RT 的深度），
+  非边缘像素 9 次采样即返回；画质档 0-4 开，最低两档关。本机 GPU 计时与 MSAA 相当（0.4→0.7 ms @4K），弱 GPU 上预计远低于 MSAA 的 resolve。
+- 岸边枫叶/岸边草整片发黑修复：`shore.js` 的 LEAF/GRASS 材质开着 `vertexColors`，但实例化几何没有 `color` 属性（颜色走 instanceColor），缺省属性读成 0 → 乘成纯黑。去掉 `vertexColors`。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

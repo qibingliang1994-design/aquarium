@@ -42,7 +42,7 @@ const HAZE_K=0.24, HAZE_MAX=0.42;
 /**
  * @param {{ camera:THREE.PerspectiveCamera, scene:THREE.Scene, light:THREE.SpotLight,
  *   waterY:number, box:{min:THREE.Vector3, max:THREE.Vector3},
- *   waterUniforms:any, sourceRT?:THREE.WebGLRenderTarget|null }} opts
+ *   waterUniforms:any, sourceRT?:{ texture:THREE.Texture, depthTexture:THREE.DepthTexture|null }|null }} opts
  *   waterUniforms：tank.js 的水面 uniforms（uTime/uFlow/uSky/uDeep/uLamp* 直接共享引用，昼夜/款式更新自动流入）
  *   sourceRT：渲染尺度分离（render-scale.js）的场景 RT；提供时颜色/深度都从它读（composer 目标不再需要深度纹理）
  */

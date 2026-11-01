@@ -1,6 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
+import { createEdgeAA } from './edge-aa.js';
 
 /* ================================================================
  * 渲染尺度分离（render scale）：3D 场景渲进自己的降尺度 RT（画质档驱动 0.6~0.9），
@@ -13,12 +14,15 @@ import { Pass } from 'three/addons/postprocessing/Pass.js';
 
 /**
  * @param {{ scene:THREE.Scene, camera:THREE.PerspectiveCamera }} opts
- * @returns {Pass & { target:THREE.WebGLRenderTarget, setScale(k:number):void, setMSAA(n:number):void }}
+ * @returns {Pass & { target:THREE.WebGLRenderTarget, source:{ readonly texture:THREE.Texture, readonly depthTexture:THREE.DepthTexture }, setScale(k:number):void, setMSAA(n:number):void, setAA(on:boolean):void }}
  */
 export function createScaledRenderPass({ scene, camera }){
   const rt=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType});
   rt.depthTexture=new THREE.DepthTexture(2,2);
-  let scale=1, lastW=2, lastH=2;
+  // 边缘抗锯齿：场景 RT 不开 MSAA，改在颜色上跑一遍 FXAA（写进 aaRT）；深度仍取场景 RT
+  const aaRT=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType, depthBuffer:false});
+  const aa=createEdgeAA();
+  let scale=1, lastW=2, lastH=2, aaOn=true;
 
   class ScaledRenderPass extends Pass {
     constructor(){ super(); this.needsSwap=false; this.clear=true; }
@@ -27,18 +31,24 @@ export function createScaledRenderPass({ scene, camera }){
       renderer.setRenderTarget(rt);
       if(this.clear) renderer.clear();
       renderer.render(scene, camera);
+      if(aaOn) aa.render(renderer, rt.texture, aaRT);
     }
     /** @param {number} w @param {number} h */
     setSize(w, h){
       lastW=w; lastH=h;
-      rt.setSize(Math.max(2,Math.round(w*scale)), Math.max(2,Math.round(h*scale)));
+      const sw=Math.max(2,Math.round(w*scale)), sh=Math.max(2,Math.round(h*scale));
+      rt.setSize(sw, sh); aaRT.setSize(sw, sh);
     }
     /** 场景渲染尺度（1 = 与画布同分辨率） @param {number} k */
     setScale(k){ scale=Math.min(1,Math.max(0.5,k)); this.setSize(lastW,lastH); }
     /** 场景 RT 的 MSAA（后期链的四边形不需要 MSAA，场景几何边缘要） @param {number} n */
     setMSAA(n){ if(rt.samples!==n){ rt.samples=n; rt.dispose(); } }
-    dispose(){ rt.dispose(); }
+    /** 边缘抗锯齿开关（最低画质档关，省一遍全屏 pass） @param {boolean} on */
+    setAA(on){ aaOn=on; }
+    dispose(){ rt.dispose(); aaRT.dispose(); aa.dispose(); }
   }
   const pass=new ScaledRenderPass();
-  return Object.assign(pass, { target: rt });
+  /** 后续 pass 读取的场景颜色（抗锯齿后或原样）+ 深度 */
+  const source={ get texture(){ return aaOn ? aaRT.texture : rt.texture; }, get depthTexture(){ return /** @type {THREE.DepthTexture} */ (rt.depthTexture); } };
+  return Object.assign(pass, { target: rt, source });
 }

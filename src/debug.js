@@ -3,6 +3,7 @@ import { U } from './uniforms.js';
 import { sstep } from './utils.js';
 import { schoolNames, personaTags } from './entities/fish/identity.js';
 import { mixNoteFor } from './ui/encyclopedia.js';
+import { vatSelfCheck } from './fish/fish-pose.js';
 
 /* ================================================================
  * window.__aqDebug：自动化验证用的调试钩子
@@ -16,8 +17,10 @@ export function installDebug(/** @type {any} */  d){
   const care=()=>runtime.care;
   const sleep=()=>sstep(0.55,0.9,dayNight.k)*(1-U.excite.value)*(1-input.fear);
   /** @type {any} */ (window).__aqDebug={
-    renderer, loopFrame, restartLoop,
+    renderer, loopFrame, restartLoop, composer:d.composer, schools, cameraObj:camera,
     glbLoaded:()=>glbLoaded?.() ?? [],
+    // 实例化蒙皮自检：位姿贴图重建 vs three 蒙皮的最大相对误差（游动片段，给定相位）
+    vatCheck:(/** @type {number} */ si, /** @type {number} */ phase=0.37, /** @type {'swim'|'fast'|'bite'} */ clip='swim')=>{ const s=schools[si]; const c=clip==='fast' ? s?.fastClip : clip==='bite' ? s?.biteClip : s?.swimClip; return s?.vat && c ? vatSelfCheck(s.vat.bake, s.template, c, phase, clip) : null; },
     quality:()=>({ level:quality.level, label:quality.label }),
     qualityForce:(/** @type {number} */ lv)=>quality.force(lv),
     time:()=>U.time.value,

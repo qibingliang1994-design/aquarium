@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { causticsTex, causticsOn, CAUSTIC_FACING } from '../scene/caustics.js';
 import { U } from '../uniforms.js';
+import { VAT_VERT_HEAD } from './vat-glsl.js';
 
 /* ================================================================
  * GLB 鱼体美化
@@ -146,13 +147,13 @@ export function prepareFishModel(/** @type {any} */ root, /** @type {string} */ 
   return root;
 }
 
-/* ---------- 着色器装饰：渐变 / 霓虹 / 焦散 / 逆光 / （无动画模型）尾摆 ----------
- * opts: { causticK?:{value}, sway?:{ phaseU, L, amp, waveK } } */
+/* ---------- 着色器装饰：渐变 / 霓虹 / 焦散 / 逆光 / （无动画模型）尾摆 / （实例化鱼）骨骼位姿蒙皮 ----------
+ * opts: { causticK?:{value}, sway?:{ phaseU, L, amp, waveK }, vat?:{ uPose, uC0, uC1, uC2 }（fish-vat.js 的实例化蒙皮） } */
 /** @param {any} mat @param {any} [opts] */
 export function decorateFishMaterial(mat, opts={}){
   const ud=(/** @type {any} */ (mat.userData)); const paint = ud.paint, frame = ud.frame;
-  const { causticK, sway } = opts;
-  const flags = `${paint?'g':''}${causticK?'c':''}${sway?'s':''}`;
+  const { causticK, sway, vat } = opts;
+  const flags = `${paint?'g':''}${causticK?'c':''}${sway?'s':''}${vat?'v':''}`;
   mat.customProgramCacheKey = ()=> `fishfx_${flags}`;
   mat.onBeforeCompile = (/** @type {any} */ sh)=>{
     Object.assign(sh.uniforms, { uRimK:fishRim.k, uRimColor:fishRim.color });
@@ -168,6 +169,7 @@ export function decorateFishMaterial(mat, opts={}){
       Object.assign(sh.uniforms, { uTP:sway.phaseU, uTL:{value:sway.L}, uTA:{value:sway.amp}, uTK:{value:sway.waveK} });
       vHead += 'uniform float uTP,uTL,uTA,uTK;\n';
     }
+    if(vat){ Object.assign(sh.uniforms, vat); vHead += VAT_VERT_HEAD; }
     if(causticK){
       Object.assign(sh.uniforms, { uCMap:{value:causticsTex}, uCK:causticK, uCOn:causticsOn, uCT:U.time });
       vHead += 'varying vec3 vFxW;\n';
@@ -184,8 +186,11 @@ export function decorateFishMaterial(mat, opts={}){
         ${vBody}
         ${sway ? `{ float k=clamp((uTL*0.5-transformed.z)/uTL,0.0,1.2);
           transformed.x += uTA*uTL*pow(k,1.7)*sin(uTP-uTK*k); }` : ''}`)
+      .replace('#include <skinnormal_vertex>', `#include <skinnormal_vertex>
+        ${vat ? 'mat4 vatS = vatSkin(); objectNormal = normalize((vatS * vec4(objectNormal, 0.0)).xyz);' : ''}`)
       .replace('#include <skinning_vertex>', `#include <skinning_vertex>
-        ${causticK ? 'vFxW = (modelMatrix*vec4(transformed,1.0)).xyz;' : ''}`);
+        ${vat ? 'transformed = (vatS * vec4(transformed, 1.0)).xyz;' : ''}
+        ${causticK ? `vFxW = (modelMatrix*${vat ? 'instanceMatrix*' : ''}vec4(transformed,1.0)).xyz;` : ''}`);
     sh.fragmentShader = fHead + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
         ${paint ? `{ vec3 g = vYN<uGM ? mix(uG0,uG1,smoothstep(0.0,uGM,vYN))

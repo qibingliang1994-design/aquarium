@@ -3,6 +3,7 @@ import { THEMES, THEME_IDS } from '../scenes/themes.js';
 import { holdDialog, releaseDialog } from './dialog.js';
 import { fishTotal } from '../scenes/scene-doc.js';
 import { TANK_STYLES } from '../scenes/tank-styles.js';
+import { scenePlaceholder } from './scene-placeholder.js';
 
 /* ================================================================
  * "我的水景"弹层：场景卡片（缩略图 / 名称 / 统计）+ 切换、造景、复制、改名、恢复预设、删除、新建
@@ -42,7 +43,7 @@ export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, to
     thumb.title=active ? '当前水景' : `切换到「${doc.name}」`;
     const src=store.thumb(doc.id);
     if(src){ const img=document.createElement('img'); img.alt=''; img.src=src; thumb.appendChild(img); }
-    else thumb.insertAdjacentHTML('beforeend','<span class="ph"><svg class="icon"><use href="#i-fish"/></svg></span>');
+    else thumb.insertAdjacentHTML('beforeend', `<span class="ph">${scenePlaceholder(doc.tank)}</span>`);
     thumb.insertAdjacentHTML('beforeend', `<span class="scene-badge${active?' now':''}">${active?'当前':theme.label}</span><span class="go">进入</span>`);
     thumb.addEventListener('click',()=>{ if(!active){ close(); onSwitch(doc.id); } });
 

@@ -140,7 +140,7 @@ export function prepareFishModel(/** @type {any} */ root, /** @type {string} */ 
     const old = o.material, name = old.name ?? '';
     const look = /Eyes/i.test(name) ? EYE : (palette.find((/** @type {any} */ entry)=>entry[0].test(name))?.[1] ?? {});
     const m = makeSkin(old, look);
-    if(/Eyes/i.test(name)){ m.clearcoat = 1; m.clearcoatRoughness = 0.02; m.iridescence = 0; }
+    if(/Eyes/i.test(name)){ m.clearcoat = 1; m.clearcoatRoughness = 0.02; m.iridescence = 0; m.userData.eye = true; }
     m.userData.frame = { up:frame.up.toArray(), lo:frame.lo, hi:frame.hi };
     o.material = m;
   });
@@ -153,7 +153,8 @@ export function prepareFishModel(/** @type {any} */ root, /** @type {string} */ 
 export function decorateFishMaterial(mat, opts={}){
   const ud=(/** @type {any} */ (mat.userData)); const paint = ud.paint, frame = ud.frame;
   const { causticK, sway, vat } = opts;
-  const flags = `${paint?'g':''}${causticK?'c':''}${sway?'s':''}${vat?'v':''}`;
+  const eye = !!ud.eye;
+  const flags = `${paint?'g':''}${causticK?'c':''}${sway?'s':''}${vat?'v':''}${eye?'e':''}`;
   mat.customProgramCacheKey = ()=> `fishfx_${flags}`;
   mat.onBeforeCompile = (/** @type {any} */ sh)=>{
     Object.assign(sh.uniforms, { uRimK:fishRim.k, uRimColor:fishRim.color });
@@ -202,7 +203,10 @@ export function decorateFishMaterial(mat, opts={}){
           float c2=texture2D(uCMap,vFxW.xz*0.92-vec2(uCT*0.013,-uCT*0.019)).r;
           diffuseColor.rgb += vec3(0.62,0.85,0.95)*pow(min(c1,c2),1.4)*smoothstep(1.75,1.0,vFxW.y)*${CAUSTIC_FACING}*uCK*uCOn; }` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        ${paint ? 'totalEmissiveRadiance += uG1*uGlow*(1.0-smoothstep(0.0,uGB,abs(vYN-uGM)));' : ''}`)
+        ${paint ? 'totalEmissiveRadiance += uG1*uGlow*(1.0-smoothstep(0.0,uGB,abs(vYN-uGM)));' : ''}
+        ${eye ? `{ float en = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+          float ring = smoothstep(0.06, 0.2, 1.0-en) * (1.0-smoothstep(0.45, 0.72, 1.0-en));
+          totalEmissiveRadiance += vec3(0.5, 0.28, 0.06) * ring * 0.55; }` : ''}`)
       .replace('#include <opaque_fragment>', `{
           float nv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
           outgoingLight += mix(uRimColor, diffuseColor.rgb, 0.45) * pow(1.0-nv, 3.0) * uRimK;

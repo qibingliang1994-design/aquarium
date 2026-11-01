@@ -22,7 +22,7 @@ const NEEDLE = () => shared('mat:needle', () => {
   return m;
 });
 const LEAF = () => shared('mat:maple', () => {
-  const m = new THREE.MeshStandardMaterial({ roughness:0.62, metalness:0, side:THREE.DoubleSide });   // 着色走 instanceColor；几何没有 color 属性，开 vertexColors 会整片变黑
+  const m = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.62, metalness:0, side:THREE.DoubleSide });   // 顶点色 = 叶心深叶尖浅（mapleLeafGeo），再乘 instanceColor 的秋色
   injectSway(m, 0.04, 1.6, 'maple', false, 0.22);
   injectWet(m, 'maple');
   return m;
@@ -68,8 +68,14 @@ export function buildPine(rng, seed){
   g.add(trunk);
   const lean = (rng()-0.5)*0.08;
   const layers = [[0.78, 0.95, 0.85], [0.62, 0.82, 1.45], [0.42, 0.7, 1.95], [0.24, 0.55, 2.4]];
-  for(const [r, h, y] of layers){
-    const c = cone(r*(0.92+rng()*0.16), h, y, 0x1a3d22, 0x3f7a34);
+  // 每棵树一个冷暖偏移（蓝绿 ↔ 黄绿），层越高越亮越黄：向阳的新叶 vs 树冠下的阴影，原来整棵一个暗绿
+  const warm = rng();
+  const c0 = new THREE.Color(0x1d4226).lerp(new THREE.Color(0x2c4a22), warm);
+  const c1 = new THREE.Color(0x3f7a34).lerp(new THREE.Color(0x6a9a3a), warm*0.7);
+  for(const [li, [r, h, y]] of layers.entries()){
+    const up = li/(layers.length-1);
+    const c = cone(r*(0.92+rng()*0.16), h, y,
+      c0.clone().lerp(c1, up*0.35).getHex(), c1.clone().lerp(new THREE.Color(0x8fb24c), up*0.3).getHex());
     c.rotation.z = lean;
     g.add(c);
   }
@@ -78,6 +84,32 @@ export function buildPine(rng, seed){
 }
 
 const MAPLE_COLS = [0xc4492a, 0xe07a2f, 0xd4a017, 0x8d2f2a, 0xf0c14a];
+
+/** 五裂掌状枫叶（取代整块矩形片）：极坐标五个尖瓣 + 叶柄缺口，叶面沿中脉微拱，顶点色叶心深、叶尖浅，
+ * 带出叶脉的明暗层次。整套模板全树共享，实例颜色再叠一层秋色 */
+function mapleLeafGeo(){
+  return shared('geo:mapleleaf', () => {
+    const N = 30, R = 0.15, pts = [];
+    for(let i=0;i<N;i++){
+      const th = i/N*Math.PI*2, lobe = Math.abs(Math.cos(2.5*(th-Math.PI/2)));
+      const r = R*(0.34 + 0.66*Math.pow(lobe, 0.7));
+      pts.push(new THREE.Vector2(Math.cos(th)*r, Math.sin(th)*r));
+    }
+    const geo = new THREE.ShapeGeometry(new THREE.Shape(pts));
+    const p = geo.attributes.position;
+    const col = new Float32Array(p.count*3);
+    for(let i=0;i<p.count;i++){
+      const x = /** @type {number} */ (p.getX(i)), y = /** @type {number} */ (p.getY(i));
+      const d = Math.min(1, Math.hypot(x, y)/R);
+      p.setZ(i, x*x*2.2 - Math.abs(y)*0.04);       // 沿中脉两翼上翘，叶面接光不再整片同亮
+      const k = 0.62 + 0.38*d;
+      col[i*3] = k; col[i*3+1] = k*0.97; col[i*3+2] = k*0.93;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }).clone();
+}
 
 /** @param {any} rng @param {number} seed */
 export function buildMaple(rng, seed){
@@ -92,9 +124,8 @@ export function buildMaple(rng, seed){
     b.rotation.y = i;
     g.add(b);
   }
-  const n = 22;
-  const leaf = new THREE.PlaneGeometry(0.34, 0.2);
-  leaf.translate(0, 0.02, 0);
+  const n = 44;
+  const leaf = mapleLeafGeo();
   const mesh = new THREE.InstancedMesh(leaf, LEAF(), n);
   mesh.userData.shore = { kind:'leaf', full:n, extra:false };
   mesh.frustumCulled = false;

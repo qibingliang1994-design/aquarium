@@ -470,6 +470,8 @@
   `render-scale.js` 在场景渲完后对颜色跑一遍、写进独立 RT（`renderPass.source` 给 tank-lens pass 读：抗锯齿后的颜色 + 场景 RT 的深度），
   非边缘像素 9 次采样即返回；画质档 0-4 开，最低两档关。本机 GPU 计时与 MSAA 相当（0.4→0.7 ms @4K），弱 GPU 上预计远低于 MSAA 的 resolve。
 - 岸边枫叶/岸边草整片发黑修复：`shore.js` 的 LEAF/GRASS 材质开着 `vertexColors`，但实例化几何没有 `color` 属性（颜色走 instanceColor），缺省属性读成 0 → 乘成纯黑。去掉 `vertexColors`。
+- 美术一轮（画面质感）：①背光幕（`tank.js` `backdrop`）四边用 `featherEdges` 羽化到透明，缸体外不再露出一张有硬边的深色卡片，缸光像洒在后墙上化进房间暗处（缸内区域保持不透明，仍写深度）；②枫叶从整块矩形换成五裂掌状叶（`shore.js` `mapleLeafGeo`：叶面沿中脉拱起 + 顶点色叶心深叶尖浅），数量 22→44，这时材质必须开 `vertexColors`（几何有 `color` 属性，和上一条黑屏修复不冲突）；③自然水域的天空倒影降饱和并往青绿拉（`uClear` 控制，玻璃缸逐值不变），池水不再是蓝紫色塑料布，池底和鱼看得见。
+- 美术第二轮：①户外池塘草地顶点色分三层（`natural-shells.js` `buildOutdoor`：大尺度深浅斑块、中尺度枯黄草窝、细碎明暗斑点，贴岸一圈更湿更深），不再是一整片平铺亮绿；②松树每棵一个冷暖偏移，越高的层越亮越黄（`shore.js` `buildPine`）；③玻璃缸房间地面加柜脚接地暗晕 `ao`（`tank.js`，进 `room` 数组，自然水域随之隐藏）。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

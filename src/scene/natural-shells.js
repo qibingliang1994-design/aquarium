@@ -173,6 +173,7 @@ function buildOutdoor(waterY){
   const p=g.attributes.position, col=new Float32Array(p.count*3);
   const mud0=new THREE.Color(0x6d6248), mud1=new THREE.Color(0x4a4334);
   const stone=new THREE.Color(0x8a8478), grass0=new THREE.Color(0x4f7a32), grass1=new THREE.Color(0x6e9444), dry=new THREE.Color(0x8d8458);
+  const meadow=new THREE.Color(0x9bac4e), lush=new THREE.Color(0x315a2a);
   const c=new THREE.Color();
   const hMesh=(/** @type {number} */ x, /** @type {number} */ z)=>{
     const edge=clamp(Math.min(TW/2-Math.abs(x), TD/2-Math.abs(z))/2.4, 0, 1);
@@ -186,7 +187,14 @@ function buildOutdoor(waterY){
     const n=fbm3(x*0.35, 2, z*0.35, 3);
     if(d<0.9) c.copy(mud0).lerp(mud1, n).multiplyScalar(0.72+0.28*(1-Math.min(1, (waterY-h)*0.35)));
     else if(d<1.08) c.copy(mud1).lerp(stone, sstep(0.9, 1.08, d));
-    else c.copy(grass0).lerp(grass1, n).lerp(dry, Math.max(0, n*1.4-0.85));
+    else{
+      // 草地分三层颜色：大尺度的深浅斑块（阴湿的浓绿 ↔ 向阳的黄绿）、中尺度的枯黄草窝、细碎的明暗斑点；
+      // 贴岸一圈更湿更深（水汽滋养的浓绿），原来单一的亮绿一整片平铺像块地毯
+      const macro=fbm3(x*0.09, 7.3, z*0.09, 3), fine=fbm3(x*1.7, 3.1, z*1.7, 2);
+      c.copy(grass0).lerp(grass1, n).lerp(meadow, sstep(0.45, 0.8, macro)*0.7).lerp(lush, sstep(0.55, 0.3, macro)*0.6);
+      c.lerp(dry, Math.max(0, n*1.4-0.85)).multiplyScalar(0.9+0.2*fine);
+      c.lerp(lush, (1-sstep(1.08, 1.5, d))*0.55);
+    }
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));

@@ -153,8 +153,10 @@ const waterMesh=new THREE.Mesh(
             vec3 refl = texture2DProj(uReflectMap, rc).rgb;
             if(!(refl.r<=4.0 && refl.g<=4.0 && refl.b<=4.0)) refl = uSky;
             float rl = dot(refl, vec3(0.2126, 0.7152, 0.0722));
-            refl = mix(vec3(rl), refl, 1.42);
-            float fmix = (0.38+0.58*clamp(rfres, 0.0, 1.0))*clamp(uReflectDim, 0.0, 1.0);
+            // 自然水域：天空倒影少一点饱和、往青绿拉（原样的纯天蓝倒影把池水铺成一张蓝紫色塑料布），池底和鱼透得出来
+            refl = mix(vec3(rl), refl, mix(1.42, 1.1, uClear));
+            refl *= mix(vec3(1.0), vec3(0.8, 1.0, 0.9), uClear);
+            float fmix = (mix(0.38, 0.28, uClear)+0.58*clamp(rfres, 0.0, 1.0))*clamp(uReflectDim, 0.0, 1.0);
             col = mix(col, min(max(refl, vec3(0.0)), vec3(3.0)), clamp(fmix, 0.0, 0.96));
           }
           // 按视角：侧看（掠射）仍是反光的水面，俯视时透出缸里（此前缸模式恒 0.93，俯视机位和编辑器都被一块深色板挡住）
@@ -312,7 +314,7 @@ const bgTex=new THREE.CanvasTexture(bgCanvas); bgTex.colorSpace=THREE.SRGBColorS
 // 背光幕重绘（主题色 'r,g,b'）：外圈辉光取主题色的 45% 亮度；art='ink' 画水墨远山（inkMountains）
 function setBackdrop(/** @type {string} */ rgb, /** @type {string} */ art=''){
   const ctx=/** @type {CanvasRenderingContext2D} */ (bgCanvas.getContext('2d'));
-  if(art==='ink'){ inkMountains(ctx, rgb); bgTex.needsUpdate=true; return; }
+  if(art==='ink'){ inkMountains(ctx, rgb); featherEdges(ctx); bgTex.needsUpdate=true; return; }
   const g=ctx.createLinearGradient(0,0,0,256);
   g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
   ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
@@ -320,7 +322,24 @@ function setBackdrop(/** @type {string} */ rgb, /** @type {string} */ art=''){
   const r=ctx.createRadialGradient(256,150,10,256,150,250);
   r.addColorStop(0,`rgba(${rgb},0.55)`); r.addColorStop(0.45,`rgba(${dim},0.28)`); r.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=r; ctx.fillRect(0,0,512,256);
+  featherEdges(ctx);
   bgTex.needsUpdate=true;
+}
+/** 背光幕四边羽化到透明：缸体外露出的那圈不再是一张有硬边的深色卡片，而是缸光洒在后墙上、化进房间暗处。
+ * 缸内（画布横向约 27%~73%、纵向约 35% 以下）保持不透明，所以透过玻璃看到的画面不变
+ * @param {CanvasRenderingContext2D} ctx */
+function featherEdges(ctx){
+  const ramp=(/** @type {CanvasGradient} */ g, /** @type {number[][]} */ stops)=>{
+    for(const [t,a] of stops) g.addColorStop(/** @type {number} */ (t), `rgba(0,0,0,${a})`);
+    return g;
+  };
+  ctx.save();
+  ctx.globalCompositeOperation='destination-in';
+  ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,512,0), [[0,0],[0.07,0.18],[0.15,0.62],[0.25,1],[0.75,1],[0.85,0.62],[0.93,0.18],[1,0]]);
+  ctx.fillRect(0,0,512,256);
+  ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,0,256), [[0,0],[0.1,0.2],[0.24,0.75],[0.36,1],[1,1]]);
+  ctx.fillRect(0,0,512,256);
+  ctx.restore();
 }
 /** 水墨远山：雾色天光底 + 三重山（由远及近墨色渐浓，山脚化入雾里留白）+ 一轮淡日。
  * 透过水体与缸壁看过去是一幅压暗的山水立轴；四周仍压暗，与其他主题的"背光幕"同一个亮度结构
@@ -365,7 +384,7 @@ function inkMountains(ctx, rgb){
 }
 setBackdrop('58,138,160');
 const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(8.6,4.6),
-  new THREE.MeshBasicMaterial({map:bgTex, fog:false}));
+  new THREE.MeshBasicMaterial({map:bgTex, fog:false, transparent:true}));   // 边缘羽化到透明（featherEdges）；仍写深度，镜头 pass 的景深不变
 backdrop.position.set(0,1.5,-2.5);
 scene.add(backdrop);
 
@@ -414,6 +433,20 @@ let floorGlowMat;
   floor.position.y=-0.75;
   floor.receiveShadow=true;
   scene.add(floor); room.push(floor);
+  // 柜脚接地阴影：柜子底下一圈柔和的暗晕（椭圆径向渐变，沿缸的长边拉长），柜子不再像悬在地面上。
+  // 先于下面的漏光加色绘制，漏光仍压在它上面
+  const aoTex=(()=>{
+    const cv=document.createElement('canvas'); cv.width=cv.height=128;
+    const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d'));
+    const g=ctx.createRadialGradient(64,64,10,64,64,64);
+    g.addColorStop(0,'rgba(0,0,0,0.85)'); g.addColorStop(0.55,'rgba(0,0,0,0.45)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(cv);
+  })();
+  const ao=new THREE.Mesh(new THREE.PlaneGeometry(7.6,3.9).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({map:aoTex, transparent:true, depthWrite:false, fog:false}));
+  ao.position.y=-0.7495;
+  scene.add(ao); room.push(ao);
   // 地面光晕：缸体透出的水色漏光，把柜子"落"在地上
   const glowTex=(()=>{
     const cv=document.createElement('canvas'); cv.width=cv.height=256;

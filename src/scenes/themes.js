@@ -56,6 +56,13 @@ export const THEMES = {
     sand:[0x6e5a44,0x4c3d2d], backdrop:'176,214,222', skirt:{ edge:0.58, gran:true, base:0x9c8c76 },
     gravel:[0x5a4a3a,0x463a2e,0x6e5e4c,0x3c3128,0x7a6a58],
   },
+  // 深蓝背景：缸后贴深钴蓝背景板，浅色苔石与草原在上面跳出来（致敬 IAPLC 2008《Mount. Donha》）
+  azure: {
+    label:'深蓝背景', hint:'深钴蓝背景板 · 深褐水草泥 · 清水', sandTex:'s_aquasoil',
+    fog:0x0a2140, glow:0x3f7fd0, sky:[0.42,0.58,0.82], deep:[0.02,0.06,0.16],
+    sand:[0x6e5a44,0x4c3d2d], backdrop:'48,96,190', skirt:{ edge:0.58, gran:true, base:0x9c8c76 },
+    gravel:[0x5a4a3a,0x463a2e,0x6e5e4c,0x3c3128,0x7a6a58],
+  },
 };
 
 export const THEME_IDS = Object.keys(THEMES);

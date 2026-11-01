@@ -63,21 +63,23 @@ export function buildLiveRock(/** @type {any} */ rng, /** @type {number} */ seed
   return { object:mesh, obstacles:[{ c:new THREE.Vector3(0,r*0.4,0), r:r*1.1 }] };
 }
 
+/** 沉木材质（沉木拱与分叉沉木枝共用；颜色走顶点色） */
+export const woodMat = () => shared('mat:wood', ()=>{
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02});
+  injectCaustics(m, 0.4, 'wood');
+  injectSurfaceDetail(m, { freq:10, k:0.3, ao:0.25, stretch:[1,0.25,1], key:'wooddet' });   // 拉长的噪声 ≈ 顺纹理的木纤维
+  injectSurfaceTex(m, { name:'w_drift', scale:1.5, k:0.9, gain:2.0, key:'drift' });         // 漂木木纹照片
+  return m;
+});
+
 /** 沉木：渐细的主干拱 + 主侧枝 + 随机细枝 + 根部扎沙；原经典布局中位于 (0,-0.57)，坐标已减去该处沙面 */
 export function buildWood(/** @type {any} */ rng, /** @type {number} */ seed){
-  const woodMat=shared('mat:wood', ()=>{
-    const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02});
-    injectCaustics(m, 0.4, 'wood');
-    injectSurfaceDetail(m, { freq:10, k:0.3, ao:0.25, stretch:[1,0.25,1], key:'wooddet' });   // 拉长的噪声 ≈ 顺纹理的木纤维
-    injectSurfaceTex(m, { name:'w_drift', scale:1.5, k:0.9, gain:2.0, key:'drift' });         // 漂木木纹照片
-    return m;
-  });
   const mossMat=shared('mat:woodMoss', ()=>new THREE.MeshStandardMaterial({color:0x4a6b2f, roughness:1, flatShading:true}));
   const V=(/** @type {number} */ x,/** @type {number} */ y,/** @type {number} */ z)=>new THREE.Vector3(x, y-0.3, z+0.57);
   const curve=new THREE.CatmullRomCurve3([V(-0.74,0.27,-0.54), V(-0.62,0.52,-0.57), V(-0.38,0.82,-0.6), V(0,1.0,-0.58),
     V(0.42,0.78,-0.6), V(0.66,0.42,-0.55), V(0.76,0.26,-0.53)]);
   const group=new THREE.Group();
-  const add=(/** @type {any} */ g)=>{ group.add(new THREE.Mesh(g, woodMat)); };
+  const add=(/** @type {any} */ g)=>{ group.add(new THREE.Mesh(g, woodMat())); };
   // 主干：左端是粗根（喇叭口扎进沙里），向右逐渐变细
   add(barkTube(curve, t=>0.034+0.032*(1-t)+0.05*Math.max(0,1-t/0.07)**2+0.02*Math.max(0,(t-0.94)/0.06)**2, { segs:64, radial:14, seed }));
   // 主侧枝 + 2~3 根随机细枝：从主干某点长出，向上外伸，末端收尖

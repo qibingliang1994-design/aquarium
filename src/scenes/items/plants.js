@@ -23,14 +23,20 @@ const PLANTS = {
   crown:    { n:3, spread:[0.12,0.08], s:[0.85,1.15], unit:(/** @type {any} */ rng)=>rosette(rng, { n:13, len:[0.62,0.82], width:0.15, petiole:0.3,
               tilt:[0.12,0.75], bend:0.75, colors:[[0x16401f,0x5aa846],[0x1a4a22,0x6cb852]], vein:0x9bd06a }) },
   // 红宫廷：茎生对叶，顶端转红
-  red:      { n:7, spread:[0.09,0.09], s:[0.75,1.2], unit:(/** @type {any} */ rng)=>stemPlant(rng, { height:0.42, nodes:11, leafLen:0.07, leafW:0.022,
+  red:      { n:11, spread:[0.11,0.1], s:[0.75,1.2], unit:(/** @type {any} */ rng)=>stemPlant(rng, { height:0.42, nodes:11, leafLen:0.07, leafW:0.022,
               cStem:0x6b3a24, cLow:0x3f6a2a, cHigh:0xd0503a }) },
+  // 绿宫廷：高大的绿色有茎草，顶梢转黄绿，成片种在后景能一直长到水面
+  stemGreen:{ n:18, spread:[0.17,0.12], s:[0.75,1.15], unit:(/** @type {any} */ rng)=>stemPlant(rng, { height:0.72, nodes:16, leafLen:0.1, leafW:0.03,
+              cStem:0x3f6a2a, cLow:0x2f6a2a, cHigh:0xa8cf52 }) },
   // 迷你矮珍珠：圆叶小草簇，铺成前景地毯
   carpet:   { n:9, spread:[0.28,0.12], s:[0.9,1.3], unit:(/** @type {any} */ rng)=>carpetClump(rng, { n:56, radius:0.1,
               colors:[[0x2c6a2a,0x6ec34c],[0x2f7430,0x82d05a]] }) },
   // 牛毛毡：极细的针状叶成簇直立，一片连成草原（ADA 岩组缸的标准前中景）；低面数，单丛株数多
   hairgrass:{ n:16, spread:[0.32,0.16], s:[0.8,1.3], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:20, len:[0.13,0.28], width:0.006, twist:0.25,
               colors:[[0x2a5a22,0x7fc04a],[0x2f6426,0x93cf58],[0x2a5220,0x6eae40]], spread:0.035, segs:5, cols:1 }) },
+  // 铁皇冠 / 黑木蕨：深绿长披针叶从短根茎斜伸，常绑在沉木与石缝间
+  fern:     { n:5, spread:[0.12,0.09], s:[0.8,1.2], unit:(/** @type {any} */ rng)=>rosette(rng, { n:11, len:[0.26,0.4], width:0.05, petiole:0.12,
+              tilt:[0.35,1.0], bend:0.5, colors:[[0x173a19,0x3f7a2e],[0x1c4220,0x4c8a36],[0x14331a,0x376a2a]], vein:0x6f9a4a }) },
   // 细叶草：极细的缎带叶，轻柔飘动
   seagrass: { n:8, spread:[0.15,0.1], s:[0.75,1.2], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:9, len:[0.55,0.9], width:0.016, twist:0.6,
               colors:[[0x234a2a,0x86b250],[0x2a5530,0x9cc25e]], spread:0.02 }) },

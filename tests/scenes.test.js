@@ -158,10 +158,14 @@ describe('缸体款式', () => {
     expect(resolveTank('rimless', 'reef')).toBe('rimless');
   });
 
-  it('每个预设各配一种不同的缸 / 水域，且都是已知款式', () => {
+  it('每个原创预设各配一种不同的缸 / 水域，且都是已知款式；致敬 IAPLC 的预设一律用 ADA 缸', () => {
     const tanks = PRESETS.map(p => sanitizeDoc(p).tank);
     for (const t of tanks) expect(TANK_STYLES[t]).toBeTruthy();
-    expect(new Set(tanks).size).toBe(PRESETS.length);
+    const own = PRESETS.filter(p => !p.homage).map(p => sanitizeDoc(p).tank);
+    expect(new Set(own).size).toBe(own.length);
+    const homage = PRESETS.filter(p => p.homage);
+    expect(homage.length).toBeGreaterThan(0);
+    for (const p of homage) expect(sanitizeDoc(p).tank).toBe('ada');
   });
 
   it('池塘 / 溪流 / 小河是自然水域，溪流有水流而池塘是静水', () => {

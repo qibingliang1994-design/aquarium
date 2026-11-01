@@ -1,6 +1,7 @@
 // @ts-check
 /* ================================================================
  * 预设水景（纯数据）。首次运行时复制进存档；"恢复预设"按 presetId 回到这里
+ * 致敬 IAPLC 冠军：苔石山（2008 Mount. Donha）/ 悠然（2018 Yururi）/ 灰色山脉（2007 Ashy Range），只取构图，homage 字段记原作
  * ADA 岩组：ADA 水景缸（超白 + 玻璃 Lily Pipe + 方形吊灯）+ 背光磨砂屏主题，青龙石岩组 + 牛毛毡草原 + 化妆砂，三角灯鱼群
  * 大户外池塘：不规则石岸（tank outdoor），锦鲤 / 金鱼 / 鼠鱼，睡莲（含荷花）与香蒲，岸上松、秋枫、岸草和石灯
  * v2.1.11 新增：江南园林（明式红木缸 + 太湖石 / 石拱桥 / 青花瓷罐 + 水墨远山背景）
@@ -174,6 +175,80 @@ const RAW = [
       it('hairgrass',1.0,0.5,0.8), it('hairgrass',1.48,0.54,0.75), it('hairgrass',1.95,0.5,0.8),
       it('carpet',-0.85,0.24,0.8), it('carpet',1.12,0.22,0.7),
     ].map((o,i)=>({ id:`iwagumi-${i}`, ...o })),
+  },
+  // ---------- 致敬 IAPLC 历届冠军（只取构图与意境，素材全部程序生成；都用 ADA 缸） ----------
+  {
+    id:'donha', presetId:'donha', name:'苔石山', theme:'azure', tank:'ada', homage:'IAPLC 2008 冠军《Mount. Donha》· Cheng Siu Wai',
+    fish:{ tetra:30 },
+    items:[
+      // 按原作横向比例排布：一道横贯全缸的苔石山脉——左组低、中间主峰最高、右组中等，石块彼此相挨连成一体
+      // 中央主峰
+      it('mossRock',0.1,-0.3,2.3,0.3), it('mossRock',-0.28,-0.22,1.8,1.4), it('mossRock',0.48,-0.26,1.9,2.2),
+      it('mossRock',-0.05,-0.02,1.3,0.9), it('mossRock',0.32,0.02,1.1,3.1), it('mossRock',-0.5,-0.4,1.4,4.4),
+      // 左组
+      it('mossRock',-1.95,-0.3,1.4,5.0), it('mossRock',-1.62,-0.16,1.1,2.0), it('mossRock',-1.32,-0.34,1.3,2.6),
+      it('mossRock',-1.02,-0.12,1.0,0.7), it('mossRock',-0.78,-0.32,1.15,3.6), it('mossRock',-1.22,0.06,0.8,1.1), it('mossRock',-0.62,0.02,0.7,2.9),
+      // 右组
+      it('mossRock',0.86,-0.3,1.7,0.2), it('mossRock',1.16,-0.12,1.2,4.1), it('mossRock',1.36,-0.34,1.5,5.4),
+      it('mossRock',1.62,-0.16,1.1,1.6), it('mossRock',1.86,-0.34,1.0,3.3), it('mossRock',0.7,0.06,0.8,2.4), it('mossRock',1.45,0.1,0.7,0.5),
+      // 右端一丛红草
+      it('red',1.95,-0.05,1.4), it('red',1.9,0.2,1.1), it('bush',1.95,0.4,0.9),
+      // 前景：又高又密的草原，盖住岩脚
+      ...[-1.9,-1.45,-1.0,-0.55,-0.1,0.35,0.8,1.25,1.7].flatMap((x,k)=>[
+        it('hairgrass',x,0.56,1.55), it('hairgrass',x+0.22,0.36,1.6), it('hairgrass',x+(k%2 ? 0.1 : -0.1),0.18,1.6)]),
+      // 后景石缝间也冒草
+      it('hairgrass',-1.45,-0.6,1.6), it('hairgrass',-0.55,-0.62,1.6), it('hairgrass',0.65,-0.62,1.6), it('hairgrass',1.6,-0.6,1.6),
+    ].map((o,i)=>({ id:`donha-${i}`, ...o })),
+  },
+  {
+    id:'yururi', presetId:'yururi', name:'悠然', theme:'nature', tank:'ada', homage:'IAPLC 2018 冠军《Yururi》· Hironori Handa',
+    fish:{ harlequin:18 },
+    items:[
+      // 原作是"左低右高"的斜坡：左侧大片留白，右侧三分之二的水草从底一直堆到水面
+      // 左：一支低平的沉木枝向右伸，后面几丛稀疏细高草
+      it('branchWood',-2.0,-0.12,1.4,0.05), it('branchWood',-1.75,-0.35,0.9,-0.4),
+      it('hairgrass',-1.75,-0.5,1.6), it('hairgrass',-1.3,-0.56,1.6), it('hairgrass',-0.95,-0.48,1.5), it('seagrass',-1.55,-0.64,1.2),
+      // 中：一大团红宫廷，沉木枝从这里斜向右上方伸出
+      it('red',-0.5,-0.5,1.8), it('red',-0.25,-0.58,1.8), it('red',-0.7,-0.38,1.6), it('red',-0.05,-0.45,1.7), it('red',-0.4,-0.28,1.5),
+      it('branchWood',-0.85,-0.18,1.8,0.0), it('branchWood',-0.55,-0.3,1.7,-0.35), it('branchWood',0.15,-0.32,1.5,-0.1),
+      it('branchWood',0.95,-0.4,1.3,2.9), it('branchWood',1.6,-0.3,1.2,3.3),
+      // 右：后排高大的绿宫廷长到水面，中排蕨类与灌丛，层层往左下收
+      it('stemGreen',0.35,-0.6,1.5), it('stemGreen',0.65,-0.64,1.6), it('stemGreen',0.95,-0.58,1.6), it('stemGreen',1.25,-0.64,1.6),
+      it('stemGreen',1.55,-0.58,1.6), it('stemGreen',1.85,-0.64,1.6), it('stemGreen',1.05,-0.42,1.5), it('stemGreen',1.7,-0.4,1.6),
+      it('kelp',1.95,-0.5,1.0), it('seagrass',1.4,-0.5,1.3),
+      it('fern',0.1,-0.12,1.6), it('fern',0.5,-0.08,1.6), it('fern',0.9,-0.15,1.6), it('fern',1.3,-0.1,1.6), it('fern',1.7,-0.12,1.6),
+      it('fern',0.7,0.12,1.3), it('fern',1.15,0.15,1.3), it('fern',1.6,0.14,1.4), it('fern',1.95,0.05,1.2),
+      it('bush',0.3,0.1,1.1), it('bush',1.85,-0.25,1.3), it('bush',-0.2,0.0,0.9),
+      // 前景矮珍珠全幅铺满
+      it('carpet',-1.8,0.52,1.4), it('carpet',-1.2,0.52,1.4), it('carpet',-0.6,0.5,1.4), it('carpet',0,0.52,1.4),
+      it('carpet',0.6,0.5,1.4), it('carpet',1.2,0.52,1.4), it('carpet',1.8,0.5,1.4),
+      it('carpet',-1.6,0.26,1.3), it('carpet',-1.0,0.24,1.3), it('carpet',-0.4,0.28,1.3), it('carpet',0.2,0.32,1.2),
+      it('carpet',-1.9,0.0,1.2), it('carpet',-1.3,-0.05,1.2), it('carpet',-0.75,0.02,1.1),
+    ].map((o,i)=>({ id:`yururi-${i}`, ...o })),
+  },
+  {
+    id:'ashy', presetId:'ashy', name:'灰色山脉', theme:'nature', tank:'ada', homage:'IAPLC 2007 冠军《Ashy Range》· Chow Wai Sun',
+    fish:{ tetra:26 },
+    items:[
+      // 中央：几根粗壮的深色倒木交错成楔形——左高右低，从左中部一路斜落到右边沙面（rot≈π：从右端扎沙向左上搭起）
+      it('logWood',0.6,-0.12,1.8,Math.PI+0.08), it('logWood',0.85,-0.32,1.75,Math.PI-0.18), it('logWood',0.2,-0.42,1.6,Math.PI+0.3),
+      it('logWood',0.05,0.02,1.4,Math.PI-0.25), it('logWood',-0.5,-0.22,1.2,0.5), it('logWood',0.4,-0.5,1.5,Math.PI+0.05),
+      it('logWood',1.15,-0.05,1.3,Math.PI+0.2),
+      it('branchWood',-0.2,-0.35,1.3,Math.PI+0.4),
+      // 左：茂密水草一直长到水面，前面一块灰石
+      it('kelp',-1.95,-0.5,1.25), it('kelp',-1.7,-0.62,1.2), it('seagrass',-1.4,-0.62,1.5), it('seagrass',-1.1,-0.55,1.4),
+      it('kelp',-1.25,-0.66,1.2), it('kelp',-0.85,-0.62,1.1), it('seagrass',-1.75,-0.35,1.4), it('seagrass',-0.6,-0.66,1.3),
+      it('crown',-1.5,-0.38,1.3), it('crown',-1.85,-0.15,1.1), it('fern',-1.05,-0.32,1.5), it('fern',-0.75,-0.5,1.3),
+      it('bush',-1.6,0.02,1.2), it('hairgrass',-1.85,0.25,1.6), it('hairgrass',-1.55,0.4,1.4), it('hairgrass',-0.95,0.12,1.3),
+      it('rock',-1.25,0.26,1.45,0.6), it('rock',-1.6,0.42,0.6,2.2),
+      // 右：低矮的深灰石组，石间铺苔草，背景留白
+      it('rock',1.05,-0.25,1.3,1.3), it('rock',1.38,-0.42,1.6,4.0), it('rock',1.7,-0.18,1.25,2.8), it('rock',1.95,-0.42,1.05,0.4),
+      it('rock',1.3,0.04,0.8,3.3), it('rock',0.6,0.3,0.4,2.8),
+      it('carpet',1.1,0.2,1.2), it('carpet',1.6,0.24,1.3), it('carpet',1.95,0.06,1.1), it('carpet',0.85,-0.02,1.0),
+      it('hairgrass',1.5,-0.05,1.1), it('hairgrass',1.85,0.3,1.0), it('hairgrass',0.95,-0.5,1.3),
+      // 前景：全幅浅色细砂
+      it('sandPath',-0.85,0.5,2.2,0.0), it('sandPath',0.45,0.52,2.2,0.05), it('sandPath',1.55,0.5,1.7,-0.05),
+    ].map((o,i)=>({ id:`ashy-${i}`, ...o })),
   },
   {
     id:'outdoor', presetId:'outdoor', name:'大户外池塘', theme:'pond', tank:'outdoor',

@@ -62,7 +62,7 @@ export const TANK_STYLES = {
 export const TANK_IDS = Object.keys(TANK_STYLES);
 
 /** @type {Record<string, string>} */
-const BY_THEME = { fresh:'rimless', reef:'reef', pond:'zen', stream:'stream', river:'river', garden:'ming', nature:'ada' };
+const BY_THEME = { fresh:'rimless', reef:'reef', pond:'zen', stream:'stream', river:'river', garden:'ming', nature:'ada', azure:'ada' };
 /** @type {Record<string, string>} */
 const BY_PRESET = { classic:'classic', reef:'reef', pond:'zen' };
 

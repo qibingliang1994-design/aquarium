@@ -12,7 +12,8 @@ import { boundsFor } from './tank-bounds.js';
 
 /** @typedef {{ id:string, type:string, x:number, z:number, rot:number, s:number, seed:number }} SceneItem */
 /** @typedef {{ id:string, name:string, presetId?:string, theme:string, tank:string, fish:Record<string,number>,
- *   items:SceneItem[], updatedAt?:number }} SceneDoc */
+ *   items:SceneItem[], updatedAt?:number, homage?:string }} SceneDoc */
+// homage：只出现在预设数据里（致敬的 IAPLC 原作与作者），存档清洗时丢弃
 
 // 与 entities/fish/species.js 的 SPECIES 顺序一致（单测校验）
 export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot','guppy','betta','harlequin'];

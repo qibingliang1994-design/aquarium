@@ -14,6 +14,7 @@ const _v=new THREE.Vector3(), _n=new THREE.Vector3(), _c=new THREE.Color(), _t=n
 export const ROCK_LOOKS={
   river:  { base:0x7d7468, dark:0x423d36, vein:0x9a9184, moss:0x4d6438, cuts:6, strata:0.25, groove:0 },
   seiryu: { base:0x878b8a, dark:0x3e4442, vein:0xd9dcd6, moss:0x56693c, cuts:9, strata:0.6, groove:1 },
+  pale:   { base:0xb4ac9a, dark:0x5c5649, vein:0xd9d3c3, moss:0x52703a, cuts:8, strata:0.7, groove:0 },   // 层岩：浅灰带层理（苔石山）
   live:   { base:0xb3a58e, dark:0x6b5e4d, vein:0xc9a7b0, moss:0x7a5d8a, cuts:5, strata:0.1, groove:0 },   // 海水活石：浅色多孔、带珊瑚藻紫斑
 };
 

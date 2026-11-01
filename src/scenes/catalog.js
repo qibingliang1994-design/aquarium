@@ -9,6 +9,7 @@ import { buildBridge } from './items/bridge.js';
 import { buildPorcelain } from './items/porcelain.js';
 import { buildPine, buildMaple, buildBankGrass, buildLantern } from './items/shore.js';
 import { buildSandPath } from './items/sand-path.js';
+import { buildBranchWood, buildLogWood, buildMossRock } from './items/hardscape.js';
 import { ITEM_TYPES } from './item-meta.js';
 
 /* ================================================================
@@ -22,7 +23,7 @@ const BUILDERS = {
   taihu: buildTaihu, bridge: buildBridge, porcelain: buildPorcelain,
   coralBranch: buildCoralBranch, coralFan: buildCoralFan, coralBrain: buildCoralBrain, anemone: buildAnemone,
   pine: buildPine, maple: buildMaple, bankGrass: buildBankGrass, lantern: buildLantern,
-  sandPath: buildSandPath,
+  sandPath: buildSandPath, branchWood: buildBranchWood, logWood: buildLogWood, mossRock: buildMossRock,
 };
 for(const t of PLANT_TYPES) BUILDERS[t] = (/** @type {any} */ rng) => buildPlant(t, rng);
 

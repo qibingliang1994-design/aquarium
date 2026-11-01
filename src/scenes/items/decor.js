@@ -14,7 +14,9 @@ import { makeRockGeo, barkTube } from './natural-geo.js';
 const rockMat = () => shared('mat:rock', ()=>{
   const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9, metalness:0.02});
   injectCaustics(m, 0.55, 'rock');
-  injectSurfaceDetail(m, { freq:14, k:0.45, ao:0.35, key:'rockdet' });
+  injectSurfaceDetail(m, { freq:14, k:0.3, ao:0.35, key:'rockdet' });
+  // 河石照片（Poly Haven dark_rock_02，CC0）：细颗粒、浅裂纹与风化斑；原图很暗（线性均值约 0.03），增益拉回原本的灰调
+  injectSurfaceTex(m, { name:'r_dark', scale:2.8, k:1.3, gain:12.0, key:'riverrock' });
   return m;
 });
 // 照片级 PBR（素材来自 aquarium-editor，MIT）：三平面贴到程序化几何上，加载完成前保持程序化外观

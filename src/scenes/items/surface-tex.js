@@ -51,10 +51,11 @@ export function onTexPair(/** @type {any} */ p,/** @type {(pair:any)=>void} */ f
 
 /**
  * 三平面 PBR 表面：albedo 乘进漫反射（uTexGain 补偿贴图平均亮度），法线按主轴平面 UV 采样、
- * 屏幕导数重建切线系后扰动。scale：每单位长度的平铺次数；k：法线强度；gain：albedo 增益
+ * 屏幕导数重建切线系后扰动。scale：每单位长度的平铺次数；k：法线强度；gain：albedo 增益；
+ * world：按世界坐标而不是物件局部坐标采样（实例化小单元用）
  */
-export function injectSurfaceTex(/** @type {any} */ mat,/** @type {{ name:string, scale?:number, k?:number, gain?:number, key?:string }} */
-  { name, scale=2.6, k=1.1, gain=1.8, key='stex' }){
+export function injectSurfaceTex(/** @type {any} */ mat,/** @type {{ name:string, scale?:number, k?:number, gain?:number, key?:string, world?:boolean }} */
+  { name, scale=2.6, k=1.1, gain=1.8, key='stex', world=false }){
   const pair=surfacePair(name);
   // 共享 uniform 引用：贴图加载完成后只改 .value，所有已编译的程序立即生效
   const uni={ tMap:{ value:pair.map }, tNor:{ value:pair.nor }, uTexOn:{ value:pair.loaded?1:0 },
@@ -67,7 +68,13 @@ export function injectSurfaceTex(/** @type {any} */ mat,/** @type {{ name:string
     Object.assign(sh.uniforms, uni);
     sh.vertexShader='varying vec3 vOPos, vONrm;\n'
       +sh.vertexShader.replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
-      vOPos = position; vONrm = objectNormal;`);
+      ${world ? `// 世界坐标：实例化的小单元（苔藓绒团）各自采到不同的一块，不会每团贴同一片
+      #ifdef USE_INSTANCING
+        vOPos = ( modelMatrix * instanceMatrix * vec4( position, 1.0 ) ).xyz;
+      #else
+        vOPos = ( modelMatrix * vec4( position, 1.0 ) ).xyz;
+      #endif` : 'vOPos = position;'}
+      vONrm = objectNormal;`);
     sh.fragmentShader=`uniform sampler2D tMap, tNor; uniform float uTexS, uTexK, uTexGain, uTexOn;
 varying vec3 vOPos, vONrm;\n`
       +sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>

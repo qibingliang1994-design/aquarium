@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { rrange, vnoise } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { shared, injectSurfaceDetail } from './common.js';
+import { injectSurfaceTex } from './surface-tex.js';
 
 /* ================================================================
  * 化妆砂：ADA 岩组缸里在深色水草泥上铺出的一条浅色细砂（小径 / 河道的意象）
@@ -14,7 +15,9 @@ const RINGS=6, SEG=48;
 const sandMat=()=>shared('mat:sandPath', ()=>{
   const m=new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.96, metalness:0 });
   injectCaustics(m, 0.5, 'sandpath');
-  injectSurfaceDetail(m, { freq:70, k:0.35, ao:0.12, key:'sandpathdet' });
+  injectSurfaceDetail(m, { freq:70, k:0.2, ao:0.1, key:'sandpathdet' });
+  // 白沙照片（世界坐标三平面）：一粒粒细砂与碎贝，取代原来平涂的一整片浅色
+  injectSurfaceTex(m, { name:'s_white', scale:3.2, k:1.3, gain:1.3, key:'sandpathtex', world:true });
   return m;
 });
 

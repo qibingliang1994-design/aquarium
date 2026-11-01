@@ -6,6 +6,7 @@ import { injectCaustics } from '../../scene/caustics.js';
 import { shared, castAll, injectSurfaceDetail, UP } from './common.js';
 import { makeRockGeo, barkTube } from './natural-geo.js';
 import { woodMat } from './decor.js';
+import { injectSurfaceTex } from './surface-tex.js';
 
 /* ================================================================
  * 造景硬景（IAPLC 致敬作品用）：分叉沉木枝 / 苔石
@@ -19,11 +20,12 @@ const TOP=0.72;                       // 分叉沉木枝的局部高度上限（
 /**
  * 斜伸的沉木：主枝从沙里斜向 +x 上方伸出，按 depth 逐级分叉，枝头收尖
  * @param {any} rng @param {number} seed
- * @param {{ bark:{cBark:number,cDark:number,cBleach:number}, r0:number, len:[number,number], elev:[number,number], depth:number, spread:[number,number], bend:number }} o
+ * @param {{ bark:{cBark:number,cDark:number,cBleach:number}, r0:number, len:[number,number], elev:[number,number], depth:number, spread:[number,number], bend:number, mat?:any, blunt?:number }} o
+ *   blunt：最末一级枝的末端半径 / 起点半径（越大越像折断的钝头）
  *   bend：每段转向幅度（1 = 细枝的自然折弯，粗倒木取小值、几乎笔直）
  */
-function growWood(rng, seed, { bark, r0:R0, len:LEN, elev:ELEV, depth:DEPTH, spread, bend }){
-  const group=new THREE.Group(), mat=woodMat();
+function growWood(rng, seed, { bark, r0:R0, len:LEN, elev:ELEV, depth:DEPTH, spread, bend, mat=woodMat(), blunt:BLUNT=0.12 }){
+  const group=new THREE.Group();
   /** @type {{c:THREE.Vector3, r:number}[]} */ const obstacles=[];
   let tubes=0;
   /** @param {THREE.Vector3} start @param {THREE.Vector3} dir @param {number} len @param {number} r0 @param {number} depth */
@@ -39,8 +41,10 @@ function growWood(rng, seed, { bark, r0:R0, len:LEN, elev:ELEV, depth:DEPTH, spr
       pts.push(pts[i-1].clone().addScaledVector(_d, len/4));
     }
     const curve=new THREE.CatmullRomCurve3(pts);
-    const r1=r0*(depth>0 ? 0.55 : 0.12);
-    group.add(new THREE.Mesh(barkTube(curve, t=>r0+(r1-r0)*t, { segs:depth>1 ? 22 : 14, radial:depth>1 ? 9 : 6, seed:seed+tubes*7, grooves:5, ...bark }), mat));
+    const r1=r0*(depth>0 ? 0.6 : BLUNT);
+    // 末端最后 6% 按四分之一圆收口：断枝是钝头（细枝 BLUNT 小、近似收尖；倒木 BLUNT 大、像折断的粗木）
+    const rad=(/** @type {number} */ t)=>(r0+(r1-r0)*t)*(t<0.94 ? 1 : Math.sqrt(Math.max(0.0, 1-((t-0.94)/0.06)**2)));
+    group.add(new THREE.Mesh(barkTube(curve, rad, { segs:depth>1 ? 22 : 14, radial:depth>1 ? 9 : 6, seed:seed+tubes*7, grooves:5, ...bark }), mat));
     tubes++;
     if(depth===DEPTH) for(const t of [0.3,0.65]) obstacles.push({ c:curve.getPointAt(t), r:r0*2.4+0.04 });
     if(depth<=0) return;
@@ -70,21 +74,30 @@ export function buildBranchWood(/** @type {any} */ rng, /** @type {number} */ se
 
 /** 倒木（粗沉木）：粗而深色，只分一级短杈，一头扎沙一头斜搭起来；几根交错成一堆 */
 export function buildLogWood(/** @type {any} */ rng, /** @type {number} */ seed){
-  return growWood(rng, seed, { bark:{ cBark:0x3e2c1f, cDark:0x110b07, cBleach:0x5e4c3c },   // 深褐近黑，高处略泛灰
-    r0:0.08, len:[1.15,1.35], elev:[0.32,0.55], depth:1, spread:[0.22,0.36], bend:0.3 });
+  return growWood(rng, seed, { bark:{ cBark:0x6a5a4c, cDark:0x2a2018, cBleach:0x8a7c6c },   // 顶点色只给明暗与沟纹，色相交给树皮照片（深褐）
+    r0:0.08, len:[1.15,1.35], elev:[0.32,0.55], depth:1, spread:[0.22,0.36], bend:0.3, mat:logMat(), blunt:0.55 });
 }
 
+// 照片贴图（public/tex/，CC0）：层岩 = Poly Haven marble_cliff_04，苔藓 = ambientCG Moss002，倒木树皮 = Poly Haven bark_brown_02
 const paleMat = () => shared('mat:rockPale', ()=>{
-  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.88, metalness:0.02});
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.86, metalness:0.02});
   injectCaustics(m, 0.55, 'rock');
-  injectSurfaceDetail(m, { freq:14, k:0.45, ao:0.35, key:'rockdet' });
+  injectSurfaceDetail(m, { freq:14, k:0.12, ao:0.3, key:'rockdet' });      // 照片法线已给足细节，程序噪声只留一点凹处积暗
+  injectSurfaceTex(m, { name:'r_pale', scale:2.2, k:1.5, gain:1.75, key:'pale' });
   return m;
 });
 const mossTuftMat = () => shared('mat:mossTuft', ()=>{
-  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:1});
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95});
   injectCaustics(m, 0.45, 'mosstuft');
-  // 绒毛感：高频世界空间噪声扰动法线 + 缝隙压暗（几何只有 20 面，毛茸茸全靠这一层）
-  injectSurfaceDetail(m, { freq:150, k:1.0, ao:0.55, key:'mosstuftdet' });
+  injectSurfaceDetail(m, { freq:150, k:0.5, ao:0.4, key:'mosstuftdet' });  // 照片之上再加一层更细的绒毛噪声
+  injectSurfaceTex(m, { name:'m_moss', scale:5.5, k:1.6, gain:1.7, key:'moss', world:true });
+  return m;
+});
+export const logMat = () => shared('mat:logWood', ()=>{
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.8, metalness:0.02});
+  injectCaustics(m, 0.4, 'wood');
+  injectSurfaceDetail(m, { freq:10, k:0.15, ao:0.25, stretch:[1,0.25,1], key:'wooddet' });
+  injectSurfaceTex(m, { name:'b_log', scale:5.0, k:2.3, gain:1.9, key:'log' });
   return m;
 });
 // 苔藓垫单元：表面起伏的扁球，顶部偏亮绿、底部偏暗；所有苔石共用一份
@@ -94,7 +107,7 @@ const tuftGeo = () => shared('geo:mossTuft', ()=>{
   g.deleteAttribute('normal'); g.deleteAttribute('uv');
   g=/** @type {any} */ (mergeVertices(g));
   const p=g.attributes.position, v=new THREE.Vector3();
-  const col=new Float32Array(p.count*3), c1=new THREE.Color(0x1d3a15), c2=new THREE.Color(0x628f34), tmp=new THREE.Color();
+  const col=new Float32Array(p.count*3), c1=new THREE.Color(0x4e5844), c2=new THREE.Color(0xe2ead6), tmp=new THREE.Color();   // 只给明暗（底暗顶亮），色相交给苔藓照片
   for(let i=0;i<p.count;i++){
     v.fromBufferAttribute(p,i);
     const fuzz=vnoise(v.x*5+3, v.y*5+v.z*4)*0.6+vnoise(v.x*11, v.z*11+v.y*9)*0.4;
@@ -125,6 +138,14 @@ export function buildMossRock(/** @type {any} */ rng, /** @type {number} */ seed
     const bb0=/** @type {THREE.Box3} */ (g.boundingBox), cap=bb0.min.y+(bb0.max.y-bb0.min.y)*0.78;
     const p=g.attributes.position;
     for(let i=0;i<p.count;i++){ const y=p.getY(i); if(y>cap) p.setY(i, cap+(y-cap)*0.2); }
+    // 层阶：按高度分成一道道水平岩层，层缝处向内收 → 岩面出现横向台阶，不再是一整坨圆鼓包
+    const per=r*rrange(rng,0.2,0.3)*sy, ph=(seed%13)*0.37+b;
+    for(let i=0;i<p.count;i++){
+      const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+      const f=((y/per+ph+vnoise(x*7+o, z*7)*0.4)%1+1)%1;
+      const t=Math.min(1, Math.max(0, (f-0.72)/0.22)), k=1-0.09*t*t*(3-2*t);
+      p.setX(i, x*k); p.setZ(i, z*k);
+    }
     g.computeVertexNormals();
     g.computeBoundingBox();
     const bb=/** @type {THREE.Box3} */ (g.boundingBox);

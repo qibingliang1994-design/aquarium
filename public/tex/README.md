@@ -26,3 +26,14 @@
 | `r_lichen(.webp/_n.webp)` | [lichen_rock](https://polyhaven.com/a/lichen_rock) diff + nor_gl | 石灯笼 |
 
 下载原件示例：`https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/pine_bark/pine_bark_diff_1k.jpg`（法线把 `diff` 换成 `nor_gl`）。
+
+## 硬景与苔藓（Poly Haven / ambientCG，CC0）
+
+1K JPG 原件用 PIL 缩放到 1024² 后存 WebP（质量 76），没有其它修改。全部走三平面（`injectSurfaceTex`）。
+
+| 文件 | 来源 | 用途 |
+|---|---|---|
+| `r_pale(.webp/_n.webp)` | Poly Haven [marble_cliff_04](https://polyhaven.com/a/marble_cliff_04) diff + nor_gl | 苔石（`mossRock`）的浅灰层状岩 |
+| `r_dark(.webp/_n.webp)` | Poly Haven [dark_rock_02](https://polyhaven.com/a/dark_rock_02) diff + nor_gl | 圆石（河石，`rock`） |
+| `b_log(.webp/_n.webp)` | Poly Haven [bark_brown_02](https://polyhaven.com/a/bark_brown_02) diff + nor_gl | 倒木（`logWood`） |
+| `m_moss(.webp/_n.webp)` | ambientCG [Moss002](https://ambientcg.com/view?id=Moss002) Color + NormalGL | 苔石上的苔藓绒团（世界坐标采样） |

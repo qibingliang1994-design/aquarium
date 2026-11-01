@@ -32,8 +32,8 @@ const PLANTS = {
   carpet:   { n:9, spread:[0.28,0.12], s:[0.9,1.3], unit:(/** @type {any} */ rng)=>carpetClump(rng, { n:56, radius:0.1,
               colors:[[0x2c6a2a,0x6ec34c],[0x2f7430,0x82d05a]] }) },
   // 牛毛毡：极细的针状叶成簇直立，一片连成草原（ADA 岩组缸的标准前中景）；低面数，单丛株数多
-  hairgrass:{ n:16, spread:[0.32,0.16], s:[0.8,1.3], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:20, len:[0.13,0.28], width:0.006, twist:0.25,
-              colors:[[0x2a5a22,0x7fc04a],[0x2f6426,0x93cf58],[0x2a5220,0x6eae40]], spread:0.035, segs:5, cols:1 }) },
+  hairgrass:{ n:18, spread:[0.32,0.16], s:[0.8,1.3], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:28, len:[0.12,0.3], width:0.0038, twist:0.3,
+              colors:[[0x24501e,0x7fc04a],[0x2f6426,0x9ad45e],[0x264a1c,0x6aa83c],[0x30581e,0xa8c858]], spread:0.04, segs:5, cols:1 }) },
   // 铁皇冠 / 黑木蕨：深绿长披针叶从短根茎斜伸，常绑在沉木与石缝间
   fern:     { n:5, spread:[0.12,0.09], s:[0.8,1.2], unit:(/** @type {any} */ rng)=>rosette(rng, { n:11, len:[0.26,0.4], width:0.05, petiole:0.12,
               tilt:[0.35,1.0], bend:0.5, colors:[[0x173a19,0x3f7a2e],[0x1c4220,0x4c8a36],[0x14331a,0x376a2a]], vein:0x6f9a4a }) },
@@ -50,8 +50,42 @@ export const bladeMat = () => shared('mat:blade', ()=>{
   const m=new THREE.MeshPhysicalMaterial({vertexColors:true, roughness:0.5, metalness:0, side:THREE.DoubleSide,
     sheen:0.5, sheenRoughness:0.45, sheenColor:new THREE.Color(0xb8f08a), specularIntensity:0.45});
   injectSway(m, 0.1, 2.1, 'blade', true);
+  injectLeafDetail(m);
   return m;
 });
+
+/**
+ * 叶面细节（叶片 UV：u 横跨叶宽、v 沿叶长；茎没有 UV，读到 0 时整段跳过）：
+ * 平行叶脉细线 + 中脉提亮 + 叶面斑驳（世界坐标噪声）+ 叶尖略黄、叶基略暗；叶脉同时轻微扰动法线，近看有起伏
+ */
+function injectLeafDetail(/** @type {any} */ mat){
+  const prev=mat.onBeforeCompile, prevKey=mat.customProgramCacheKey?.() ?? '';
+  mat.customProgramCacheKey=()=>`${prevKey}_leaf`;
+  mat.onBeforeCompile=(/** @type {any} */ sh, /** @type {any} */ r)=>{
+    prev?.(sh, r);
+    sh.vertexShader='varying vec2 vLfUV;\n'+sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vLfUV = uv;`);
+    sh.fragmentShader='varying vec2 vLfUV;\n'+sh.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      if( vLfUV.y > 0.0 ){
+        float u = vLfUV.x, v = vLfUV.y;
+        float lines = pow( abs( sin( u*3.14159*9.0 ) ), 10.0 );                  // 平行叶脉
+        float mid = 1.0 - smoothstep( 0.0, 0.05, abs( u-0.5 ) );                 // 中脉
+        float mott = fract( sin( dot( floor( vSwW.xz*90.0 + vSwW.y*40.0 ), vec2( 12.9898, 78.233 ) ) )*43758.5 );
+        diffuseColor.rgb *= 0.9 + 0.12*mott - 0.1*lines;
+        diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb*vec3( 1.25, 1.22, 0.9 ), mid*0.5 );
+        diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb*vec3( 1.18, 1.1, 0.72 ), smoothstep( 0.8, 1.0, v )*0.45 );   // 叶尖泛黄
+        diffuseColor.rgb *= 0.78 + 0.22*smoothstep( 0.0, 0.25, v );                // 叶基压暗（丛内自遮挡）
+      }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      if( vLfUV.y > 0.0 ){
+        vec3 dpx = dFdx( vSwW ), dpy = dFdy( vSwW );
+        float du = dFdx( vLfUV.x ), dv = dFdy( vLfUV.x );
+        vec3 T = normalize( dpx*dv - dpy*du + 1e-6 );
+        normal = normalize( normal + T * cos( vLfUV.x*3.14159*9.0 ) * 0.12 );    // 叶脉起伏
+      }`);
+  };
+}
 export const bladeDepth = () => shared('mat:blade_d', ()=>{
   const m=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, side:THREE.DoubleSide});
   injectSway(m, 0.1, 2.1, 'blade_d');

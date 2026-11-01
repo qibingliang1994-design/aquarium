@@ -472,6 +472,9 @@
 - 岸边枫叶/岸边草整片发黑修复：`shore.js` 的 LEAF/GRASS 材质开着 `vertexColors`，但实例化几何没有 `color` 属性（颜色走 instanceColor），缺省属性读成 0 → 乘成纯黑。去掉 `vertexColors`。
 - 美术一轮（画面质感）：①背光幕（`tank.js` `backdrop`）四边用 `featherEdges` 羽化到透明，缸体外不再露出一张有硬边的深色卡片，缸光像洒在后墙上化进房间暗处（缸内区域保持不透明，仍写深度）；②枫叶从整块矩形换成五裂掌状叶（`shore.js` `mapleLeafGeo`：叶面沿中脉拱起 + 顶点色叶心深叶尖浅），数量 22→44，这时材质必须开 `vertexColors`（几何有 `color` 属性，和上一条黑屏修复不冲突）；③自然水域的天空倒影降饱和并往青绿拉（`uClear` 控制，玻璃缸逐值不变），池水不再是蓝紫色塑料布，池底和鱼看得见。
 - 美术第二轮：①户外池塘草地顶点色分三层（`natural-shells.js` `buildOutdoor`：大尺度深浅斑块、中尺度枯黄草窝、细碎明暗斑点，贴岸一圈更湿更深），不再是一整片平铺亮绿；②松树每棵一个冷暖偏移，越高的层越亮越黄（`shore.js` `buildPine`）；③玻璃缸房间地面加柜脚接地暗晕 `ao`（`tank.js`，进 `room` 数组，自然水域随之隐藏）。
+- 美术第三轮：①鱼眼不再是纯黑玻璃珠：`prepareFishModel` 给 Eyes 材质打 `userData.eye`，`decorateFishMaterial` 的 `e` 变体在 `emissivemap_fragment` 里按视线·法线加一圈琥珀虹膜（中心留瞳孔），实例化蒙皮 / 旧骨骼 / 图鉴预览三条路径通用；②水景卡片占位图（`ui/scene-placeholder.js`）：没进过的水景按缸体款式画剪影小插画（玻璃缸 / 池塘 / 溪河各一种），不再是同一个居中的鱼图标。
+- 美术第四轮：①自然水域的天空倒影再一半拉向主题水色（`tank.js` 水面着色器，`uClear` 控制）：溪流从钴蓝变青灰、河湾偏茶绿，各水域有自己的水色，玻璃缸不受影响；②房间地面圆盘用径向 `alphaMap` 羽化（`renderOrder=-10`，先于玻璃 / 水面画），远处不再露出一道圆弧地平线。
+- 美术第五轮：夜间调色。`uniforms.js` 新增 `U.night`（`daynight.apply` 每次写入昼夜 k），`grading.js` 按它夜间降约 22% 饱和、暗部偏冷蓝：月光下的草不再是荧光绿，整体更像夜景；白天 `uNight=0`，与改前逐值相同。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

@@ -61,6 +61,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
 
   function apply(/** @type {number} */ v){
     k=v;
+    U.night.value=k;
     hoodSpot.intensity=lerp(DAY.spot,NIGHT.spot,k)*lampK*wx.sunMul;
     hoodSpot.color.lerpColors(DAY.spotCol,NIGHT.spotCol,k);
     hemi.intensity=lerp(ENV?.hemi ?? DAY.hemi,NIGHT.hemi,k)*wx.hemiMul;

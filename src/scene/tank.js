@@ -156,6 +156,7 @@ const waterMesh=new THREE.Mesh(
             // 自然水域：天空倒影少一点饱和、往青绿拉（原样的纯天蓝倒影把池水铺成一张蓝紫色塑料布），池底和鱼透得出来
             refl = mix(vec3(rl), refl, mix(1.42, 1.1, uClear));
             refl *= mix(vec3(1.0), vec3(0.8, 1.0, 0.9), uClear);
+            refl = mix(refl, vec3(rl)*uSky*1.9, 0.5*uClear);      // 俯视时倒影取的是天顶深蓝；一半拉向主题水色（溪流青、河湾茶、池塘绿），各水域各有自己的水色而不是同一块钴蓝
             float fmix = (mix(0.38, 0.28, uClear)+0.58*clamp(rfres, 0.0, 1.0))*clamp(uReflectDim, 0.0, 1.0);
             col = mix(col, min(max(refl, vec3(0.0)), vec3(3.0)), clamp(fmix, 0.0, 0.96));
           }
@@ -428,10 +429,20 @@ function setShell(/** @type {string} */ id){
 /* ---------- 房间地面 ---------- */
 let floorGlowMat;
 {
+  // 地面圆盘边缘羽化：远处原来露出一道清晰的圆弧地平线（圆盘外是纯色背景），径向 alphaMap 让地面化进房间暗处
+  const floorFade=(()=>{
+    const cv=document.createElement('canvas'); cv.width=cv.height=128;
+    const ctx=/** @type {CanvasRenderingContext2D} */ (cv.getContext('2d'));
+    const g=ctx.createRadialGradient(64,64,0,64,64,64);
+    g.addColorStop(0,'#fff'); g.addColorStop(0.5,'#fff'); g.addColorStop(0.78,'#777'); g.addColorStop(1,'#000');
+    ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(cv);
+  })();
   const floor=new THREE.Mesh(new THREE.CircleGeometry(14,48).rotateX(-Math.PI/2),
-    new THREE.MeshStandardMaterial({color:0x0e0f12, roughness:0.62, metalness:0.2}));
+    new THREE.MeshStandardMaterial({color:0x0e0f12, roughness:0.62, metalness:0.2, alphaMap:floorFade, transparent:true}));
   floor.position.y=-0.75;
   floor.receiveShadow=true;
+  floor.renderOrder=-10;                          // 变透明后仍要先于玻璃 / 水面画，否则缸后的地面会盖在玻璃上
   scene.add(floor); room.push(floor);
   // 柜脚接地阴影：柜子底下一圈柔和的暗晕（椭圆径向渐变，沿缸的长边拉长），柜子不再像悬在地面上。
   // 先于下面的漏光加色绘制，漏光仍压在它上面

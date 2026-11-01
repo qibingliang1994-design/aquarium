@@ -18,11 +18,12 @@ const GradeShader = {
     uShadow:   { value: new THREE.Color(0.0, 0.05, 0.08) },
     uHigh:     { value: new THREE.Color(0.06, 0.03, 0.0) },
     uGrain:    { value: 0.018 },
+    uNight:    U.night,
   },
   vertexShader: `varying vec2 vUv;
     void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float uTime, uSat, uContrast, uGrain;
+    uniform sampler2D tDiffuse; uniform float uTime, uSat, uContrast, uGrain, uNight;
     uniform vec3 uShadow, uHigh; varying vec2 vUv;
     // ACESFilmicToneMapping / sRGBTransferOETF 与 toneMappingExposure uniform 都在
     // ShaderMaterial 的内置前奏里（toneMapped 默认开），直接调用，不要再 include（会重复定义）
@@ -32,9 +33,10 @@ const GradeShader = {
       col = ACESFilmicToneMapping(col);            // 线性 HDR → 显示
       col = sRGBTransferOETF(vec4(col,1.0)).rgb;   // → sRGB（与 OutputPass 输出逐位一致）
       float l = dot(col, vec3(0.2126,0.7152,0.0722));
-      col = mix(vec3(l), col, uSat);
+      // 夜间：人眼在暗处色觉变弱（月下的草不是荧光绿），整体降一点饱和，暗部再偏冷蓝；白天 uNight=0 时与改前逐值相同
+      col = mix(vec3(l), col, uSat*(1.0-0.22*uNight));
       col = (col-0.5)*uContrast + 0.5;
-      col += uShadow*(1.0-l)*(1.0-l) + uHigh*l*l;
+      col += (uShadow+vec3(0.0,0.0,0.025)*uNight)*(1.0-l)*(1.0-l) + uHigh*l*l;
       float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime)*91.7, vec2(12.9898,78.233)))*43758.5453);
       col += (n-0.5)*uGrain;
       gl_FragColor = vec4(clamp(col,0.0,1.0), c.a);

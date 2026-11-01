@@ -12,6 +12,8 @@ import { shadowFit } from '../systems/shadow-fit.js';
 const CYCLE_SECS=180;
 /** 玻璃缸的雾密度（自然水域由 env.fogD 覆盖） */
 const FOG_D=0.052;
+/** 自然水域天气雾量为 1 时的雾密度 */
+const NAT_FOG=0.055;
 
 /** 自然水域的太阳位置（指向缸心 spotTarget） */
 const SUN={ x:-3.2, y:7.6, z:-2.6 };
@@ -88,6 +90,13 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
     floorGlowMat.opacity=Math.min(1, lerp(1,0.45,k)*lampK);     // 地面漏光随缸内亮度变化
   }
 
+  /** 自然水域基础雾很淡（户外 0.0045），只乘倍率时"薄雾"天在十几米的场景里几乎看不出；
+   * 按天气雾量直接抬到绝对密度（薄雾满强度≈0.05：对岸半隐、近处可见）。玻璃缸仍走倍率 */
+  function fogDensity(){
+    const base=ENV?.fogD ?? FOG_D;
+    return ENV ? Math.max(base*wx.fogMul, base+(NAT_FOG-base)*wx.fogAmt) : base*wx.fogMul;
+  }
+
   return {
     get k(){ return k; },
     get target(){ return target; },
@@ -99,7 +108,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
       apply(k);
     },
     /** 当前水域的基础雾密度（开缸浊度在它之上加浓；天气再乘 fogMul，晴天 = 1） */
-    get fogD(){ return (ENV?.fogD ?? FOG_D)*wx.fogMul; },
+    get fogD(){ return fogDensity(); },
     /** 叠一层天气。每帧从昼夜表重算，晴天倍率是 1
      * @param {{ sunMul:number, hemiMul:number, fogMul:number, chop:number, grey:number, rain:number, fogAmt:number }} f */
     setWeather(f){
@@ -159,7 +168,7 @@ export function createDayNight({ scene, lights, waterUniforms, sandMat, shell, f
       sh.updateProjectionMatrix();
       ENV=t.env ?? null;
       if(ENV){ envBg.setHex(ENV.bg); envFog.setHex(ENV.fog); }
-      scene.fog.density=(ENV?.fogD ?? FOG_D)*wx.fogMul;
+      scene.fog.density=fogDensity();
       apply(k);
     },
     /** 鱼群重建后补一次（新鱼的焦散强度跟上当前昼夜） */

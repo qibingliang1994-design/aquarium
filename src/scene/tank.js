@@ -7,6 +7,7 @@ import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX, applyShellDensity } from './natural-shells.js';
 import { createSkirtMaterial, setSkirtStyle } from './substrate.js';
+import { createSandGrains } from './sand-grains.js';
 import { surfacePair, onTexPair } from '../scenes/items/surface-tex.js';
 import { boundsFor } from '../scenes/tank-bounds.js';
 import { setGround, setGroundBase } from './ground.js';
@@ -264,6 +265,7 @@ function setSandPhoto(/** @type {string} */ name){
     sandTex.dispose();
   });
 }
+const grains=createSandGrains({ heightAt:sandHeight, halfX:TANK.W/2-TANK.glass-0.016, halfZ:TANK.D/2-TANK.glass-0.012 });
 const sandGeo=new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.02, TANK.D-2*TANK.glass-0.02, 72, 32).rotateX(-Math.PI/2);
 {
   const p=sandGeo.attributes.position;
@@ -298,6 +300,7 @@ for(const g of skirtGeo){ const m=new THREE.Mesh(g, skirtMat); m.receiveShadow=t
 function setSandColors(/** @type {number} */ a, /** @type {number} */ b, /** @type {string|undefined} */ tex, /** @type {import('./substrate.js').SkirtStyle|undefined} */ skirt){
   setSandPhoto(tex ?? 's_oiso');
   setSkirtStyle(skirt);
+  grains.setStyle(a, b, tex ?? 's_oiso');
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
   for(const g of [sandGeo, ...skirtGeo]){
     const p=g.attributes.position, col=g.attributes.color, skirt=g!==sandGeo;
@@ -318,6 +321,9 @@ const sand=new THREE.Mesh(sandGeo, sandMat);
 sand.receiveShadow=true;
 tankGroup.add(sand);
 sandParts.push(sand);
+// 沙面立体颗粒（sand-grains.js）：主题切换随 setSandColors 换形态与颜色，画质档由 main 的 onLevel 调数量
+tankGroup.add(grains.mesh);
+sandParts.push(grains.mesh);
 
 /* ---------- 背景幕（渐变，增加纵深） ---------- */
 // 水景缸常见的"背光幕"：缸体正后方柔和青色辉光，四周压暗，鱼与水草在其上形成剪影层次
@@ -504,5 +510,7 @@ room.push(backdrop);
 setShell('classic');
   return { tankGroup, waterUniforms, glassHigh, glassLow, sandMat, waterMesh, floorGlowMat, setSandColors, setBackdrop, shell, setShell,
     /** 自然水域外壳的草/石密度跟画质档。玻璃缸上没有标记，遍历是空操作 @param {number} level */
-    applyDensity(level){ if(shell.group) applyShellDensity(shell.group, level); } };
+    applyDensity(level){ if(shell.group) applyShellDensity(shell.group, level); },
+    /** 沙面立体颗粒数量跟画质档（最低档不画） @param {number} level */
+    setGrainLevel(level){ grains.setLevel(level); } };
 }

@@ -465,6 +465,7 @@ const quality=createQuality({
     reflect.setLevel(q.level);
     runtime.applyShore(q.level);
     runtime.applyShell(q.level);
+    tank.setGrainLevel(q.level);
   },
 });
 

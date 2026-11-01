@@ -5,6 +5,7 @@ import { scaleNormalTex, finAlphaTex } from '../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, fishEyeLayout } from '../fish/body.js';
 import { prepareFishModel, decorateFishMaterial } from '../fish/glb-style.js';
 import { ecologyTags, mixNote } from '../entities/fish/ecology.js';
+import { orientFishModel } from '../entities/fish/species-models.js';
 
 /* ---------- 鱼类图鉴数据与视图 ---------- */
 /** @typedef {{ name:string, latin:string, className:string, desc:string, zone:string, size:string, behavior:string, diet:string }} SpeciesMeta */
@@ -212,7 +213,7 @@ function renderModelPreviewEntry(entry){
 async function loadModelPreview(entry){
   try{
     const gltf=await gltfLoader.loadAsync(entry.model.path);
-    const group=prepareFishModel(gltf.scene, entry.model.id);   // 与水族箱内同一套调色与皮肤
+    const group=orientFishModel(prepareFishModel(gltf.scene, entry.model.id), entry.model.id, 1);   // 与水族箱内同一套调色、皮肤与朝向
     group.traverse(obj=>{
       if(obj.isMesh){
         obj.visible=true;

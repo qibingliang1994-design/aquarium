@@ -89,12 +89,12 @@ export function pondTint(quality, clarity=1){
   return Math.max(0, murkVisual(quality, clarity).murk-murkVisual(1, 1).murk);
 }
 
-/** 降水粒子预算随 7 档画质下降（满档 1600 雨 / 700 雪，极速仍留约三成） */
+/** 降水粒子预算随 7 档画质下降（满档 1600 雨 / 1500 雪，极速仍留约三成） */
 const PRECIP_SCALE = [1, 0.88, 0.76, 0.64, 0.52, 0.4, 0.28];
 /** @param {number} level */
 export function precipBudget(level){
   const s = PRECIP_SCALE[clamp(level|0, 0, PRECIP_SCALE.length-1)] ?? 0.28;
-  return { rain:Math.round(1600*s), snow:Math.round(700*s) };
+  return { rain:Math.round(1600*s), snow:Math.round(1500*s) };
 }
 
 /** @param {Record<string, unknown>} [initial] */

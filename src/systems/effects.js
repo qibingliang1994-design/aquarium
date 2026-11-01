@@ -180,7 +180,7 @@ class Ripples {
  *  不写深度、不投影。落在水面上的涟漪每秒几圈，不按每一滴去生成（涟漪池只有 10 个）。
  * @param {THREE.Scene} scene @param {{ spawn:(x:number,z:number)=>void }} ripples */
 function createPrecip(scene, ripples){
-  const RAIN_N=1600, SNOW_N=700, rng=makeRng(91);
+  const RAIN_N=1600, SNOW_N=1500, rng=makeRng(91);
   const rPos=new Float32Array(RAIN_N*3), rVel=new Float32Array(RAIN_N);
   for(let i=0;i<RAIN_N;i++){
     rPos[i*3]=(rng()*2-1)*16; rPos[i*3+1]=rng()*14+1; rPos[i*3+2]=(rng()*2-1)*12;
@@ -228,12 +228,12 @@ function createPrecip(scene, ripples){
     const t=new THREE.CanvasTexture(c); t.needsUpdate=true; return t;
   })();
   const snow=new THREE.Points(nGeo, new THREE.ShaderMaterial({
-    uniforms:{ uOpacity:{value:0}, uSize:{value:28}, uMap:{value:flake}, uTime:{value:0} },
+    uniforms:{ uOpacity:{value:0}, uSize:{value:56}, uMap:{value:flake}, uTime:{value:0} },
     transparent:true, depthWrite:false,
     vertexShader:`attribute float aPh; uniform float uSize, uTime;
       void main(){ vec3 p=position; p.x+=sin(uTime*0.6+aPh)*0.35; p.z+=cos(uTime*0.45+aPh)*0.35;
         vec4 mv=modelViewMatrix*vec4(p,1.0); gl_Position=projectionMatrix*mv;
-        gl_PointSize=clamp(uSize/max(-mv.z,0.25), 2.0, 18.0); }`,
+        gl_PointSize=clamp(uSize/max(-mv.z,0.25), 3.0, 22.0); }`,
     fragmentShader:`uniform float uOpacity; uniform sampler2D uMap;
       void main(){ vec4 t=texture2D(uMap, gl_PointCoord); float a=t.a*uOpacity;
         if(a<0.03) discard; gl_FragColor=vec4(1.0,1.0,1.0,a); }`,

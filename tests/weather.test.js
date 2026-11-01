@@ -98,7 +98,7 @@ describe('存档清洗 / 水色 / 粒子预算', () => {
   });
 
   it('粒子数随七档画质下降', () => {
-    expect(precipBudget(0)).toEqual({ rain:1600, snow:700 });
+    expect(precipBudget(0)).toEqual({ rain:1600, snow:1500 });
     expect(precipBudget(4).rain).toBeLessThan(precipBudget(2).rain);
     expect(precipBudget(2).rain).toBeLessThan(precipBudget(0).rain);
     expect(precipBudget(6).rain).toBeLessThan(precipBudget(4).rain);

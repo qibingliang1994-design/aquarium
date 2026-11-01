@@ -8,5 +8,7 @@ export const U = {
   flow:    { value: 0 },   // 水流速度（+x，溪流/小河），水草顺流倒伏
   chop:    { value: 1 },   // 波浪倍率：1 = 现有水面；天气只在非晴天时偏离
   wet:     { value: 0 },   // 地面潮湿度 0..1（0 时湿润着色是乘 1）
+  snow:    { value: 0 },   // 地面积雪 0..1（只在自然水域的下雪天缓慢堆起，天晴慢慢化掉）
+  snowY:   { value: 1.9 }, // 积雪线：水面以上才积（tank.setShell 写，水下的河床不积）
   night:   { value: 0 },   // 昼夜 k（daynight.apply 写）：调色 pass 夜间降饱和、暗部偏冷
 };

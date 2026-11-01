@@ -60,6 +60,10 @@ export function createAmbience({ settings, dayNight, lens, snow, scene, waterUni
       const st=weather.step(dt);
       dayNight.setWeather(st);
       U.wet.value=st.wet;
+      // 积雪：自然水域下雪天约 25 s 堆满，雪停后约 40 s 化尽；玻璃缸里没有岸可积
+      const snowGoal=isNatural() ? Math.min(1, st.snow*1.4) : 0;
+      U.snow.value+=(snowGoal-U.snow.value)*Math.min(1, dt*(snowGoal>U.snow.value ? 0.12 : 0.08));
+      if(U.snow.value<0.002 && snowGoal===0) U.snow.value=0;
       if(waterUniforms.uMurk) waterUniforms.uMurk.value=(murkBase?.() ?? 0)+st.rain*0.5;
       if(st.changed) onWeather?.(st);
       if(settings.clock && (clockAcc+=dt)>=CLOCK_EVERY){ clockAcc=0; dayNight.target=clockNight(now()); }

@@ -126,9 +126,18 @@ const waterMesh=new THREE.Mesh(
         float depth=1.0;                                   // 水深（自然水域按贴图，缸里视为很深）
         if(uDepthOn>0.5) depth=texture2D(uDepthTex, (vW.xz-uDepthBox.xy)*uDepthBox.zw).r*${DEPTH_MAX.toFixed(2)};
         float t=uTime;
-        vec2 g=uChop*vec2(
-          7.0*cos(vXZ.x*7.0+t*1.3)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006,
-          9.0*cos(vXZ.y*9.0+t*1.7)*0.006 + 5.0*cos((vXZ.x+vXZ.y)*5.0+t*0.9)*0.006);
+        // 自然水域大水面：几组正弦叠出来的波纹在雨天（uChop 放大）变成一排排等距白带，像搓衣板。
+        // 用低频噪声扭曲波形坐标、再调制各处波幅，让条带断开、忽强忽弱；玻璃缸（uClear=0）原样
+        vec2 wq=vXZ;
+        float wamp=1.0;
+        if(uClear>0.5){
+          vec2 nA=vec2(texture2D(uCMap, vXZ*0.05+vec2(t*0.004, 0.0)).r, texture2D(uCMap, vXZ*0.05+vec2(0.37, 0.61-t*0.003)).r);
+          wq+=(nA-0.5)*0.4;
+          wamp=0.4+1.2*texture2D(uCMap, vXZ*0.032-vec2(0.0, t*0.003)).r;
+        }
+        vec2 g=uChop*wamp*vec2(
+          7.0*cos(wq.x*7.0+t*1.3)*0.006 + 5.0*cos((wq.x+wq.y)*5.0+t*0.9)*0.006,
+          9.0*cos(wq.y*9.0+t*1.7)*0.006 + 5.0*cos((wq.x+wq.y)*5.0+t*0.9)*0.006);
         // 法线 y 分量太小（此前缸模式 0.02，而波斜率可达 0.07）会让法线几乎水平，俯视时菲涅尔变成大块条纹
         vec3 n=normalize(vec3(-g.x,mix(0.25,0.4,uClear),-g.y));
         if(!gl_FrontFacing) n=-n;
@@ -399,6 +408,7 @@ function setShell(/** @type {string} */ id){
   const built=buildShell(id, vol, { waterY:vol.waterY, sandHeight });
   setGround(typeof built.group.userData.bed==='function' ? built.group.userData.bed : null);
   waterMesh.position.y=vol.waterY;
+  U.snowY.value=vol.waterY+0.02;
   Object.assign(shell, { id, ...built });
   tankGroup.add(built.group);
   const nat=built.natural;

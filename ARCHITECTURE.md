@@ -475,6 +475,8 @@
 - 美术第三轮：①鱼眼不再是纯黑玻璃珠：`prepareFishModel` 给 Eyes 材质打 `userData.eye`，`decorateFishMaterial` 的 `e` 变体在 `emissivemap_fragment` 里按视线·法线加一圈琥珀虹膜（中心留瞳孔），实例化蒙皮 / 旧骨骼 / 图鉴预览三条路径通用；②水景卡片占位图（`ui/scene-placeholder.js`）：没进过的水景按缸体款式画剪影小插画（玻璃缸 / 池塘 / 溪河各一种），不再是同一个居中的鱼图标。
 - 美术第四轮：①自然水域的天空倒影再一半拉向主题水色（`tank.js` 水面着色器，`uClear` 控制）：溪流从钴蓝变青灰、河湾偏茶绿，各水域有自己的水色，玻璃缸不受影响；②房间地面圆盘用径向 `alphaMap` 羽化（`renderOrder=-10`，先于玻璃 / 水面画），远处不再露出一道圆弧地平线。
 - 美术第五轮：夜间调色。`uniforms.js` 新增 `U.night`（`daynight.apply` 每次写入昼夜 k），`grading.js` 按它夜间降约 22% 饱和、暗部偏冷蓝：月光下的草不再是荧光绿，整体更像夜景；白天 `uNight=0`，与改前逐值相同。
+- 美术第六轮：自然水域雨天的"搓衣板"水纹。水面着色器的几组正弦在 `uChop` 放大后叠成一排排等距白带；`uClear>0.5` 时用 `uCMap` 低频噪声轻微扭曲波形坐标（±0.2 单位，相位偏移要控制在约 2 rad 内——偏移到 3 单位会叠成指纹状涡纹）并按位置调制波幅（0.4~1.6 倍），条带断开成起伏的涟漪。玻璃缸（`uClear=0`）走原式。
+- 美术第七轮：下雪天的画面。①积雪：`U.snow`（`ambience.update` 在自然水域下雪天约 25 s 堆满、雪停约 40 s 化尽）+ `U.snowY`（`tank.setShell` 写水线），`wet.js` 的 `injectWet` 在 `color_fragment` 里把朝上（世界法线 y）且高于水线的面向雪白混——地面、石头、松针层顶、石灯都自动积雪，水下河床不积；`uSnow=0` 整段跳过。**坑**：three 的 `inverseTransformDirection` 会归一化，不能拿来还原位移，要用 `vec4(-vViewPosition,0.0)*viewMatrix`（第一版因此整个池底也白了）。②雪花：数量 700→1500（`effects.js` `SNOW_N` / `weather.js` `precipBudget`，测试同步），点大小翻倍，原来大场景里几乎看不见。
 ## 后续拆分顺序
 
 1. 把当前入口拆成 `src/main.js`、`scene/`、`entities/fish/`、`entities/flora/`、`entities/scenery/`、`systems/` 和 `ui/`。

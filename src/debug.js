@@ -63,6 +63,12 @@ export function installDebug(/** @type {any} */  d){
       if(s.glbMode && s.fishes[ii]){ s.fishes[ii].position.copy(s.pos[ii]); } },
     posOf:(/** @type {number} */ si,/** @type {number} */ ii)=>schools[si].pos[ii].toArray(),
     restState:(/** @type {number} */ si,/** @type {number} */ ii)=>{ const r=schools[si].rest; return r?{on:r[ii].on,t:+r[ii].t.toFixed(1),dur:+r[ii].dur.toFixed(1)}:null; },
+    // 照片皮鱼的步态（尾摆/弯曲/各鳍/冲刺-滑行）与习性（吸玻璃 mode 0 游/1 靠近/2 吸住；换气 mode 0/1 上浮/2 吞气）；t 传 0 把计时拨到马上
+    gaitOf:(/** @type {number} */ si,/** @type {number} */ ii)=>{ const g=schools[si]?.gait; if(!g) return null;
+      return { hz:+g.hzOf(ii).toFixed(2), ...Object.fromEntries(['amp','freq','bend','open','flapAmp','dorsal','pelvic','thrust'].map(k=>[k, +g[k][ii].toFixed(3)])) }; },
+    habitOf:(/** @type {number} */ si,/** @type {number} */ ii,/** @type {number} */ t)=>{ const s=schools[si], c=s?.cling?.[ii], b=s?.breath?.[ii];
+      if(t!==undefined){ if(c) c.t=t; if(b) b.t=t; }
+      return { cling:c ? { mode:c.mode, w:+c.w.toFixed(2), t:+c.t.toFixed(1) } : null, breath:b ? { mode:b.mode, t:+b.t.toFixed(1) } : null }; },
     velOf:(/** @type {number} */ si,/** @type {number} */ ii)=>schools[si].vel[ii].toArray().map((/** @type {any} */ v)=>+v.toFixed(3)),
     bloom:(/** @type {any} */ on)=>{ bloom.enabled=on; },
     haze:(/** @type {boolean} */ on, /** @type {number} */ k, /** @type {number} */ max)=>{ lens.setHaze(on); if(k!==undefined) lens.uniforms.uDensity.value=k; if(max!==undefined) lens.uniforms.uMaxMix.value=max; },   // 水体纵深（k = 每单位雾化系数）

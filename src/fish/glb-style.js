@@ -148,11 +148,12 @@ export function prepareFishModel(/** @type {any} */ root, /** @type {string} */ 
 }
 
 /* ---------- 着色器装饰：渐变 / 霓虹 / 焦散 / 逆光 / （无动画模型）尾摆 / （实例化鱼）骨骼位姿蒙皮 ----------
- * opts: { causticK?:{value}, sway?:{ phaseU, L, amp, waveK }, vat?:{ uPose, uC0, uC1, uC2 }（fish-vat.js 的实例化蒙皮） } */
+ * opts: { causticK?:{value}, sway?:{ phaseU, L, amp, waveK }, vat?:{ uPose, uC0, uC1, uC2 }（fish-vat.js 的实例化蒙皮）,
+ *   inst?:boolean（实例化但不走骨骼位姿，如 photo-fish.js：焦散取世界坐标时要乘 instanceMatrix） } */
 /** @param {any} mat @param {any} [opts] */
 export function decorateFishMaterial(mat, opts={}){
   const ud=(/** @type {any} */ (mat.userData)); const paint = ud.paint, frame = ud.frame;
-  const { causticK, sway, vat } = opts;
+  const { causticK, sway, vat, inst } = opts;
   const eye = !!ud.eye;
   const flags = `${paint?'g':''}${causticK?'c':''}${sway?'s':''}${vat?'v':''}${eye?'e':''}`;
   mat.customProgramCacheKey = ()=> `fishfx_${flags}`;
@@ -191,7 +192,7 @@ export function decorateFishMaterial(mat, opts={}){
         ${vat ? 'mat4 vatS = vatSkin(); objectNormal = normalize((vatS * vec4(objectNormal, 0.0)).xyz);' : ''}`)
       .replace('#include <skinning_vertex>', `#include <skinning_vertex>
         ${vat ? 'transformed = (vatS * vec4(transformed, 1.0)).xyz;' : ''}
-        ${causticK ? `vFxW = (modelMatrix*${vat ? 'instanceMatrix*' : ''}vec4(transformed,1.0)).xyz;` : ''}`);
+        ${causticK ? `vFxW = (modelMatrix*${vat || inst ? 'instanceMatrix*' : ''}vec4(transformed,1.0)).xyz;` : ''}`);
     sh.fragmentShader = fHead + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
         ${paint ? `{ vec3 g = vYN<uGM ? mix(uG0,uG1,smoothstep(0.0,uGM,vYN))

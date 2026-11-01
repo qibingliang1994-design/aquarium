@@ -489,6 +489,7 @@ function applyQualityLock(){
 if(settings.qualityMode!=='auto') applyQualityLock();
 
 const onEat=(/** @type {any} */ school, /** @type {number} */ i)=>{ school.setGrowth(i, runtime.care.eat(school.spec.id,i)); sound.crunch(); };
+const onGulp=(/** @type {THREE.Vector3} */ p)=>ripples.spawn(p.x, p.z);   // 迷鳃鱼上水面吞气：水面一圈涟漪
 function updateCareHud(){                // 圆环 pathLength=100：dashoffset = 100 - 百分比
   careFill.style.strokeDashoffset=`${100-Math.round(runtime.care.satiety*100)}`;
   careText.textContent=runtime.care.status();
@@ -553,7 +554,7 @@ function frame(){
   feeder.wafers=schools.some(s=>s.spec.hug!=null && s.spec.count>0) ? 3 : 0;   // 有底栖鱼才投沉底片
   lure.update(dt, t);                            // 光点视觉/位置先就位，鱼群本帧就追得上
   const ctx={ obstacles, pellets:active, feeder, excite:U.excite.value, time:t, schools, current:flow,
-    appetite, fear:input.fear, sleep, onEat, grid:fishGrid, lure };
+    appetite, fear:input.fear, sleep, onEat, onGulp, grid:fishGrid, lure };
   rebuildFishGrid(fishGrid, schools);             // 共享统一网格：同种/异种 pair 查询走邻域
   for(const s of schools) s.update(dt,ctx);
 

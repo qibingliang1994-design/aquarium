@@ -32,6 +32,12 @@
 .species-card:has(.guppy){--sp:#ff6f9c}
 .species-card:has(.betta){--sp:#5a6cff}
 .species-card:has(.harlequin){--sp:#e8845a}
+.species-card:has(.rummy){--sp:#e8f0f4}
+.species-card:has(.ember){--sp:#ff7a3a}
+.species-card:has(.oto){--sp:#b9a77c}
+.species-card:has(.ram){--sp:#ffc94a}
+.species-card:has(.scalare){--sp:#cfd8dc}
+.species-card:has(.gourami){--sp:#ff5a6a}
 
 /* 预览区：物种色聚光 + 水底渐变 + 底部沙面反光，模型居中漂浮 */
 .species-art{position:relative;height:138px;overflow:hidden;

@@ -7,6 +7,9 @@ import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { bakeFishPose } from '../../fish/fish-pose.js';
 import { VatFish } from '../../fish/fish-vat.js';
+import { PhotoFish } from '../../fish/photo-fish.js';
+import { PhotoGait } from '../../fish/photo-gait.js';
+import { clingState, stepCling, breathState, stepBreath } from './habits.js';
 import { TANK } from '../../scene/tank.js';
 import { groundY } from '../../scene/ground.js';
 // @ts-check
@@ -14,8 +17,9 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 /** @typedef {import('./species.js').FishSpec} FishSpec */
 /** @typedef {{ c:THREE.Vector3, r:number }} Obstacle */
-/** @typedef {{ template:THREE.Object3D, animations:any[] }} GlbData */
-/** @typedef {{ growth?:number[], capacity?:number, gloss?:number, swim?:{x:number,z:number}, yCeil?:number, waterY?:number }} SchoolOpts */
+/** @typedef {{ template:THREE.Object3D, animations:any[], photo?:import('../../fish/photo-fish.js').PhotoSource }} GlbData */
+/** glass：玻璃内壁半宽（自然水域为 null：没有玻璃可吸附）
+ * @typedef {{ growth?:number[], capacity?:number, gloss?:number, swim?:{x:number,z:number}, yCeil?:number, waterY?:number, glass?:{x:number,z:number}|null }} SchoolOpts */
 
 /* ---------- 鱼群（Boids + 转弯侧倾） ---------- */
 const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
@@ -23,6 +27,10 @@ const _v1=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(),
       _coh=new THREE.Vector3(), _dummy=new THREE.Object3D();
 const _eyeLocal=new THREE.Matrix4(), _eyeM=new THREE.Matrix4();
 const _pm=new THREE.Matrix4(), _po=new THREE.Vector3(), _pd=new THREE.Vector3(), _p0=new THREE.Vector3();
+const _hab=new THREE.Vector3(), _q1=new THREE.Quaternion(), _q2=new THREE.Quaternion();
+/** @type {[number,number]} */ const _band=[0,0];
+const HALF_PI=Math.PI/2;
+const PITCH_MAX=0.9;                // 照片皮鱼的俯仰上限（tan，约 42°）：上浮换气、下沉觅食也是斜着游，不会竖成一根
 
 const BITE_DUR=0.35;                // 咬食动作时长（秒）
 const NIBBLE_R=0.14;                // 距光点这么近算"咬到"（逗鱼模式）
@@ -63,6 +71,12 @@ export class School {
   /** @type {any} */ rest=null;
   /** @type {THREE.Object3D[]} */ fishes=[];
   /** @type {VatFish|null} */ vat=null;                     // 实例化蒙皮（骨骼位姿贴图）：骨骼动画物种的默认路径
+  /** @type {PhotoFish|null} */ photo=null;                 // 照片皮鱼：顶点着色器游动（尾、身体弯曲、各鳍、眼、鳃）
+  /** @type {PhotoGait|null} */ gait=null;                  // 照片皮鱼的步态（由真实运动推出）
+  photoK=1;                                                 // 照片皮模型（米制）→ 场景的缩放
+  /** @type {import('./habits.js').ClingState[]|null} */ cling=null;
+  /** @type {import('./habits.js').BreathState[]|null} */ breath=null;
+  /** @type {{x:number,z:number}|null} */ glass=null;
   /** @type {Float32Array} */ vatT=new Float32Array(0);     // 每条鱼三个片段（游动/冲刺/咬食）的相位 0..1
   /** @type {THREE.AnimationMixer[]} */ mixers=[];
   /** @type {{ swim:any, fast:any, bite:any }[]} */ actions=[];
@@ -71,7 +85,7 @@ export class School {
 
   // capacity：可容纳的最大条数（预分配实例/状态数组，addFish 原地入缸不用重建）
   /** @param {FishSpec} spec @param {Obstacle[]} obstacles @param {GlbData|null} glbData @param {SchoolOpts} [opts] */
-  constructor(spec, obstacles, glbData, { growth, capacity, gloss, swim, yCeil, waterY }={}){
+  constructor(spec, obstacles, glbData, { growth, capacity, gloss, swim, yCeil, waterY, glass }={}){
     this.spec=spec;
     this.glbMode=!!glbData;
     const N=spec.count;
@@ -79,11 +93,21 @@ export class School {
     this.spawnObstacles=obstacles;               // addFish 出生避让岩石时复用
     this.yCeil=yCeil ?? 1.66;                    // 硬高度上限（默认缸 = 水面下 0.18）
     this.waterY=waterY ?? TANK.waterY;
+    this.glass=glass ?? null;
     this.lim=swimLimits(spec.L, swim ?? SWIM);   // 水平活动半宽（按体长离玻璃留距）
     this._refreshSpawn();
     this.group=new THREE.Group();
     this.causticK=null;
-    if(this.glbMode){
+    const photoSrc=glbData?.photo;
+    if(photoSrc){
+      // —— 照片皮模式：每物种一个 InstancedMesh，姿态与步态逐实例 ——
+      this.causticK={ value:0.22 };            // 鱼体焦散强度（applyNight 调节）
+      this.photo=new PhotoFish(photoSrc, { capacity:this.capacity, causticK:this.causticK, castShadow:spec.L>=0.2 });
+      this.gait=new PhotoGait(this.capacity, photoSrc.swim, { pectSwim:spec.pectSwim ?? 0.5, burst:spec.burst ?? 0 });
+      this.photoK=spec.L/photoSrc.swim.length;
+      this.group.add(this.photo.group);
+      this.photo.setCount(N);
+    } else if(this.glbMode){
       // —— 骨骼动画模型模式 ——
       const clips=(/** @type {GlbData} */ (glbData)).animations||[];
       // 无动画模型（如静态雕塑）也能跑：仅靠 Boids 位移
@@ -175,6 +199,9 @@ export class School {
     this.rest = spec.bottomRest
       ? Array.from({length:N},()=>({t:rand(4,10),on:0,dur:0,p:new THREE.Vector3()}))
       : null;
+    this.cling = spec.cling ? Array.from({length:N},()=>clingState()) : null;     // 吸玻璃啃藻（小精灵）
+    this.breath = spec.breathe ? Array.from({length:N},()=>breathState()) : null; // 迷鳃鱼上水面换气
+    this._clingSp={ glass:{x:0,z:0}, gap:spec.H*0.5+0.006, y0:0, y1:0 };
     // 成长体型（当前值缓动到目标值）与咬食计时（容量预分配，addFish 原地追加）
     const cap=this.capacity;
     this.growth=new Float32Array(cap).fill(1);
@@ -187,7 +214,7 @@ export class School {
     this.pY=new Float32Array(cap).fill(0.5);
     this.obsT=0;
     this.regroupT=0;
-    this.baseScale=this.glbMode ? (this.template.scale.x??1) : 1;
+    this.baseScale=this.template ? (this.template.scale.x??1) : 1;   // 照片皮没有包裹节点（缩放在 photoK）
     this.glossK=-1; this.setGloss(gloss??0);
     this.update(0.016, { obstacles, pellets:[], excite:0, time:0, schools:[] });
   }
@@ -201,18 +228,20 @@ export class School {
     }
   }
 
-  /** 射线选鱼（实例化蒙皮路径）：对每条鱼的椭球体求交，返回最近的 { distance, fid } @param {THREE.Ray} ray */
+  /** 射线选鱼（实例化路径：骨骼位姿 / 照片皮）：对每条鱼的椭球体求交，返回最近的 { distance, fid } @param {THREE.Ray} ray */
   pickRay(ray){
-    const spec=this.spec, vat=this.vat;
-    if(!vat) return null;
-    // 椭球半轴按"包裹节点内"坐标（体长 L / baseScale）；沿朝向 z 为长轴，宽高取 H 与体长比例的较大值
-    const az=spec.L*0.52/this.baseScale, ay=Math.max(spec.H, spec.L*0.28)*0.6/this.baseScale;
+    const spec=this.spec, inst=this.vat ?? this.photo;
+    if(!inst) return null;
+    // 椭球半轴按实例矩阵之前的局部坐标：骨骼位姿是"包裹节点内"（体长沿 z，÷baseScale），照片皮是模型米制（体长沿 x，÷photoK）
+    const k=this.photo ? this.photoK : this.baseScale;
+    const aL=spec.L*0.52/k, aT=Math.max(spec.H, spec.L*0.28)*0.6/k;
+    const ax=this.photo ? aL : aT, ay=aT, az=this.photo ? aT : aL;
     /** @type {{distance:number, fid:number}|null} */ let best=null;
     _p0.set(0,0,0);
     for(let i=0;i<spec.count;i++){
-      _pm.fromArray(vat.matAttr.array, i*16).invert();
-      _po.copy(ray.origin).applyMatrix4(_pm); _po.set(_po.x/ay, _po.y/ay, _po.z/az);
-      _pd.copy(ray.direction).applyMatrix4(_pm).sub(_p0.set(0,0,0).applyMatrix4(_pm)); _pd.set(_pd.x/ay, _pd.y/ay, _pd.z/az);
+      _pm.fromArray(inst.matAttr.array, i*16).invert();
+      _po.copy(ray.origin).applyMatrix4(_pm); _po.set(_po.x/ax, _po.y/ay, _po.z/az);
+      _pd.copy(ray.direction).applyMatrix4(_pm).sub(_p0.set(0,0,0).applyMatrix4(_pm)); _pd.set(_pd.x/ax, _pd.y/ay, _pd.z/az);
       const a=_pd.dot(_pd), b=_po.dot(_pd), c=_po.dot(_po)-1, disc=b*b-a*c;
       if(!(disc>=0)) continue;                       // 含 NaN（矩阵退化）一并跳过
       const sq=Math.sqrt(disc);
@@ -287,11 +316,12 @@ export class School {
       ? { x:x*0.82, z:z*0.72, rx:x*0.82*0.76, rz:z*0.72*0.8 }
       : { x:1.7, z:0.5, rx:1.3, rz:0.4 };
   }
-  /** 换缸但不重建鱼群时更新活动范围 @param {{x:number,z:number}} swim @param {number} yCeil @param {number} waterY */
-  setLimits(swim, yCeil, waterY){
+  /** 换缸但不重建鱼群时更新活动范围 @param {{x:number,z:number}} swim @param {number} yCeil @param {number} waterY @param {{x:number,z:number}|null} [glass] */
+  setLimits(swim, yCeil, waterY, glass=null){
     this.lim=swimLimits(this.spec.L, swim);
     this.yCeil=yCeil;
     this.waterY=waterY;
+    this.glass=glass;
     this._refreshSpawn();
   }
 
@@ -312,11 +342,13 @@ export class School {
     this.smv.push(new THREE.Vector3(Math.sin(a),0,Math.cos(a)));
     this.yaw.push(a); this.bank.push(0);
     this.rest?.push({t:rand(4,10),on:0,dur:0,p:new THREE.Vector3()});
+    this.cling?.push(clingState()); this.breath?.push(breathState());
     this.growth[i]=0.45; this.growthTarget[i]=1;   // 0.45 → 1：几秒内长大
     this.biteT[i]=0; this.gulpCool[i]=rand(0.5,1.5);
     this.pSpd[i]=0.5; this.pTurn[i]=0.3;
     this.pY[i]=(p.y-0.35)/(this.waterY-0.35);
-    if(this.vat){ this._initVatPhase(i); this.vat.setCount(i+1); }
+    if(this.photo){ this.gait?.reset(i); this.photo.setCount(i+1); }
+    else if(this.vat){ this._initVatPhase(i); this.vat.setCount(i+1); }
     else if(this.glbMode) this._glbFish(i);
     else { this.mesh.count=i+1; this.finMesh.count=i+1; this.eyeMesh.count=(i+1)*2; }
     return i;
@@ -360,6 +392,7 @@ export class School {
   // 场景切换/改鱼群时释放：GLB 模式只释放克隆出来的材质（几何与模板共享），程序化模式全部释放
   dispose(){
     this.group.removeFromParent();
+    if(this.photo){ this.photo.dispose(); return; }
     if(this.vat){ this.vat.dispose(); return; }   // 材质克隆保留（理由同下）；几何的逐实例属性随 dispose 释放
     if(this.glbMode){
       for(const m of this.mixers) m.stopAllAction();
@@ -455,7 +488,16 @@ export class School {
       const col=columnBand(spec.band, sandHere, this.yCeil, spec.H, spec.hug);
       const floorY=spec.hug!=null ? sandHere+spec.hug+spec.H*0.5 : col.band[0];
       let resting=false;
-      if(R){
+      // 吸玻璃（小精灵）：自然水域没有玻璃、受惊时松开
+      const C=this.cling ? this.cling[i] : null;
+      let clinging=false;
+      if(C){
+        const sp=this._clingSp;
+        if(this.glass){ sp.glass.x=this.glass.x; sp.glass.z=this.glass.z; sp.y0=col.floor+0.1; sp.y1=this.yCeil-0.2; }
+        clinging=stepCling(C, p, v, _hab, dt, ctx.time*0.9+i*1.7, this.glass && fear<0.3 ? sp : null, Math.random);
+      }
+      const stuck=clinging && /** @type {any} */ (C).mode===2;
+      if(R && !clinging){
         R.t-=dt;
         if(!R.on){
           if(R.t<=0 && p.y<floorY+0.25){ R.on=1; R.dur=rand(2,3.2);
@@ -484,15 +526,22 @@ export class School {
         else if(d<0.5){ _acc.x+=ex/d*0.5; _acc.z+=ez/d*0.5; }                  // 防塌中心
         _acc.x+=(-ez/d)*0.45*rx/Math.max(rx,rz); _acc.z+=(ex/d)*0.45*rz/Math.max(rx,rz);   // 切向绕圈
       }
-      boundaryAcc(p, col.band, _acc, this.lim, floorY, v);   // 边界软约束 + 贴墙侧向转弯
+      // 迷鳃鱼换气：上浮期间水层上限放到水面
+      const B=this.breath ? this.breath[i] : null;
+      const surfY=this.waterY-spec.H*0.35;
+      const breathing=B ? stepBreath(B, p, v, _acc, dt, surfY, fear<0.1 && !resting, Math.random, ctx.onGulp) : false;
+      let band=col.band;
+      if(breathing){ _band[0]=col.band[0]; _band[1]=surfY+0.1; band=_band; }
+      boundaryAcc(p, band, _acc, this.lim, floorY, v);   // 边界软约束 + 贴墙侧向转弯
       obstacleAcc(p, ctx.obstacles, _acc);        // 障碍
       if(resting){                                // 趴底：忽略社交力，弹簧锚定沙面
         _acc.set(0,0,0);
         _acc.add(_v1.subVectors((/** @type {any} */ R).p,p).multiplyScalar(3));
       }
+      if(clinging) _acc.copy(_hab);               // 吸附：游向吸附点 / 贴在玻璃上（群游力全部让位）
       if(this.gulpCool[i]>0) this.gulpCool[i]-=dt;
       let targeting=false;
-      if(hunting && !resting && this.gulpCool[i]<=0){   // 觅食
+      if(hunting && !resting && !clinging && !breathing && this.gulpCool[i]<=0){   // 觅食
         const bottomFeeder=spec.hug!=null;
         const best=huntTarget(p, ctx.pellets, senseR, bottomFeeder ? -Infinity : spec.band[0]+0.05, bottomFeeder);
         if(best){
@@ -502,7 +551,7 @@ export class School {
           if(bd<0.13 && ctx.feeder.consume(best)){ this._bite(i); ctx.onEat?.(this,i); }
         }
       }
-      if(lure && !resting && !targeting && fear<0.3){   // 逗鱼：追光点盘旋，凑近轻咬一口
+      if(lure && !resting && !clinging && !breathing && !targeting && fear<0.3){   // 逗鱼：追光点盘旋，凑近轻咬一口
         const d=lureAcc(p, lure, _acc);
         if(d>=0 && d<NIBBLE_R && Math.random()<dt*1.6){
           this.biteT[i]=BITE_DUR;
@@ -512,23 +561,27 @@ export class School {
       }
 
       v.addScaledVector(_acc, dt);
+      if(this.gait && !resting && !clinging) v.addScaledVector(this.smv[i], this.gait.thrust[i]*spec.maxSpeed*0.6*dt);   // 冲刺-滑行的速度节奏
       let s=v.length();
-      if(s<1e-5){ v.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(spec.minSpeed); s=v.length(); }
+      if(s<1e-5 && !stuck){ v.set(rand(-1,1),0,rand(-1,1)).normalize().multiplyScalar(spec.minSpeed); s=v.length(); }
       if(s>maxS) v.multiplyScalar(maxS/s);
-      else if(!resting && s<minS){
+      else if(!resting && !stuck && s<minS){
         // 顶流时最低游速放宽到水流推送量附近：否则被抬到 minS，又变成整群往上游挤
         const lo=flow ? Math.min(minS, FLOW_PUSH*Math.abs(flow)*0.65) : minS;
         if(s<lo) v.multiplyScalar(lo/s);
       }
       v.y*=1-Math.min(0.5, dt*0.8);               // 保持水平姿态
       p.addScaledVector(v, dt);
-      if(flow && !resting) p.x+=flow*dt*FLOW_PUSH; // 水流推送（鱼要一直逆游才能保持位置）
+      if(flow && !resting && !stuck) p.x+=flow*dt*FLOW_PUSH; // 水流推送（鱼要一直逆游才能保持位置）
       if(resting) v.multiplyScalar(1-Math.min(1,dt*3));   // 趴底阻尼
       // 硬约束：不出玻璃、不钻沙（沙面按高度场，趴底时可以贴近）
       const sandY=sandHere;
-      p.x=clamp(p.x,-this.lim.x-0.06,this.lim.x+0.06);
-      p.y=clamp(p.y, resting ? sandY+0.03 : col.floor, this.yCeil);
-      p.z=clamp(p.z,-this.lim.z-0.06,this.lim.z+0.06);
+      // 吸玻璃的鱼可以贴到玻璃内壁（鱼心离玻璃 = 半个体高），换气的鱼可以碰到水面
+      const gx=clinging && this.glass ? this.glass.x-this._clingSp.gap : this.lim.x+0.06;
+      const gz=clinging && this.glass ? this.glass.z-this._clingSp.gap : this.lim.z+0.06;
+      p.x=clamp(p.x,-gx,gx);
+      p.y=clamp(p.y, resting ? sandY+0.03 : col.floor, breathing ? surfY : this.yCeil);
+      p.z=clamp(p.z,-gz,gz);
       speedSum+=v.length();
 
       // 平滑朝向：速度方向低通滤波（帧率无关），转弯呈弧线而非瞬时甩头
@@ -552,7 +605,27 @@ export class School {
       this.growth[i]+=(this.growthTarget[i]-this.growth[i])*Math.min(1,dt*1.5);
       if(this.biteT[i]>0) this.biteT[i]=Math.max(0,this.biteT[i]-dt);
 
-      if(this.vat){
+      if(this.photo){
+        // 模型头朝 +X：lookAt 让 +Z 对准游向，再绕自身 Y 转 -90° 把 +X 转过去
+        _dummy.position.copy(p);
+        _dummy.scale.setScalar(this.photoK*this.growth[i]);
+        const hl=Math.hypot(hd.x,hd.z);
+        if(hl>1e-3) _v2.set(p.x+hd.x, p.y+clamp(hd.y,-PITCH_MAX*hl,PITCH_MAX*hl), p.z+hd.z);
+        else _v2.set(p.x+Math.sin(this.yaw[i]), p.y, p.z+Math.cos(this.yaw[i]));
+        _dummy.lookAt(_v2);
+        _dummy.rotateZ(this.bank[i]*0.5);
+        _dummy.rotateY(-HALF_PI);
+        if(C && C.w>0.002){                       // 吸在玻璃上：头沿 f、背朝缸内（腹面贴玻璃），啃藻时头轻轻左右摆
+          _pm.makeBasis(C.f, C.n, _v3.crossVectors(C.f, C.n));
+          _q1.setFromRotationMatrix(_pm).premultiply(_q2.setFromAxisAngle(C.n, Math.sin(ctx.time*5+i)*0.08));
+          _dummy.quaternion.slerp(_q1, C.w);
+        }
+        _dummy.updateMatrix();
+        this.photo.setMatrix(i,_dummy.matrix);
+        const bite=this.biteT[i]>0 ? Math.sin(Math.PI*(1-this.biteT[i]/BITE_DUR)) : 0;
+        /** @type {PhotoGait} */ (this.gait).step(i, dt, sLen/spec.L, yawRate, fear, bite,
+          resting || (C && C.w>0.5) ? 1 : 0, (1+0.4*ctx.excite)*(1-0.45*sleep));
+      } else if(this.vat){
         _dummy.position.copy(p);
         _dummy.scale.setScalar(this.baseScale*this.growth[i]);
         _v2.copy(p).add(hd);
@@ -587,6 +660,11 @@ export class School {
       }
     }
     this.avgSpeed+=((speedSum/N)-this.avgSpeed)*Math.min(1,dt*2);
+    if(this.photo){
+      /** @type {PhotoGait} */ (this.gait).write(this.photo.swimAttr, this.photo.finAttr, N);
+      this.photo.flush();
+      return;
+    }
     if(this.glbMode){
       // 摆尾频率随速度/兴奋度加快（对应程序化模式的 Strouhal 逻辑）
       const ts=(0.75+1.5*(this.avgSpeed/spec.maxSpeed)+0.9*ctx.excite)*(1-0.5*sleep);

@@ -10,7 +10,6 @@ import { sstep, vnoise } from '../../utils.js';
  * @property {number} count 默认条数
  * @property {number} L 目标体长（米）
  * @property {number} H 目标体高
- * @property {string} [glb] GLB 路径（species-models 的 FILES 才是加载真源）
  * @property {[number,number][]} profileH 侧视轮廓 [位置0..1, 高度0..1]
  * @property {[number,number][]} profileW 顶视轮廓
  * @property {number} topK @property {number} botK 背/腹缩放
@@ -31,13 +30,17 @@ import { sstep, vnoise } from '../../utils.js';
  * @property {boolean} [bottomRest] 底栖趴沙停顿
  * @property {number[]} [territory] 领地 [x, y(未用), z, x 半径, z 半径?]（椭圆，缸深方向可以窄一些）
  * @property {number} [hug] 底栖：水层下界改为"沙面 + hug + 半个体高"，跟着沙面起伏（band[0] 只作出生参考）
+ * @property {number} [pectSwim] 照片皮步态：慢游时靠胸鳍划水的程度 0..1（神仙鱼、金鱼高，灯鱼中等，底栖鱼低）
+ * @property {number} [burst] 照片皮步态：巡游中"冲刺-滑行"的频度（0 = 不滑行；小型灯鱼 1）
+ * @property {boolean} [cling] 吸玻璃啃藻（小精灵）：隔一阵游到玻璃上吸住几秒（habits.js）
+ * @property {boolean} [breathe] 迷鳃鱼：隔半分钟到一分钟上水面吞一口气（habits.js）
  * @property {(u:number,c:number,y:number,z:number,out:THREE.Color)=>void} [paint] 程序化体色
  */
 
 /** @type {FishSpec[]} */
 export const SPECIES = [
-  { // 霓虹脂鲤：银色 + 霓虹蓝条纹 + 红色后腹
-    id:'tetra', count:24, L:0.17, H:0.052, glb:'fish-models/species/species-tetra.glb',
+  { // 霓虹脂鲤：银色 + 霓虹蓝条纹 + 红色后腹（模型：aquarium-editor 照片皮，MIT）
+    id:'tetra', count:24, L:0.17, H:0.052,
     profileH:[[0,0.05],[0.1,0.58],[0.28,0.94],[0.42,1],[0.6,0.88],[0.78,0.52],[0.92,0.30],[1,0.15]],
     profileW:[[0,0.52],[0.1,0.78],[0.28,0.66],[0.5,0.50],[0.75,0.30],[1,0.18]],
     topK:1.06, botK:0.94,
@@ -47,7 +50,7 @@ export const SPECIES = [
     rough:0.42, metal:0.35, scaleI:0.48, irid:0.5, scaleTiles:30, eyeSize:0.064,
     amp:0.105, beat:9.5, waveK:5.8,
     schoolRad:0.6, wSep:2.4, wAli:1.15, wCoh:0.85,
-    minSpeed:0.16, maxSpeed:0.62, wander:0.28,
+    minSpeed:0.16, maxSpeed:0.62, wander:0.28, pectSwim:0.5, burst:1,
     band:[0.73,1.6], senseR:2.4, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.62,0.70,0.75);
@@ -60,8 +63,8 @@ export const SPECIES = [
       if(red>0) out.lerp(new THREE.Color(0.86,0.08,0.045), red*0.86);
     },
   },
-  { // 金鱼：橙白斑块，圆润高身
-    id:'gold', count:4, L:0.34, H:0.17, glb:'fish-models/species/species-goldfish.glb',
+  { // 金鱼（琉金）：红白斑块，高背短身大尾（模型：aquarium-editor 照片皮，MIT）
+    id:'gold', count:4, L:0.34, H:0.17,
     profileH:[[0,0.12],[0.14,0.58],[0.32,1],[0.5,0.96],[0.66,0.76],[0.82,0.42],[1,0.14]],
     profileW:[[0,0.5],[0.14,0.85],[0.34,0.74],[0.56,0.5],[0.78,0.30],[1,0.20]],
     topK:1.08, botK:1.04,
@@ -71,7 +74,7 @@ export const SPECIES = [
     rough:0.42, metal:0.16, scaleI:0.65, irid:0.3, scaleTiles:20, eyeSize:0.072,
     amp:0.085, beat:4.6, waveK:4.4,
     schoolRad:0.95, wSep:2.2, wAli:0.3, wCoh:0.3,
-    minSpeed:0.08, maxSpeed:0.4, wander:0.12, turn:2.4,
+    minSpeed:0.08, maxSpeed:0.4, wander:0.12, turn:2.4, pectSwim:0.85,
     band:[0.68,1.53], senseR:2.6, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.95,0.30,0.045);
@@ -82,7 +85,7 @@ export const SPECIES = [
     },
   },
   { // 神仙鱼：银底黑竖带，极高身长鳍
-    id:'angel', count:3, L:0.3, H:0.26, glb:'fish-models/species/species-butterfly.glb',
+    id:'angel', count:3, L:0.3, H:0.26,
     profileH:[[0,0.10],[0.14,0.5],[0.34,1],[0.55,0.92],[0.75,0.5],[1,0.18]],
     profileW:[[0,0.42],[0.1,0.5],[0.3,0.44],[0.55,0.32],[1,0.24]],
     topK:1.12, botK:1.06,
@@ -104,8 +107,8 @@ export const SPECIES = [
       out.lerp(new THREE.Color(0.05,0.06,0.07), Math.max(b1,b2,b3)*0.92);
     },
   },
-  { // 鼠鱼：底栖，保护色斑点，宽体扁腹
-    id:'cory', count:5, L:0.15, H:0.075, glb:'fish-models/species/species-cory.glb',
+  { // 鼠鱼（熊猫鼠）：底栖，白身黑眼罩，三五成群在沙面上一跳一跳地找吃的（模型：aquarium-editor 照片皮，MIT）
+    id:'cory', count:5, L:0.15, H:0.075,
     profileH:[[0,0.14],[0.1,0.75],[0.24,1],[0.45,0.95],[0.65,0.66],[0.85,0.34],[1,0.2]],
     profileW:[[0,0.62],[0.1,0.92],[0.28,0.84],[0.5,0.62],[0.75,0.44],[1,0.30]],
     topK:1.12, botK:0.62,
@@ -115,7 +118,7 @@ export const SPECIES = [
     rough:0.55, metal:0.15, scaleI:1.0, irid:0.12, scaleTiles:22, eyeSize:0.082,
     amp:0.115, beat:11, waveK:6.4,
     schoolRad:0.45, wSep:2.6, wAli:0.35, wCoh:0.2,
-    minSpeed:0.04, maxSpeed:0.5, wander:0.5, bottomRest:true, hug:0.03,
+    minSpeed:0.04, maxSpeed:0.5, wander:0.5, bottomRest:true, hug:0.03, pectSwim:0.35, burst:0.6,
     band:[0.45,0.9], senseR:1.6, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.60,0.49,0.34);
@@ -128,7 +131,7 @@ export const SPECIES = [
     },
   },
   { // 锦鲤：白底红斑展示鱼，成对悠游
-    id:'koi', count:2, L:0.42, H:0.15, glb:'fish-models/species/species-koi.glb',
+    id:'koi', count:2, L:0.42, H:0.15,
     profileH:[[0,0.10],[0.15,0.6],[0.35,1],[0.55,0.9],[0.75,0.55],[1,0.18]],
     profileW:[[0,0.5],[0.15,0.8],[0.35,0.7],[0.58,0.5],[0.78,0.3],[1,0.2]],
     topK:1.08, botK:0.98,
@@ -149,7 +152,7 @@ export const SPECIES = [
     },
   },
   { // 小丑鱼：橙白条纹珊瑚礁明星
-    id:'clown', count:4, L:0.2, H:0.1, glb:'fish-models/species/species-clown.glb',
+    id:'clown', count:4, L:0.2, H:0.1,
     profileH:[[0,0.12],[0.15,0.6],[0.35,1],[0.55,0.9],[0.75,0.55],[1,0.2]],
     profileW:[[0,0.5],[0.15,0.75],[0.35,0.62],[0.58,0.48],[0.78,0.3],[1,0.2]],
     topK:1.05, botK:0.98,
@@ -169,7 +172,7 @@ export const SPECIES = [
     },
   },
   { // 狮子鱼：红白条纹 + 张扬鳍条
-    id:'lion', count:2, L:0.26, H:0.15, glb:'fish-models/species/species-lion.glb',
+    id:'lion', count:2, L:0.26, H:0.15,
     profileH:[[0,0.1],[0.18,0.62],[0.4,1],[0.6,0.85],[0.8,0.5],[1,0.18]],
     profileW:[[0,0.48],[0.18,0.72],[0.4,0.6],[0.6,0.44],[0.8,0.3],[1,0.2]],
     topK:1.06, botK:1.0,
@@ -189,7 +192,7 @@ export const SPECIES = [
     },
   },
   { // 麒麟鱼（花斑连鳍䲗）：蓝橙花纹底栖
-    id:'mandarin', count:2, L:0.16, H:0.09, glb:'fish-models/species/species-mandarin.glb',
+    id:'mandarin', count:2, L:0.16, H:0.09,
     profileH:[[0,0.14],[0.16,0.68],[0.38,1],[0.58,0.9],[0.78,0.55],[1,0.22]],
     profileW:[[0,0.52],[0.16,0.78],[0.38,0.66],[0.6,0.48],[0.8,0.3],[1,0.2]],
     topK:1.06, botK:0.96,
@@ -209,7 +212,7 @@ export const SPECIES = [
     },
   },
   { // 鹦鹉鱼：青蓝礁石种
-    id:'parrot', count:3, L:0.24, H:0.13, glb:'fish-models/species/species-parrot.glb',
+    id:'parrot', count:3, L:0.24, H:0.13,
     profileH:[[0,0.11],[0.16,0.64],[0.36,1],[0.56,0.9],[0.76,0.55],[1,0.2]],
     profileW:[[0,0.5],[0.16,0.76],[0.36,0.64],[0.58,0.48],[0.78,0.3],[1,0.2]],
     topK:1.06, botK:1.0,
@@ -228,7 +231,7 @@ export const SPECIES = [
     },
   },
   { // 孔雀鱼（雄）：虹彩蓝绿小身 + 大红尾，上层松散小群（模型：aquarium-editor，MIT）
-    id:'guppy', count:6, L:0.14, H:0.055, glb:'fish-models/species/species-guppy.glb',
+    id:'guppy', count:6, L:0.14, H:0.055,
     profileH:[[0,0.08],[0.12,0.6],[0.3,1],[0.5,0.9],[0.7,0.6],[0.88,0.36],[1,0.2]],
     profileW:[[0,0.5],[0.12,0.76],[0.32,0.62],[0.52,0.46],[0.78,0.28],[1,0.22]],
     topK:1.06, botK:0.96,
@@ -238,7 +241,7 @@ export const SPECIES = [
     rough:0.4, metal:0.24, scaleI:0.5, irid:0.45, scaleTiles:26, eyeSize:0.07,
     amp:0.115, beat:10, waveK:6.0,
     schoolRad:0.9, wSep:2.0, wAli:0.5, wCoh:0.4,
-    minSpeed:0.08, maxSpeed:0.42, wander:0.24, turn:2.6,
+    minSpeed:0.08, maxSpeed:0.42, wander:0.24, turn:2.6, pectSwim:0.4, burst:0.5,
     band:[0.92,1.68], senseR:2.2, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.42,0.62,0.6);                       // 虹彩蓝绿身
@@ -249,7 +252,7 @@ export const SPECIES = [
     },
   },
   { // 半月斗鱼：宽大绯鳍缓游独行，一缸一两尾刚刚好（模型：aquarium-editor，MIT）
-    id:'betta', count:1, L:0.2, H:0.095, glb:'fish-models/species/species-betta.glb',
+    id:'betta', count:1, L:0.2, H:0.095,
     profileH:[[0,0.1],[0.14,0.62],[0.34,1],[0.52,0.92],[0.7,0.68],[0.86,0.42],[1,0.24]],
     profileW:[[0,0.46],[0.14,0.7],[0.34,0.56],[0.54,0.42],[0.78,0.26],[1,0.2]],
     topK:1.1, botK:1.02,
@@ -259,7 +262,7 @@ export const SPECIES = [
     rough:0.38, metal:0.2, scaleI:0.52, irid:0.4, scaleTiles:24, eyeSize:0.06,
     amp:0.06, beat:3.6, waveK:4.0,
     schoolRad:1.6, wSep:2.8, wAli:0.1, wCoh:0.1,
-    minSpeed:0.02, maxSpeed:0.2, wander:0.12, turn:2.0,
+    minSpeed:0.02, maxSpeed:0.2, wander:0.12, turn:2.0, pectSwim:0.65, breathe:true,
     band:[0.85,1.62], senseR:2.2, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.42,0.2,0.6);                        // 紫蓝身
@@ -270,7 +273,7 @@ export const SPECIES = [
     },
   },
   { // 金三角灯：铜粉底 + 后半黑三角斑，队形最整齐的群游鱼（模型：aquarium-editor，MIT）
-    id:'harlequin', count:16, L:0.15, H:0.055, glb:'fish-models/species/species-harlequin.glb',
+    id:'harlequin', count:16, L:0.15, H:0.055,
     profileH:[[0,0.07],[0.12,0.62],[0.32,1],[0.5,0.92],[0.7,0.6],[0.88,0.32],[1,0.16]],
     profileW:[[0,0.5],[0.12,0.74],[0.32,0.6],[0.52,0.46],[0.78,0.28],[1,0.18]],
     topK:1.06, botK:0.96,
@@ -280,7 +283,7 @@ export const SPECIES = [
     rough:0.42, metal:0.3, scaleI:0.5, irid:0.4, scaleTiles:28, eyeSize:0.066,
     amp:0.1, beat:9, waveK:5.6,
     schoolRad:0.55, wSep:2.3, wAli:1.3, wCoh:1.0,
-    minSpeed:0.14, maxSpeed:0.55, wander:0.26,
+    minSpeed:0.14, maxSpeed:0.55, wander:0.26, pectSwim:0.5, burst:1,
     band:[0.78,1.55], senseR:2.4, hunts:true,
     paint(u,c,y,z,out){
       out.setRGB(0.85,0.62,0.44);                      // 铜粉底
@@ -288,6 +291,119 @@ export const SPECIES = [
       if(c<-0.5) out.lerp(new THREE.Color(0.95,0.9,0.85), sstep(-0.5,-1,c)*0.7);
       const tri=sstep(0.42,0.5,u)*(1-sstep(0.78,0.86,u))*sstep(-0.05,0.15,c);       // 后半黑三角
       if(tri>0) out.lerp(new THREE.Color(0.08,0.06,0.06), tri*0.92);
+    },
+  },
+  // —— 以下照片皮物种（模型：aquarium-editor，MIT）。程序化字段只是模型加载失败时的兜底 ——
+  { // 红鼻剪刀：红头、黑白剪刀尾，队形最紧的群游鱼
+    id:'rummy', count:18, L:0.19, H:0.05,
+    profileH:[[0,0.06],[0.12,0.6],[0.32,1],[0.5,0.9],[0.7,0.58],[0.88,0.3],[1,0.15]],
+    profileW:[[0,0.5],[0.12,0.74],[0.32,0.6],[0.52,0.46],[0.78,0.28],[1,0.18]],
+    topK:1.04, botK:0.94,
+    tailLen:0.42, tailSpread:1.05, tailFork:0.6,
+    dorsalH:0.62, dorsalL:0.22, analH:0.45, analL:0.2, pectL:0.15,
+    finOpacity:0.55, finColor:0xd8dde0,
+    rough:0.42, metal:0.3, scaleI:0.48, irid:0.45, scaleTiles:30, eyeSize:0.062,
+    amp:0.1, beat:9.5, waveK:5.8,
+    schoolRad:0.55, wSep:2.3, wAli:1.45, wCoh:1.1,
+    minSpeed:0.16, maxSpeed:0.6, wander:0.22, pectSwim:0.45, burst:1,
+    band:[0.75,1.5], senseR:2.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.78,0.82,0.8);
+      out.lerp(new THREE.Color(0.32,0.38,0.34), sstep(0.3,0.9,c)*0.7);
+      if(u<0.2) out.lerp(new THREE.Color(0.85,0.12,0.1), (1-sstep(0.12,0.2,u))*0.9);   // 红头
+    },
+  },
+  { // 火焰灯：两厘米的橙红小灯，松散地成群
+    id:'ember', count:20, L:0.11, H:0.035,
+    profileH:[[0,0.07],[0.12,0.62],[0.32,1],[0.5,0.92],[0.7,0.6],[0.88,0.32],[1,0.16]],
+    profileW:[[0,0.5],[0.12,0.74],[0.32,0.6],[0.52,0.46],[0.78,0.28],[1,0.18]],
+    topK:1.06, botK:0.96,
+    tailLen:0.42, tailSpread:1.0, tailFork:0.5,
+    dorsalH:0.6, dorsalL:0.22, analH:0.5, analL:0.2, pectL:0.15,
+    finOpacity:0.6, finColor:0xff8a50,
+    rough:0.42, metal:0.25, scaleI:0.45, irid:0.3, scaleTiles:26, eyeSize:0.07,
+    amp:0.1, beat:10, waveK:5.8,
+    schoolRad:0.5, wSep:2.2, wAli:0.9, wCoh:0.8,
+    minSpeed:0.1, maxSpeed:0.45, wander:0.3, pectSwim:0.5, burst:1,
+    band:[0.8,1.55], senseR:2.2, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.98,0.42,0.16);
+      out.lerp(new THREE.Color(0.7,0.2,0.06), sstep(0.3,0.9,c)*0.6);
+    },
+  },
+  { // 小精灵：吸在玻璃和沙面上啃藻的小清洁工
+    id:'oto', count:4, L:0.15, H:0.04,
+    profileH:[[0,0.12],[0.12,0.7],[0.3,1],[0.5,0.85],[0.7,0.6],[0.88,0.4],[1,0.22]],
+    profileW:[[0,0.6],[0.12,0.9],[0.3,0.8],[0.52,0.6],[0.78,0.4],[1,0.26]],
+    topK:1.0, botK:0.6,
+    tailLen:0.38, tailSpread:0.9, tailFork:0.4,
+    dorsalH:0.9, dorsalL:0.2, analH:0.4, analL:0.16, pectL:0.22,
+    finOpacity:0.55, finColor:0x9a8a6a,
+    rough:0.55, metal:0.1, scaleI:0.9, irid:0.1, scaleTiles:22, eyeSize:0.07,
+    amp:0.1, beat:8, waveK:5.6,
+    schoolRad:0.45, wSep:2.4, wAli:0.3, wCoh:0.3,
+    minSpeed:0.03, maxSpeed:0.3, wander:0.3, bottomRest:true, hug:0.025, cling:true, pectSwim:0.3, burst:0.4,
+    band:[0.45,1.1], senseR:1.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.72,0.66,0.52);
+      out.lerp(new THREE.Color(0.2,0.18,0.14), sstep(-0.05,0.08,c)*(1-sstep(0.08,0.2,c))*0.85);   // 体侧黑线
+      if(c<-0.4) out.lerp(new THREE.Color(0.92,0.9,0.84), sstep(-0.4,-1,c));
+    },
+  },
+  { // 荷兰凤凰：金黄身子缀满蓝亮片的矮慈鲷，成对守在沙面附近
+    id:'ram', count:2, L:0.19, H:0.09,
+    profileH:[[0,0.12],[0.14,0.66],[0.34,1],[0.55,0.92],[0.75,0.58],[1,0.2]],
+    profileW:[[0,0.48],[0.14,0.72],[0.34,0.6],[0.56,0.46],[0.78,0.3],[1,0.2]],
+    topK:1.1, botK:1.02,
+    tailLen:0.42, tailSpread:1.1, tailFork:0.1,
+    dorsalH:0.95, dorsalL:0.55, analH:0.6, analL:0.3, pectL:0.18,
+    finOpacity:0.6, finColor:0xf0c060,
+    rough:0.4, metal:0.2, scaleI:0.5, irid:0.45, scaleTiles:24, eyeSize:0.066,
+    amp:0.08, beat:6, waveK:5,
+    schoolRad:0.9, wSep:2.4, wAli:0.15, wCoh:0.35,
+    minSpeed:0.03, maxSpeed:0.3, wander:0.18, turn:2.6, hug:0.08, territory:[0.7,0.6,0.15,0.6,0.3], pectSwim:0.8, burst:0.5,
+    band:[0.5,1.0], senseR:2.0, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.95,0.78,0.3);
+      out.lerp(new THREE.Color(0.3,0.55,0.85), sstep(0.25,0.75,u)*0.45);
+      if(u<0.25 && c>-0.1) out.lerp(new THREE.Color(0.08,0.08,0.1), sstep(0.12,0.18,u)*(1-sstep(0.2,0.25,u)));   // 过眼黑带
+    },
+  },
+  { // 神仙鱼：银底黑竖带的高身三角鱼，长腹鳍拖成两根丝，缓缓巡游
+    id:'scalare', count:3, L:0.38, H:0.3,
+    profileH:[[0,0.10],[0.14,0.55],[0.34,1],[0.55,0.92],[0.75,0.5],[1,0.18]],
+    profileW:[[0,0.4],[0.1,0.48],[0.3,0.42],[0.55,0.3],[1,0.22]],
+    topK:1.15, botK:1.1,
+    tailLen:0.5, tailSpread:1.0, tailFork:0.2,
+    dorsalH:2.0, dorsalL:0.6, analH:2.0, analL:0.6, pectL:0.25,
+    finOpacity:0.55, finColor:0xd6dbdc,
+    rough:0.42, metal:0.3, scaleI:0.55, irid:0.35, scaleTiles:24, eyeSize:0.055,
+    amp:0.06, beat:3, waveK:3.8,
+    schoolRad:1.2, wSep:2.0, wAli:0.3, wCoh:0.45,
+    minSpeed:0.05, maxSpeed:0.26, wander:0.1, turn:1.8, pectSwim:0.9,
+    band:[0.85,1.5], senseR:2.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.85,0.86,0.84);
+      const b=sstep(0.22,0.26,u)*(1-sstep(0.3,0.34,u)) + sstep(0.48,0.52,u)*(1-sstep(0.58,0.62,u));
+      if(b>0) out.lerp(new THREE.Color(0.08,0.08,0.09), Math.min(1,b)*0.9);
+    },
+  },
+  { // 丽丽（小丽丽）：红蓝斜纹的迷鳃鱼，在上层慢慢踱步，不时上水面吸一口气
+    id:'gourami', count:2, L:0.22, H:0.1,
+    profileH:[[0,0.12],[0.14,0.66],[0.34,1],[0.55,0.92],[0.75,0.58],[1,0.2]],
+    profileW:[[0,0.42],[0.14,0.6],[0.34,0.5],[0.56,0.38],[0.78,0.26],[1,0.18]],
+    topK:1.08, botK:1.04,
+    tailLen:0.4, tailSpread:1.0, tailFork:0.1,
+    dorsalH:0.8, dorsalL:0.6, analH:0.7, analL:0.6, pectL:0.18,
+    finOpacity:0.6, finColor:0xe07060,
+    rough:0.4, metal:0.2, scaleI:0.5, irid:0.4, scaleTiles:24, eyeSize:0.06,
+    amp:0.07, beat:4.5, waveK:4.4,
+    schoolRad:1.0, wSep:2.2, wAli:0.25, wCoh:0.3,
+    minSpeed:0.04, maxSpeed:0.26, wander:0.14, turn:2.2, pectSwim:0.75, burst:0.2, breathe:true,
+    band:[0.95,1.6], senseR:2.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.88,0.32,0.22);
+      if(Math.sin((u*3+c*0.8)*18)>0.3) out.lerp(new THREE.Color(0.35,0.62,0.9), 0.75);   // 斜纹
     },
   },
 ];

@@ -65,6 +65,12 @@
 #fishCard[data-species=guppy]{--sp:#ff6f9c}
 #fishCard[data-species=betta]{--sp:#5a6cff}
 #fishCard[data-species=harlequin]{--sp:#e8845a}
+#fishCard[data-species=rummy]{--sp:#e8f0f4}
+#fishCard[data-species=ember]{--sp:#ff7a3a}
+#fishCard[data-species=oto]{--sp:#b9a77c}
+#fishCard[data-species=ram]{--sp:#ffc94a}
+#fishCard[data-species=scalare]{--sp:#cfd8dc}
+#fishCard[data-species=gourami]{--sp:#ff5a6a}
 .fc-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .fc-name{display:flex;align-items:baseline;gap:8px}
 #fcTitle{font-size:17px;font-weight:600;letter-spacing:.08em;color:var(--ink)}

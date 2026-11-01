@@ -16,9 +16,11 @@ import { boundsFor } from './tank-bounds.js';
 // homage：只出现在预设数据里（致敬的 IAPLC 原作与作者），存档清洗时丢弃
 
 // 与 entities/fish/species.js 的 SPECIES 顺序一致（单测校验）
-export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot','guppy','betta','harlequin'];
+export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot','guppy','betta','harlequin',
+  'rummy','ember','oto','ram','scalare','gourami'];
 /** @type {Record<string, number>} */
-export const FISH_MAX = { tetra:40, gold:10, angel:8, cory:12, koi:6, clown:10, lion:4, mandarin:6, parrot:8, guppy:10, betta:2, harlequin:24 };
+export const FISH_MAX = { tetra:40, gold:10, angel:8, cory:12, koi:6, clown:10, lion:4, mandarin:6, parrot:8, guppy:10, betta:2, harlequin:24,
+  rummy:30, ember:40, oto:10, ram:4, scalare:6, gourami:4 };
 export const FISH_TOTAL_MAX = 90;
 export const NAME_MAX = 16;
 

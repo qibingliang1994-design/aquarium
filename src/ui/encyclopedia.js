@@ -5,7 +5,8 @@ import { scaleNormalTex, finAlphaTex } from '../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, fishEyeLayout } from '../fish/body.js';
 import { prepareFishModel, decorateFishMaterial } from '../fish/glb-style.js';
 import { ecologyTags, mixNote } from '../entities/fish/ecology.js';
-import { orientFishModel } from '../entities/fish/species-models.js';
+import { speciesModelPath } from '../entities/fish/species-models.js';
+import { photoSource } from '../fish/photo-fish.js';
 
 /* ---------- 鱼类图鉴数据与视图 ---------- */
 /** @typedef {{ name:string, latin:string, className:string, desc:string, zone:string, size:string, behavior:string, diet:string }} SpeciesMeta */
@@ -13,8 +14,8 @@ import { orientFishModel } from '../entities/fish/species-models.js';
 export const SPECIES_META={
   tetra:{name:'霓虹脂鲤',latin:'Paracheirodon innesi',className:'tetra',
     desc:'银蓝色的小型群游鱼，成群穿梭在水族箱中层，喂食时反应敏捷。',zone:'中层',size:'3–4 cm',behavior:'群游敏捷',diet:'杂食'},
-  gold:{name:'金鱼',latin:'Carassius auratus',className:'gold',
-    desc:'橙白相间的圆润居民，动作从容亲人，喜欢在中上层寻找食物。',zone:'中上层',size:'8–12 cm',behavior:'温和好动',diet:'杂食'},
+  gold:{name:'琉金',latin:'Carassius auratus',className:'gold',
+    desc:'金鱼的经典品种：高背短身、红白相间，摆着三叶大尾慢慢划水，动作从容亲人。',zone:'中上层',size:'8–12 cm',behavior:'温和好动',diet:'杂食'},
   angel:{name:'蝴蝶鱼',latin:'Chaetodon auriga',className:'angel',
     desc:'高扁身姿的珊瑚礁住客，条纹优雅，泳姿从容大方，是缸中的门面担当。',zone:'中层',size:'10–15 cm',behavior:'温和群居',diet:'杂食'},
   clown:{name:'小丑鱼',latin:'Amphiprion ocellaris',className:'clown',
@@ -27,14 +28,26 @@ export const SPECIES_META={
     desc:'青蓝体色的礁石雕刻家，以藻类为食，温和大群活动。',zone:'中层',size:'25–35 cm',behavior:'温和群游',diet:'植食'},
   koi:{name:'锦鲤',latin:'Cyprinus rubrofuscus',className:'koi',
     desc:'水中活宝石，白底红斑极为吉祥，悠然巡游全缸，是当之无愧的门面。',zone:'全层',size:'40–60 cm',behavior:'从容大方',diet:'杂食'},
-  cory:{name:'鼠鱼',latin:'Corydoras paleatus',className:'cory',
-    desc:'活跃的底栖清道夫，常在沙地上觅食，用胡须探索每一处角落。',zone:'底层',size:'4–6 cm',behavior:'底栖活跃',diet:'杂食'},
+  cory:{name:'熊猫鼠',latin:'Corydoras panda',className:'cory',
+    desc:'白身子配黑眼罩的小鼠鱼，三五成群在沙面上一跳一跳地翻找食物，用胡须探索每一处角落。',zone:'底层',size:'4–5 cm',behavior:'底栖活跃',diet:'杂食'},
   guppy:{name:'孔雀鱼',latin:'Poecilia reticulata',className:'guppy',
     desc:'虹彩蓝绿的小身子拖着大红尾，在水面上层轻快巡游，是最耐养的入门鱼。',zone:'上层',size:'4–6 cm',behavior:'温和活泼',diet:'杂食'},
   betta:{name:'半月斗鱼',latin:'Betta splendens',className:'betta',
     desc:'展开的鱼鳍像一把绯色的扇，缓游独行、气度雍容，一缸一两尾刚刚好。',zone:'中上层',size:'6–8 cm',behavior:'从容独游',diet:'肉食'},
   harlequin:{name:'金三角灯',latin:'Trigonostigma heteromorpha',className:'harlequin',
     desc:'铜粉色的小灯鱼，后半身一块黑三角，成群游动时队形出奇地整齐。',zone:'中层',size:'4–5 cm',behavior:'群游整齐',diet:'杂食'},
+  rummy:{name:'红鼻剪刀',latin:'Hemigrammus rhodostomus',className:'rummy',
+    desc:'鲜红的鼻头配黑白剪刀尾，是队形最紧的群游鱼；水草缸里常见它们整群齐刷刷地转向。',zone:'中层',size:'4–5 cm',behavior:'紧密群游',diet:'杂食'},
+  ember:{name:'火焰灯',latin:'Hyphessobrycon amandae',className:'ember',
+    desc:'只有两厘米长的橙红小灯，像一把撒进水草里的火星，松散地成群穿梭。',zone:'中上层',size:'2 cm',behavior:'活泼群游',diet:'杂食'},
+  oto:{name:'小精灵',latin:'Otocinclus vittatus',className:'oto',
+    desc:'水草缸的小清洁工：吸盘嘴贴在玻璃和沙面上啃藻，一啃就是好一阵，再慢悠悠换个地方。',zone:'底层 · 玻璃',size:'3–4 cm',behavior:'安静啃藻',diet:'植食'},
+  ram:{name:'荷兰凤凰',latin:'Mikrogeophagus ramirezi',className:'ram',
+    desc:'金黄的身子缀满蓝色亮片，红眼睛上压着一道黑带；成对守着沙面一小片地盘，悬停、啄沙、一顿一顿地前进。',zone:'底层',size:'5–6 cm',behavior:'成对守域',diet:'杂食'},
+  scalare:{name:'神仙鱼',latin:'Pterophyllum scalare',className:'scalare',
+    desc:'银底黑竖带的高身三角鱼，背鳍臀鳍高高扬起、腹鳍拖成两根长丝，在水草间从容巡游。',zone:'中层',size:'12–15 cm',behavior:'优雅缓游',diet:'杂食'},
+  gourami:{name:'丽丽',latin:'Trichogaster lalius',className:'gourami',
+    desc:'红蓝斜纹的小型迷鳃鱼，能直接呼吸空气，所以不时浮上水面吸一口气，再慢慢踱回水草间。',zone:'上层',size:'5–6 cm',behavior:'温和踱步',diet:'杂食'},
 };
 /** 当前鱼群的混养冷知识（体长与显示名取自物种表） @param {Record<string, number>} fish */
 export function mixNoteFor(fish){
@@ -146,10 +159,11 @@ function renderFishPreviews(){
   for(const spec of SPECIES){
     const canvas=speciesGrid.querySelector(`canvas[data-species="${spec.id}"]`);
     if(!canvas) continue;
-    if(spec.glb){
+    const path=speciesModelPath(spec.id);
+    if(path){
       let g=glbSpeciesEntries.get(spec.id);
       if(!g || g.canvas!==canvas){
-        g=createModelPreview({id:spec.id, path:spec.glb, name:spec.id}, canvas);
+        g=createModelPreview({id:spec.id, path, name:spec.id}, canvas);
         glbSpeciesEntries.set(spec.id, g);
       }
       resizeModelPreview(g);
@@ -213,7 +227,9 @@ function renderModelPreviewEntry(entry){
 async function loadModelPreview(entry){
   try{
     const gltf=await gltfLoader.loadAsync(entry.model.path);
-    const group=orientFishModel(prepareFishModel(gltf.scene, entry.model.id), entry.model.id, 1);   // 与水族箱内同一套调色、皮肤与朝向
+    // 照片皮模型：保留照片贴图，透明度改成镂空（同缸内）；头朝 +X 本来就是侧身。骨骼模型走缸内同一套调色与皮肤
+    const photo=!!photoSource(gltf.scene);
+    const group=photo ? gltf.scene : prepareFishModel(gltf.scene, entry.model.id);
     group.traverse(obj=>{
       if(obj.isMesh){
         obj.visible=true;
@@ -222,7 +238,8 @@ async function loadModelPreview(entry){
         obj.receiveShadow=false;
         if(obj.material){
           obj.material.side=THREE.DoubleSide;
-          decorateFishMaterial(obj.material);
+          if(photo){ obj.material.transparent=false; obj.material.alphaTest=0.5; obj.material.depthWrite=true; }
+          else decorateFishMaterial(obj.material);
         }
       }
     });
@@ -245,8 +262,8 @@ async function loadModelPreview(entry){
     modelRoot.add(group);
     group.position.sub(center);
     modelRoot.scale.setScalar(1.38/maxSize);
-    // 侧身视角：鱼体长轴沿本地 Z，绕 Y 转到屏幕水平方向，避免正对镜头只看得到鱼头
-    modelRoot.rotation.y=Math.PI/2;
+    // 侧身视角：骨骼模型的鱼体长轴沿本地 Z，绕 Y 转到屏幕水平方向，避免正对镜头只看得到鱼头
+    modelRoot.rotation.y=photo ? 0 : Math.PI/2;
     entry.scene.add(modelRoot);
     entry.group=modelRoot;
     entry.loaded=true;
@@ -263,7 +280,7 @@ export function renderEncyclopediaPreviews(){
   renderFishPreviews();
 }
 export function modelPreviewStats(){
-  return SPECIES.filter(spec=>spec.glb).map(spec=>{
+  return SPECIES.filter(spec=>speciesModelPath(spec.id)).map(spec=>{
     const entry=glbSpeciesEntries.get(spec.id);
     return { id:spec.id, loaded:!!(entry&&entry.loaded), error:!!(entry&&entry.error) };
   });

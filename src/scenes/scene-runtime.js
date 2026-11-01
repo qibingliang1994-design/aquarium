@@ -10,7 +10,7 @@ import { buildItem, disposeItem } from './catalog.js';
 import { createItemBatch } from './item-batch.js';
 import { createContactShadows } from './contact-shadow.js';
 import { THEMES } from './themes.js';
-import { TANK_STYLES } from './tank-styles.js';
+import { TANK_STYLES, isNatural } from './tank-styles.js';
 import { careKey } from './scene-store.js';
 import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
 import { ITEM_META } from './item-meta.js';
@@ -60,6 +60,8 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     tankGroup.add(gravel);
   }
   const boxOf=()=>boundsFor(doc?.tank ?? 'classic');
+  /** 玻璃内壁（小精灵吸附用）；自然水域没有玻璃 */
+  const glassOf=()=>isNatural(doc?.tank ?? 'classic') ? null : boxOf().glassInner;
 
   function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
@@ -220,11 +222,11 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     const next=[];
     for(const spec of specs){
       const prev=old.get(spec.id);
-      if(prev && !reset && prev.spec.count===spec.count){ prev.setLimits(b.swim, b.yCeil, b.waterY); next.push(prev); old.delete(spec.id); continue; }
+      if(prev && !reset && prev.spec.count===spec.count){ prev.setLimits(b.swim, b.yCeil, b.waterY, glassOf()); next.push(prev); old.delete(spec.id); continue; }
       if(spec.count<=0) continue;
       const s=new School(spec, obstacles, glbMap[spec.id],
         { growth:care.growthArray(spec.id), capacity:FISH_MAX[spec.id] ?? spec.count, gloss:care.glossK(),
-          swim:b.swim, yCeil:b.yCeil, waterY:b.waterY });
+          swim:b.swim, yCeil:b.yCeil, waterY:b.waterY, glass:glassOf() });
       tankGroup.add(s.group);
       next.push(s);
     }
@@ -248,7 +250,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     syncItems(doc.items);
     const fishChanged=!prev || countsOf(prev.fish).join()!==countsOf(doc.fish).join();
     if(fresh || prev?.id!==doc.id || fishChanged) setFish(doc.fish, { reset:fresh || prev?.id!==doc.id });
-    else if(tankChanged){ const b=boxOf(); for(const s of schools) s.setLimits(b.swim, b.yCeil, b.waterY); }
+    else if(tankChanged){ const b=boxOf(); for(const s of schools) s.setLimits(b.swim, b.yCeil, b.waterY, glassOf()); }
   }
 
   return {
@@ -301,7 +303,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
       const b=boxOf();
       const s=new School(spec, obstacles, glbMap[speciesId], {
         growth:care.growthArray(spec.id), capacity:FISH_MAX[spec.id] ?? spec.count, gloss:care.glossK(),
-        swim:b.swim, yCeil:b.yCeil, waterY:b.waterY });
+        swim:b.swim, yCeil:b.yCeil, waterY:b.waterY, glass:glassOf() });
       const n=Math.min(s.spec.count, prev.pos.length);
       for(let i=0;i<n;i++){
         s.pos[i].copy(prev.pos[i]); s.vel[i].copy(prev.vel[i]); s.smv[i].copy(prev.smv[i]);

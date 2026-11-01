@@ -76,7 +76,7 @@ const RAW = [
   },
   {
     id:'planted', presetId:'planted', name:'荷兰草缸', theme:'fresh', tank:'rimless',
-    fish:{ tetra:26, angel:4, cory:6 },
+    fish:{ tetra:20, cory:5, ram:2, scalare:3, gourami:2 },   // 荷兰草缸的老搭档：神仙鱼、霓虹、鼠鱼、凤凰、丽丽
     items:[
       // 荷兰式：后景高茎成墙，中景红草点缀，前景草坪渐低，沉木斜出
       it('kelp',-1.8,-0.66,1.2), it('kelp',-1.35,-0.68,1.1), it('kelp',1.4,-0.68,1.15), it('kelp',1.85,-0.64,1.2),
@@ -155,7 +155,7 @@ const RAW = [
   },
   {
     id:'iwagumi', presetId:'iwagumi', name:'ADA 岩组', theme:'nature', tank:'ada',
-    fish:{ harlequin:22 },
+    fish:{ rummy:24, oto:3 },
     items:[
       // 岩组（Iwagumi）：主石立在左侧黄金分割点附近，副石倚着它、添石压阵；石纹朝向一致（rot≈0.5），像一道山脊
       it('rockTall',-0.6,-0.26,3.0,0.5), it('rockTall',-0.12,-0.4,2.1,0.62), it('rockTall',-1.02,-0.04,1.5,0.42),
@@ -179,7 +179,7 @@ const RAW = [
   // ---------- 致敬 IAPLC 历届冠军（只取构图与意境，素材全部程序生成；都用 ADA 缸） ----------
   {
     id:'donha', presetId:'donha', name:'苔石山', theme:'azure', tank:'ada', homage:'IAPLC 2008 冠军《Mount. Donha》· Cheng Siu Wai',
-    fish:{ tetra:38 },
+    fish:{ tetra:34, oto:3 },
     items:[
       // 按原作山脊逐段取样（缸宽比例 → 水体高度比例：左组约 0.6~0.69、中峰 0.89、右组 0.7 落到 0.5），
       // 两排石柱：后排定天际线，中排低两成；每块的缩放按它自己的局部高度反推（固定种子），峰顶正好落在山脊线上
@@ -206,7 +206,7 @@ const RAW = [
   },
   {
     id:'yururi', presetId:'yururi', name:'悠然', theme:'nature', tank:'ada', homage:'IAPLC 2018 冠军《Yururi》· Hironori Handa',
-    fish:{ harlequin:22 },
+    fish:{ ember:30, oto:2 },   // 两厘米的火焰灯把山景衬得更大
     items:[
       // 原作是"左低右高"的斜坡：左侧大片留白透出白光屏，右侧三分之二的水草从底一直堆到水面；
       // 前景一整条矮珍珠草毯，几支红褐沉木枝从左下斜扫向右上
@@ -239,7 +239,7 @@ const RAW = [
   },
   {
     id:'ashy', presetId:'ashy', name:'灰色山脉', theme:'nature', tank:'ada', homage:'IAPLC 2007 冠军《Ashy Range》· Chow Wai Sun',
-    fish:{ harlequin:22 },
+    fish:{ harlequin:22, oto:2 },
     items:[
       // 中左：九根粗壮的深色倒木堆成楔形——右下端扎在缸宽 60%~73% 的沙里，向左上斜搭（rot≈π：倒木从右端扎沙向左上搭起）。
       // 种子是挑过的：三根陡的（局部高 0.7+）爬到顶后被限高压平，成了原作左上那支约八成水深的横臂；

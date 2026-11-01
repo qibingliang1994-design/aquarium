@@ -4,7 +4,7 @@ import { SPECIES_META } from './encyclopedia.js';
 import { schoolNames, personaTags } from '../entities/fish/identity.js';
 
 /* ================================================================
- * 识鱼：射线拾取（GLB 逐条模型 / 程序化 InstancedMesh）+ 资料卡片
+ * 识鱼：射线拾取（实例化鱼按椭球 / GLB 逐条模型 / 程序化 InstancedMesh）+ 资料卡片
  * 卡片带个体身份：名字（getName，随场景确定性生成）与个性标签（真实行为统计）
  * ================================================================ */
 const CARD_W=284, CARD_H=300, CARD_MS=6000;   // 页脚两行：心情 + 在缸天数 / 成长条
@@ -22,13 +22,14 @@ export function createFishCard({ camera, schools, getCare, getSceneId }){   // g
     raycaster.setFromCamera(ndc,camera);
     /** @type {any} */ let best=null;
     for(const s of schools){
-      const hit=s.vat
+      const inst=!!(s.vat || s.photo);              // 实例化路径（骨骼位姿 / 照片皮）按椭球拾取
+      const hit=inst
         ? s.pickRay(raycaster.ray)
         : s.glbMode
           ? raycaster.intersectObjects(s.group.children,true)[0]
           : raycaster.intersectObject(s.mesh,false)[0];
       if(!hit || (best && hit.distance>=best.distance)) continue;
-      const fid=s.vat ? hit.fid : s.glbMode ? findFishIndex(hit.object) : hit.instanceId;
+      const fid=inst ? hit.fid : s.glbMode ? findFishIndex(hit.object) : hit.instanceId;
       best={ distance:hit.distance, fid, school:s };
     }
     return best;

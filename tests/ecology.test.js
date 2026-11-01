@@ -5,7 +5,7 @@ import { PRESETS } from '../src/scenes/presets.js';
 import { SPECIES } from '../src/entities/fish/species.js';
 
 const lengths = Object.fromEntries(SPECIES.map(s => [s.id, s.L]));
-const names = { lion: '狮子鱼', mandarin: '麒麟鱼', clown: '小丑鱼' };
+const names = { lion: '狮子鱼', mandarin: '麒麟鱼', clown: '小丑鱼', scalare: '神仙鱼', tetra: '霓虹脂鲤' };
 const note = fish => mixNote(fish, { lengths, names });
 
 describe('物种生态标签', () => {
@@ -18,15 +18,15 @@ describe('物种生态标签', () => {
       expect(ecologyTags(id)).toHaveLength(2);
     }
   });
-  it('只有狮子鱼是肉食鱼', () => {
-    expect(FISH_IDS.filter(id => ECOLOGY[id].predator)).toEqual(['lion']);
+  it('肉食鱼只有狮子鱼和神仙鱼', () => {
+    expect(FISH_IDS.filter(id => ECOLOGY[id].predator)).toEqual(['lion', 'scalare']);
   });
 });
 
 describe('mixNote', () => {
   const byId = Object.fromEntries(PRESETS.map(p => [p.id, p.fish]));
   it.each([
-    ['classic', '淡水鱼和海水鱼'], ['planted', '淡水鱼和海水鱼'],
+    ['classic', '淡水鱼和海水鱼'], ['planted', '神仙鱼会把霓虹脂鲤当点心'],
     ['stream', '26 °C'], ['river', '26 °C'],
     ['reef', '狮子鱼会把麒麟鱼当点心'],
     ['pond', null], ['lotus', null], ['garden', null], ['outdoor', null], ['iwagumi', null],

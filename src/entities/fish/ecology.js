@@ -15,7 +15,7 @@ export const ECOLOGY={
   tetra:{ water:'fresh', temp:'tropical' },
   gold:{ water:'fresh', temp:'cold' },
   angel:{ water:'salt', temp:'tropical' },     // 现为海水蝴蝶鱼（见任务分解 A3）
-  cory:{ water:'fresh', temp:'warm' },         // 花鼠 C. paleatus：18–24 °C，冷水热带都合得来
+  cory:{ water:'fresh', temp:'warm' },         // 熊猫鼠 C. panda：20–25 °C，冷水热带都合得来
   koi:{ water:'fresh', temp:'cold' },
   clown:{ water:'salt', temp:'tropical' },
   lion:{ water:'salt', temp:'tropical', predator:true },
@@ -24,6 +24,12 @@ export const ECOLOGY={
   guppy:{ water:'fresh', temp:'tropical' },
   betta:{ water:'fresh', temp:'tropical' },    // 半月斗鱼：26 °C 左右，独居
   harlequin:{ water:'fresh', temp:'tropical' },
+  rummy:{ water:'fresh', temp:'tropical' },
+  ember:{ water:'fresh', temp:'tropical' },
+  oto:{ water:'fresh', temp:'tropical' },
+  ram:{ water:'fresh', temp:'tropical' },      // 荷兰凤凰要 27–30 °C 的软水
+  scalare:{ water:'fresh', temp:'tropical', predator:true },   // 神仙鱼长大后真会吃霓虹灯这类小灯鱼
+  gourami:{ water:'fresh', temp:'tropical' },
 };
 
 export const WATER_LABEL={ fresh:'淡水', salt:'海水' };
@@ -55,7 +61,7 @@ export function mixNote(fish, { lengths={}, names={} }={}){
     const Lp=lengths[p];
     if(!ECOLOGY[p].predator || !Lp) continue;
     const prey=ids.find(id=>id!==p && (lengths[id] ?? Infinity)<=Lp*PREY_RATIO);
-    if(prey) return `现实中${names[p] ?? '狮子鱼'}会把${names[prey] ?? '小鱼'}当点心，这里它只是在巡游。`;
+    if(prey) return `现实中${names[p] ?? '大鱼'}会把${names[prey] ?? '小鱼'}当点心，这里它只是在巡游。`;
   }
   return null;
 }

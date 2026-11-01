@@ -7,10 +7,7 @@
 
 | 文件 | 模型 | 用途 |
 | --- | --- | --- |
-| species-tetra.glb | Tetra | 霓虹脂鲤群（24 条群游） |
-| species-goldfish.glb | Goldfish | 金鱼 |
-| species-butterfly.glb | Butterfly Fish | 蝴蝶鱼（原神仙鱼位） |
-| species-cory.glb | Armored Catfish | 鼠鱼（底栖） |
+| species-butterfly.glb | Butterfly Fish | 蝴蝶鱼（海水） |
 | species-clown.glb | Clownfish | 小丑鱼 |
 | species-lion.glb | Lionfish | 狮子鱼 |
 | species-mandarin.glb | Mandarin Fish | 麒麟鱼（花斑连鳍䲗） |
@@ -18,7 +15,8 @@
 
 每个模型含 6 段动画（Swimming_Normal / Swimming_Fast / Attack / Death /
 Out_Of_Water / Swimming_Impulse），当前使用 Swimming_Normal，timeScale 随游速
-与喂食兴奋度加快。模型朝向 +Z，经包围盒归一化到物种体长。
+与喂食兴奋度加快。模型朝向 +Z，经包围盒归一化到物种体长。原包里的 Tetra / Goldfish / Armored Catfish
+已换成下面的照片皮模型（霓虹脂鲤 / 琉金 / 熊猫鼠），文件已删除。
 
 ## 锦鲤（用户提供的高模）
 
@@ -37,15 +35,27 @@ Blender 构建脚本放在本地 `_koi_build/`（已在 .gitignore 中，不进�
 
 ## 照片皮模型（aquarium-editor，MIT）
 
-来自 [SkentSun/aquarium-editor](https://github.com/SkentSun/aquarium-editor)（MIT License），
-由侧面照片生成的单网格静态模型（一张嵌入式照片贴图、无骨骼动画），按原样解码收录。
+来自 [SkentSun/aquarium-editor](https://github.com/SkentSun/aquarium-editor)（MIT License，
+Copyright (c) 2026 SkentSun），由侧面照片生成的单网格模型：一张嵌入式照片贴图（webp），
+顶点属性 `_FIN`（部位/权重/收拢角）与 `_PIV`（鳍条/鳍基/眼球的转动中心），节点 `extras.swim`
+（吻端、体长、波长、摆尾频率、幅度、包络、胸鳍贴体角）。头朝 +X、米制真实尺寸。
+用 `node scripts/fish-import.mjs <源id>:<文件名>` 从 `../aquarium-editor/fish/<源id>.glb.b64.txt` 解码收录，不改内容。
 
-| 文件 | 物种 | 用途 |
-| --- | --- | --- |
-| species-guppy.glb | 孔雀鱼（雄） | 上层松散小群（≤10 条） |
-| species-betta.glb | 半月斗鱼 | 缓游独行（≤2 条） |
-| species-harlequin.glb | 金三角灯 | 整齐群游（≤24 条） |
+| 文件 | 源 id | 物种 | 用途 |
+| --- | --- | --- | --- |
+| species-neon.glb | neon | 霓虹脂鲤 | `tetra`：中层大群 |
+| species-ryukin.glb | ryukin | 琉金 | `gold`：中上层慢游 |
+| species-panda.glb | cory | 熊猫鼠 | `cory`：底栖小群 |
+| species-guppy.glb | guppy | 孔雀鱼（雄） | 上层松散小群 |
+| species-betta.glb | betta | 半月斗鱼 | 缓游独行，上水面换气 |
+| species-harlequin.glb | harlequin | 金三角灯 | 整齐群游 |
+| species-rummy.glb | rummynose | 红鼻剪刀 | 紧密群游 |
+| species-ember.glb | ember | 火焰灯 | 两厘米的小灯，松散成群 |
+| species-oto.glb | oto | 小精灵 | 吸侧玻璃 / 趴沙啃藻 |
+| species-ram.glb | ram | 荷兰凤凰 | 成对守着沙面一小片地盘 |
+| species-scalare.glb | angel | 神仙鱼 | 中层优雅缓游 |
+| species-gourami.glb | dwarfgourami | 丽丽 | 上层踱步，上水面换气 |
 
-无动画片段：School 走 `decorateFishMaterial` 的顶点尾摆路径（`amp/beat/waveK` 来自
-物种表）；材质走锦鲤同款"保留照片贴图 + 压镜面高光"路径（物种表无 PALETTES 条目即生效）。
-- 朝向 +Z；模型尺寸 1.14 单位长，运行时按物种 `L=0.42` 归一化。
+渲染走 `src/fish/photo-fish.js`（游动着色器移植自原项目 fishlib.js）：每物种一个 InstancedMesh，
+顶点着色器按逐实例状态摆尾、弯身、开合各鳍、转眼、鼓鳃；贴图透明度只有 0/1，按 alphaTest 镂空。
+步态由 `src/fish/photo-gait.js` 从鱼的真实运动推出，School 按物种体长 `L` 缩放（模型米制 → 场景）。

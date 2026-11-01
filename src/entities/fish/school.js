@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { rand, clamp, wrapPI } from '../../utils.js';
 import { scaleNormalTex, finAlphaTex } from '../../fish/textures.js';
 import { buildFishBody, buildFishFins, profileSampler, injectSwim, fishEyeLayout } from '../../fish/body.js';
-import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, lureAcc, swimLimits, columnBand, SWIM } from './steering.js';
+import { boidsAccumulate, crossSeparate, wanderAcc, boundaryAcc, obstacleAcc, huntTarget, lureAcc, swimLimits, columnBand, wallFlat, SWIM } from './steering.js';
 import { decorateFishMaterial } from '../../fish/glb-style.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { bakeFishPose } from '../../fish/fish-pose.js';
@@ -465,7 +465,7 @@ export class School {
         if(R.on){ R.dur-=dt; resting=R.dur>0; if(!resting){ R.on=0; R.t=rand(9,18); } }
       }
 
-      boidsAccumulate(i, this.pos, this.vel, spec, social, _acc, _sep, _ali, _coh, ctx.grid, this);
+      boidsAccumulate(i, this.pos, this.vel, spec, social, _acc, _sep, _ali, _coh, ctx.grid, this, wallFlat(p, this.lim));   // 墙边压扁，免得立成竖柱
       crossSeparate(this, i, ctx.schools, _acc, ctx.grid);   // 异种：仅分离（体型悬殊时小鱼推不动大鱼）
       wanderAcc(_acc, ctx.time, i, wander);       // 漫游：低频缓变，直线巡航为主
       if(flow && !resting){                       // 顶流（趋流性）：迎着水流游、对地速度约为 0，前后缓缓进退
@@ -484,7 +484,7 @@ export class School {
         else if(d<0.5){ _acc.x+=ex/d*0.5; _acc.z+=ez/d*0.5; }                  // 防塌中心
         _acc.x+=(-ez/d)*0.45*rx/Math.max(rx,rz); _acc.z+=(ex/d)*0.45*rz/Math.max(rx,rz);   // 切向绕圈
       }
-      boundaryAcc(p, col.band, _acc, this.lim, floorY);   // 边界软约束
+      boundaryAcc(p, col.band, _acc, this.lim, floorY, v);   // 边界软约束 + 贴墙侧向转弯
       obstacleAcc(p, ctx.obstacles, _acc);        // 障碍
       if(resting){                                // 趴底：忽略社交力，弹簧锚定沙面
         _acc.set(0,0,0);

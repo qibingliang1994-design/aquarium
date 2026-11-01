@@ -92,6 +92,10 @@ const _boidsGridCb=(e,d2)=>{
   if(d2<q.rad2){ q.ali.add(e.school.vel[e.i]); q.coh.add(e.p); q.cnt++; }
 };
 
+/** 贴墙压扁（flat=1）时竖直分离 / 聚合的倍率。此前各向同性：贴墙掉头时水平被挤扁，分离只能往上下推，整群立成一根竖柱。
+ * 只在墙边生效——全缸都压扁会让鱼群水平铺得比 schoolRad 还宽，被岩石一隔就劈成两群 */
+export const SEP_Y=0.3, COH_Y=3;
+
 /** 同种 Boids：分离 / 对齐 / 聚合（schoolRad 内对齐聚合；sepRadius 内分离）
  * @param {number} i @param {THREE.Vector3[]} pos @param {THREE.Vector3[]} vel
  * @param {{ L?:number, schoolRad:number, wSep:number, wAli:number, wCoh:number }} spec
@@ -99,8 +103,9 @@ const _boidsGridCb=(e,d2)=>{
  * @param {THREE.Vector3} acc @param {THREE.Vector3} sep @param {THREE.Vector3} ali @param {THREE.Vector3} coh
  * @param {any} [grid] 共享网格（提供时走邻域查询）
  * @param {any} [school] 网格路径需要的自身鱼群引用
+ * @param {number} [flat] 0..1 竖直压扁程度（wallFlat 给出；0 = 各向同性）
  * @returns {number} 邻居数 */
-export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, grid=null, school=null){
+export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, grid=null, school=null, flat=0){
   sep.set(0,0,0); ali.set(0,0,0); coh.set(0,0,0);
   const p=pos[i], v=vel[i];
   let cnt=0;
@@ -119,9 +124,11 @@ export function boidsAccumulate(i, pos, vel, spec, social, acc, sep, ali, coh, g
     }
   }
   if(!cnt) return 0;
+  sep.y*=1+(SEP_Y-1)*flat;
   acc.addScaledVector(sep, spec.wSep);
   ali.divideScalar(cnt); acc.addScaledVector(_v.subVectors(ali,v), spec.wAli*social);
-  coh.divideScalar(cnt); acc.addScaledVector(_v.subVectors(coh,p), spec.wCoh*social);
+  coh.divideScalar(cnt); _v.subVectors(coh,p); _v.y*=1+(COH_Y-1)*flat;
+  acc.addScaledVector(_v, spec.wCoh*social);
   return cnt;
 }
 
@@ -184,9 +191,12 @@ export function columnBand(band, sandY, yCeil, bodyH, hug){
 }
 
 /** 缸体软边界（swimLimits 内 0.14 起弹簧；y 为 band 水层带，floor 可抬高下界——底栖种按沙面算）
+ * 传入 v 时左右玻璃前再加一股侧向转弯力：朝墙游的鱼顺着自身 z 向拐弯（对齐后全群同向，不会劈成两股），
+ * 整群沿玻璃画弧掉头、在 z 向铺开，而不是全压在同一个 x 上（只有弹簧时鱼群在墙前叠成一摞）
  * @param {THREE.Vector3} p @param {[number,number]} band @param {THREE.Vector3} acc
- * @param {{x:number,z:number}} [lim] 水平半宽（默认按 0 体长） @param {number} [floor] 下界（默认 band[0]） */
-export function boundaryAcc(p, band, acc, lim=SWIM, floor=band[0]){
+ * @param {{x:number,z:number}} [lim] 水平半宽（默认按 0 体长） @param {number} [floor] 下界（默认 band[0]）
+ * @param {THREE.Vector3} [v] 当前速度（不传则只有弹簧） */
+export function boundaryAcc(p, band, acc, lim=SWIM, floor=band[0], v){
   const m=0.14, k=7, X=lim.x-m, Z=lim.z-m;
   if(p.x<-X) acc.x+=k*(-X-p.x);
   if(p.x> X) acc.x-=k*(p.x-X);
@@ -194,6 +204,21 @@ export function boundaryAcc(p, band, acc, lim=SWIM, floor=band[0]){
   if(p.z<-Z) acc.z+=k*(-Z-p.z);
   if(p.y>band[1]-0.08) acc.y-=k*(p.y-(band[1]-0.08));
   if(p.y<floor+0.08) acc.y+=k*((floor+0.08)-p.y);
+  if(!v) return;
+  const ax=Math.abs(p.x), T=X-TURN_ZONE;
+  if(ax<=T || p.x*v.x<=0) return;                 // 离墙远或已在往回游
+  const dir=Math.sign(v.z) || (p.z>0 ? -1 : 1);
+  acc.z+=dir*TURN_K*Math.min(1,(ax-T)/TURN_ZONE)*Math.abs(v.x);
+}
+/** 侧向转弯区宽度（弹簧起点之前）与强度 */
+export const TURN_ZONE=0.35, TURN_K=6;
+/** 压扁区宽度：比转弯区宽——后排的鱼还没进转弯区就被前排顶住，竖柱从这里开始长 */
+export const FLAT_ZONE=0.6;
+/** 离左右玻璃多近：弹簧起点前 FLAT_ZONE 处 0 → 弹簧起点 1（给 boidsAccumulate 的 flat）
+ * @param {THREE.Vector3} p @param {{x:number,z:number}} [lim] */
+export function wallFlat(p, lim=SWIM){
+  const X=lim.x-0.14;
+  return clamp((Math.abs(p.x)-(X-FLAT_ZONE))/FLAT_ZONE, 0, 1);
 }
 
 /** 障碍推离（岩石/沉木等的包围球）

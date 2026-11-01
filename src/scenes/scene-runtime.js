@@ -63,7 +63,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
 
   function setTheme(/** @type {string} */ id){
     const t=THEMES[id] ?? THEMES.fresh, c=new THREE.Color();
-    tank.setSandColors(t.sand[0], t.sand[1], t.sandTex);
+    tank.setSandColors(t.sand[0], t.sand[1], t.sandTex, t.skirt);
     tank.setBackdrop(t.backdrop, t.art);
     for(let i=0;i<GRAVEL_N;i++) gravel.setColorAt(i, c.setHex(t.gravel[(i*7)%t.gravel.length]));
     if(gravel.instanceColor) gravel.instanceColor.needsUpdate=true;
@@ -104,6 +104,10 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     e.root.rotation.set(0, it.rot, 0);
     e.root.scale.setScalar(it.s);
     e.root.children[0]?.userData.onPlace?.((boxOf().waterY-y)/it.s);   // 睡莲/香蒲按到水面的局部高度伸展
+    // 化妆砂这类铺在地上的薄片：按局部点逐顶点贴合沙面（局部 → 世界：先缩放再绕 y 转）
+    const c=Math.cos(it.rot), sn=Math.sin(it.rot);
+    e.root.children[0]?.userData.onGround?.((/** @type {number} */ lx, /** @type {number} */ lz)=>
+      (groundY(it.x+(lx*c+lz*sn)*it.s, it.z+(-lx*sn+lz*c)*it.s)-y)/it.s);
     e.root.updateMatrix();
     e.root.updateMatrixWorld(true);
     e.shadow=contact.fit(it, e.shadow ?? null);   // 接地暗斑跟着位置/缩放重贴沙面

@@ -28,6 +28,9 @@ const PLANTS = {
   // 迷你矮珍珠：圆叶小草簇，铺成前景地毯
   carpet:   { n:9, spread:[0.28,0.12], s:[0.9,1.3], unit:(/** @type {any} */ rng)=>carpetClump(rng, { n:56, radius:0.1,
               colors:[[0x2c6a2a,0x6ec34c],[0x2f7430,0x82d05a]] }) },
+  // 牛毛毡：极细的针状叶成簇直立，一片连成草原（ADA 岩组缸的标准前中景）；低面数，单丛株数多
+  hairgrass:{ n:16, spread:[0.32,0.16], s:[0.8,1.3], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:20, len:[0.13,0.28], width:0.006, twist:0.25,
+              colors:[[0x2a5a22,0x7fc04a],[0x2f6426,0x93cf58],[0x2a5220,0x6eae40]], spread:0.035, segs:5, cols:1 }) },
   // 细叶草：极细的缎带叶，轻柔飘动
   seagrass: { n:8, spread:[0.15,0.1], s:[0.75,1.2], unit:(/** @type {any} */ rng)=>ribbons(rng, { n:9, len:[0.55,0.9], width:0.016, twist:0.6,
               colors:[[0x234a2a,0x86b250],[0x2a5530,0x9cc25e]], spread:0.02 }) },

@@ -32,6 +32,8 @@ export const TANK_STYLES = {
     light:{ spotCol:0xffe6c4, spotK:0.95, spotY:2.12, strip:0xffdcae } },
   ming:    { label:'明式红木', hint:'紫檀推光漆框 · 翘头灯檐与宫灯 · 回纹明式柜', kind:'tank',
     light:{ spotCol:0xffe2b8, spotK:0.95, spotY:2.5, strip:0xffd6a0 } },
+  ada:     { label:'ADA 水景缸', hint:'超白无框 · 玻璃出入水 Lily Pipe · 方形吊灯 · 白蜡木柜', kind:'tank',
+    light:{ spotCol:0xf6f8ff, spotK:1.15, spotY:2.68, strip:0xf4f8ff } },
   pond:    { label:'山野池塘', hint:'草岸芦苇 · 水面清澈见底 · 静水', kind:'natural',
     light:{ spotCol:0xfff0d4, spotK:3.6, spotY:4.4, strip:0 },
     env:{ bg:0x9dbfcc, fog:0x93b6bf, fogD:0.026, hemi:0.6, fill:0.4, env:0.55, clear:1, current:0 } },
@@ -60,7 +62,7 @@ export const TANK_STYLES = {
 export const TANK_IDS = Object.keys(TANK_STYLES);
 
 /** @type {Record<string, string>} */
-const BY_THEME = { fresh:'rimless', reef:'reef', pond:'zen', stream:'stream', river:'river', garden:'ming' };
+const BY_THEME = { fresh:'rimless', reef:'reef', pond:'zen', stream:'stream', river:'river', garden:'ming', nature:'ada' };
 /** @type {Record<string, string>} */
 const BY_PRESET = { classic:'classic', reef:'reef', pond:'zen' };
 

@@ -6,7 +6,7 @@ import { WAVE_GLSL } from './water-wave.js';
 import { injectCaustics, causticsTex } from './caustics.js';
 import { buildShell, disposeShell } from './tank-shells.js';
 import { DEPTH_MAX, applyShellDensity } from './natural-shells.js';
-import { createSkirtMaterial } from './substrate.js';
+import { createSkirtMaterial, setSkirtStyle } from './substrate.js';
 import { surfacePair, onTexPair } from '../scenes/items/surface-tex.js';
 import { boundsFor } from '../scenes/tank-bounds.js';
 import { setGround, setGroundBase } from './ground.js';
@@ -94,7 +94,8 @@ const LAMP_RECT={
   rimless:{ y:2.70, half:[2.07,0.075], xz:[0,-0.05], col:0xfff8ee },  // 吊灯细条 W*0.9×0.15 @H+0.504
   reef:{ y:2.63, half:[0.20,0.20], xz:[-1.15,-0.05], xz2:[1.15,-0.05], col:0xcfe0ff },  // 双灯盘 r0.2 @x±1.15
   zen:{ y:2.37, half:[2.12,0.25], xz:[0,-0.60], col:0xffdcae },       // 木质灯檐条 W*0.92×0.5 @H+0.168
-  ming:{ y:2.41, half:[2.07,0.18], xz:[0,-0.55], col:0xffd6a0 },      // 翘头灯檐下的暖光条 W*0.9×0.36
+  ming:{ y:2.41, half:[2.07,0.18], xz:[0,-0.55], col:0xffd6a0 },
+  ada:{ y:2.714, half:[0.25,0.25], xz:[-1.15,-0.05], xz2:[1.15,-0.05], col:0xf4f8ff },   // 两盏方形吊灯 0.5×0.5（ada-shell.js）      // 翘头灯檐下的暖光条 W*0.9×0.36
 };
 const waterMesh=new THREE.Mesh(
   new THREE.PlaneGeometry(TANK.W-2*TANK.glass-0.01, TANK.D-2*TANK.glass-0.01, 48, 24).rotateX(-Math.PI/2),
@@ -293,9 +294,10 @@ const skirtGeo=(()=>{
 const skirtMat=createSkirtMaterial();             // 分层底砂截面（substrate.js）
 for(const g of skirtGeo){ const m=new THREE.Mesh(g, skirtMat); m.receiveShadow=true; tankGroup.add(m); sandParts.push(m); }
 // 沙色（主题切换时重刷顶点色）：两色按噪声斑驳混合；侧壁越深越暗（湿砂 + 光线衰减）
-// tex：底砂照片贴图名（public/tex/，缺省大磯沙），由主题 sandTex 传入
-function setSandColors(/** @type {number} */ a, /** @type {number} */ b, /** @type {string|undefined} */ tex){
+// tex：底砂照片贴图名（public/tex/，缺省大磯沙），由主题 sandTex 传入；skirt：截面分层（主题 skirt，见 substrate.js）
+function setSandColors(/** @type {number} */ a, /** @type {number} */ b, /** @type {string|undefined} */ tex, /** @type {import('./substrate.js').SkirtStyle|undefined} */ skirt){
   setSandPhoto(tex ?? 's_oiso');
+  setSkirtStyle(skirt);
   const c1=new THREE.Color(a), c2=new THREE.Color(b), tmp=new THREE.Color();
   for(const g of [sandGeo, ...skirtGeo]){
     const p=g.attributes.position, col=g.attributes.color, skirt=g!==sandGeo;
@@ -304,7 +306,7 @@ function setSandColors(/** @type {number} */ a, /** @type {number} */ b, /** @ty
       tmp.copy(c1).lerp(c2, vnoise(x*2.3+11,z*2.3+5)*0.8);
       if(skirt){
         const depth=1-(p.getY(i)-TANK.glass)/Math.max(0.01,sandHeight(x,z)-TANK.glass);
-        tmp.multiplyScalar(0.92-depth*0.45);         // 越深越暗（颗粒与分层在 skirtMat 着色器里）
+        tmp.multiplyScalar(0.92-depth*0.3);          // 越深越暗（颗粒与分层在 skirtMat 着色器里）
       }
       col.setXYZ(i, tmp.r, tmp.g, tmp.b);
     }
@@ -325,6 +327,7 @@ const bgTex=new THREE.CanvasTexture(bgCanvas); bgTex.colorSpace=THREE.SRGBColorS
 function setBackdrop(/** @type {string} */ rgb, /** @type {string} */ art=''){
   const ctx=/** @type {CanvasRenderingContext2D} */ (bgCanvas.getContext('2d'));
   if(art==='ink'){ inkMountains(ctx, rgb); featherEdges(ctx); bgTex.needsUpdate=true; return; }
+  if(art==='screen'){ frostedScreen(ctx, rgb); featherEdges(ctx); bgTex.needsUpdate=true; return; }
   const g=ctx.createLinearGradient(0,0,0,256);
   g.addColorStop(0,'#0c1824'); g.addColorStop(0.55,'#071220'); g.addColorStop(1,'#030507');
   ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
@@ -350,6 +353,19 @@ function featherEdges(ctx){
   ctx.fillStyle=ramp(ctx.createLinearGradient(0,0,0,256), [[0,0],[0.1,0.2],[0.24,0.75],[0.36,1],[1,1]]);
   ctx.fillRect(0,0,512,256);
   ctx.restore();
+}
+/** ADA 背光磨砂屏：缸后贴的磨砂膜被灯从背后打亮——中下部最亮、往上渐暗，没有图案，
+ * 岩石与草的轮廓在上面成剪影。缸外那圈仍由 featherEdges 化进房间暗处
+ * @param {CanvasRenderingContext2D} ctx @param {string} rgb */
+function frostedScreen(ctx, rgb){
+  const [r,g,b]=rgb.split(',').map(Number);
+  const c=(/** @type {number} */ k, /** @type {number} */ a=1)=>`rgba(${Math.min(255,r*k)|0},${Math.min(255,g*k)|0},${Math.min(255,b*k)|0},${a})`;
+  const v=ctx.createLinearGradient(0,0,0,256);
+  v.addColorStop(0,c(0.32)); v.addColorStop(0.35,c(0.62)); v.addColorStop(0.62,c(0.86)); v.addColorStop(0.8,c(0.8)); v.addColorStop(1,c(0.5));
+  ctx.fillStyle=v; ctx.fillRect(0,0,512,256);
+  const glow=ctx.createRadialGradient(256,170,8,256,170,220);       // 背光灯管在屏后中下部的光斑
+  glow.addColorStop(0,'rgba(255,255,255,0.32)'); glow.addColorStop(0.5,'rgba(255,255,255,0.1)'); glow.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=glow; ctx.fillRect(0,0,512,256);
 }
 /** 水墨远山：雾色天光底 + 三重山（由远及近墨色渐浓，山脚化入雾里留白）+ 一轮淡日。
  * 透过水体与缸壁看过去是一幅压暗的山水立轴；四周仍压暗，与其他主题的"背光幕"同一个亮度结构

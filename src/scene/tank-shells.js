@@ -5,6 +5,7 @@ import { vnoise } from '../utils.js';
 import { isNatural } from '../scenes/tank-styles.js';
 import { buildNaturalShell } from './natural-shells.js';
 import { buildMing } from './ming-shell.js';
+import { buildAda } from './ada-shell.js';
 import { mergeStaticMeshes } from './static-merge.js';
 
 /* ================================================================
@@ -191,6 +192,11 @@ const BUILDERS={
   // 明式红木：紫檀推光漆框 + 翘头灯檐 + 宫灯 + 回纹牙板、团花门心、马蹄足的明式柜（ming-shell.js）
   ming(/** @type {any} */ group){
     return buildMing(group, { W, H, D, CAB_H, CAB_Y, box:kit(group).box, woodTexture, lightPanel });
+  },
+
+  // ADA 水景缸：超白无框 + 玻璃 Lily Pipe + 方形铝吊灯 + 白蜡木柜（ada-shell.js）
+  ada(/** @type {any} */ group){
+    return buildAda(group, { W, H, D, T, CAB_H, CAB_Y, box:kit(group).box, woodTexture, lightPanel, cabinet, glassEdges, siliconeSeams, cables });
   },
 };
 

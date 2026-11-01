@@ -19,17 +19,19 @@ export const ITEM_GROUPS = [
 /** @type {Record<string, ItemMeta>} */
 export const ITEM_META = {
   rock:        { label:'河石',     group:'stone', radius:0.22, scale:[0.3,2.2] },
-  rockTall:    { label:'青龙石',   group:'stone', radius:0.16, scale:[0.5,1.8] },
+  rockTall:    { label:'青龙石',   group:'stone', radius:0.16, scale:[0.5,3.2], hint:'岩组主石可放到很大' },
   liveRock:    { label:'活石',     group:'stone', radius:0.3,  scale:[0.4,2.0], hint:'海水缸礁岩，可叠放成礁' },
   wood:        { label:'沉木拱',   group:'stone', radius:0.75, scale:[0.5,1.3] },
   mossBall:    { label:'苔球',     group:'stone', radius:0.09, scale:[0.6,2.0] },
   pebbles:     { label:'卵石滩',   group:'stone', radius:0.32, scale:[0.6,2.0], hint:'溪流河床常见的圆润卵石' },
+  sandPath:    { label:'化妆砂',   group:'stone', radius:0.5,  scale:[0.6,2.2], hint:'浅色细砂铺出的小径，贴着底床起伏' },
   // 水草的 radius 含叶片伸出的满幅（不是只算丛心）：选中圈更贴实、边界钳制才挡得住穿玻璃
   kelp:        { label:'长叶草',   group:'plant', radius:0.42, scale:[0.35,1.25] },
   bush:        { label:'灌丛草',   group:'plant', radius:0.38, scale:[0.5,1.4] },
   crown:       { label:'皇冠草',   group:'plant', radius:0.4,  scale:[0.5,1.4] },
   red:         { label:'红宫廷',   group:'plant', radius:0.16, scale:[0.6,1.6] },
   carpet:      { label:'前景矮草', group:'plant', radius:0.36, scale:[0.6,1.6] },
+  hairgrass:   { label:'牛毛毡',   group:'plant', radius:0.36, scale:[0.6,1.6], hint:'针状细叶连成草原，岩组缸的前中景' },
   seagrass:    { label:'细叶草',   group:'plant', radius:0.38, scale:[0.5,1.5] },
   lily:        { label:'睡莲',     group:'wet',   radius:0.42, scale:[0.7,1.5], hint:'叶片与花浮在水面' },
   reeds:       { label:'香蒲',     group:'wet',   radius:0.22, scale:[0.7,1.4], hint:'挺水植物，长出水面' },

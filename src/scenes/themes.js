@@ -5,8 +5,10 @@
  * ================================================================ */
 
 /** @typedef {{ label:string, fog:number, glow:number, sky:[number,number,number], deep:[number,number,number],
- *   sand:[number,number], sandTex?:string, backdrop:string, gravel:number[], hint?:string, art?:'ink' }} Theme */
-/* art：背光幕画面（缺省 = 纯色辉光；'ink' = 水墨远山）
+ *   sand:[number,number], sandTex?:string, backdrop:string, gravel:number[], hint?:string, art?:'ink'|'screen',
+ *   skirt?:{ edge?:number, gran?:boolean, base?:number } }} Theme */
+// skirt：透过前玻璃看到的底床截面分层（substrate.js）——edge 上层占比，gran 上层画成圆粒水草泥，base 下层底肥 / 火山石色
+/* art：背光幕画面（缺省 = 纯色辉光；'ink' = 水墨远山；'screen' = ADA 式背光磨砂屏，亮而均匀）
  * sandTex：缸底沙面照片贴图（public/tex/，缺省 = 大磯沙）；沙色仍由 sand 两色经顶点色混入 */
 
 /** @type {Record<string, Theme>} */
@@ -46,6 +48,13 @@ export const THEMES = {
     fog:0x12302a, glow:0x6fb39a, sky:[0.56,0.7,0.64], deep:[0.03,0.1,0.09],
     sand:[0xa29e92,0x7f7c73], backdrop:'150,185,170',
     gravel:[0xb3b0a6,0x8f8c83,0xcfccc2,0x6e6c66,0x9c968a],
+  },
+  // ADA 自然水景：深褐水草泥 + 背光磨砂屏（缸后一整片柔亮的青白光，岩组与草毯在上面成剪影）
+  nature: {
+    label:'天然水景', hint:'深褐水草泥 · 背光磨砂屏 · 通透清水', art:'screen', sandTex:'s_aquasoil',
+    fog:0x0c2a2c, glow:0x5fb8b8, sky:[0.58,0.76,0.78], deep:[0.03,0.11,0.12],
+    sand:[0x6e5a44,0x4c3d2d], backdrop:'176,214,222', skirt:{ edge:0.58, gran:true, base:0x9c8c76 },
+    gravel:[0x5a4a3a,0x463a2e,0x6e5e4c,0x3c3128,0x7a6a58],
   },
 };
 

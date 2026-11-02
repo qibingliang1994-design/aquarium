@@ -8,12 +8,12 @@
 | `r_seiryu(.webp/_n.webp)` | 青龙石灰蓝底白筋，1024²，albedo+法线 | 造景「青龙石」立石 |
 | `r_lava(.webp/_n.webp)` | 火山岩多孔红褐，1024²，albedo+法线 | 造景「活石」海水礁岩 |
 | `r_ryuoh(.webp/_n.webp)` | 龙王石灰质孔石，1024²，albedo+法线 | 造景「太湖石」 |
-| `w_drift(.webp/_n.webp)` | 漂木木纹，1024²，albedo+法线 | 造景「沉木拱」 |
+| `w_drift(.webp/_n.webp)` | 漂木木纹，1024²，albedo+法线 | 全部沉木（拱 / 红沉木枝 / 灰沉木枝）的木质，按几何 UV 采样（`injectUvTex`），木纹顺着枝条走 |
 | `s_oiso(.webp/_n.webp)` | 大磯沙混合砾石，1024²，albedo+法线 | 缸底沙面（pond/stream 主题） |
 | `s_aquasoil(.webp/_n.webp)` | 水草泥深褐圆粒，1024²，albedo+法线 | 缸底沙面（fresh/river 主题） |
 | `s_white(.webp/_n.webp)` | 白沙细砾，1024²，albedo+法线 | 缸底沙面（reef/garden 主题） |
 
-`_n` 后缀为切线空间法线贴图（线性色彩空间）；其余为 albedo（sRGB）。三平面映射按世界/物件坐标采样，无需 UV。
+`_n` 后缀为切线空间法线贴图（线性色彩空间）；其余为 albedo（sRGB）。三平面映射按世界/物件坐标采样，无需 UV；沉木例外，几何自带 UV（u 绕枝一周、v 沿弧长）。
 
 ## 岸边景物（Poly Haven，CC0）
 
@@ -29,11 +29,11 @@
 
 ## 硬景与苔藓（Poly Haven / ambientCG，CC0）
 
-1K JPG 原件用 PIL 缩放到 1024² 后存 WebP（质量 76），没有其它修改。全部走三平面（`injectSurfaceTex`）。
+1K JPG 原件用 PIL 缩放到 1024² 后存 WebP（质量 76），没有其它修改。除 `b_log` 外都走三平面（`injectSurfaceTex`）。
 
 | 文件 | 来源 | 用途 |
 |---|---|---|
 | `r_pale(.webp/_n.webp)` | Poly Haven [marble_cliff_04](https://polyhaven.com/a/marble_cliff_04) diff + nor_gl | 苔石（`mossRock`）的浅灰层状岩 |
 | `r_dark(.webp/_n.webp)` | Poly Haven [dark_rock_02](https://polyhaven.com/a/dark_rock_02) diff + nor_gl | 圆石（河石，`rock`） |
-| `b_log(.webp/_n.webp)` | Poly Haven [bark_brown_02](https://polyhaven.com/a/bark_brown_02) diff + nor_gl | 倒木（`logWood`） |
+| `b_log(.webp/_n.webp)` | Poly Haven [bark_brown_02](https://polyhaven.com/a/bark_brown_02) diff + nor_gl | 沉木上成片的残留树皮（按顶点属性 `aBark` 与 `w_drift` 混合，UV × 2；目前只有灰沉木枝 `logWood` 有少量树皮片） |
 | `m_moss(.webp/_n.webp)` | ambientCG [Moss002](https://ambientcg.com/view?id=Moss002) Color + NormalGL | 苔石上的苔藓绒团（世界坐标采样） |

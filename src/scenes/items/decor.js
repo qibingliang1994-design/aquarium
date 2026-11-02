@@ -1,10 +1,12 @@
 // @ts-check
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange, vnoise } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
 import { shared, castAll, injectSurfaceDetail, UP } from './common.js';
-import { injectSurfaceTex } from './surface-tex.js';
-import { makeRockGeo, barkTube } from './natural-geo.js';
+import { injectSurfaceTex, injectUvTex } from './surface-tex.js';
+import { makeRockGeo } from './natural-geo.js';
+import { woodTube, growLimb, forkOf, exitOf } from './wood-geo.js';
 
 /* ================================================================
  * 硬景：圆石 / 立石（青龙石）/ 活石 / 沉木 / 苔球 / 气石
@@ -65,14 +67,21 @@ export function buildLiveRock(/** @type {any} */ rng, /** @type {number} */ seed
   return { object:mesh, obstacles:[{ c:new THREE.Vector3(0,r*0.4,0), r:r*1.1 }] };
 }
 
-/** 沉木材质（沉木拱与分叉沉木枝共用；颜色走顶点色） */
+/** 沉木材质（沉木拱 / 红沉木枝 / 灰沉木枝共用，一个批次画完）：几何自带顺枝条的 UV，漂木照片的木纹顺着枝条走；
+ *  残留的树皮片按顶点属性 aBark 换成树皮照片；色相走顶点色（红沉木栗红褐、灰沉木灰褐）。
+ *  照片：漂木 = w_drift，树皮 = Poly Haven bark_brown_02（b_log） */
 export const woodMat = () => shared('mat:wood', ()=>{
-  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02});
+  const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.84, metalness:0.02});
   injectCaustics(m, 0.4, 'wood');
-  injectSurfaceDetail(m, { freq:10, k:0.3, ao:0.25, stretch:[1,0.25,1], key:'wooddet' });   // 拉长的噪声 ≈ 顺纹理的木纤维
-  injectSurfaceTex(m, { name:'w_drift', scale:1.5, k:0.9, gain:2.0, key:'drift' });         // 漂木木纹照片
+  injectSurfaceDetail(m, { freq:6, k:0.05, ao:0.18, key:'wooddet' });     // 只留低频的明暗斑驳，打散照片的重复
+  injectUvTex(m, { name:'w_drift', k:1.3, gain:2.0, key:'woodUv', bark:{ name:'b_log', scale:2, k:2.2, gain:1.9 } });
   return m;
 });
+
+const WOOD_TINT={ base:0x5d412c, dark:0x22160d, light:0x9c8670 };
+/** 沉木拱的侧枝（growLimb 参数；拱顶本身就高，不限高） @type {import('./wood-geo.js').TreeOpts} */
+const ARCH_TWIG={ tint:WOOD_TINT, spread:[0.4,0.6], kids:[0,2], curl:0.16, top:1.3, tipK:0.1, brk:0.3, stub:[0.35,0.6],
+  twigs:0.5, density:2.4, oval:0.16, ridgeK:0.06 };
 
 /** 沉木：渐细的主干拱 + 主侧枝 + 随机细枝 + 根部扎沙；原经典布局中位于 (0,-0.57)，坐标已减去该处沙面 */
 export function buildWood(/** @type {any} */ rng, /** @type {number} */ seed){
@@ -80,41 +89,44 @@ export function buildWood(/** @type {any} */ rng, /** @type {number} */ seed){
   const V=(/** @type {number} */ x,/** @type {number} */ y,/** @type {number} */ z)=>new THREE.Vector3(x, y-0.3, z+0.57);
   const curve=new THREE.CatmullRomCurve3([V(-0.74,0.27,-0.54), V(-0.62,0.52,-0.57), V(-0.38,0.82,-0.6), V(0,1.0,-0.58),
     V(0.42,0.78,-0.6), V(0.66,0.42,-0.55), V(0.76,0.26,-0.53)]);
-  const group=new THREE.Group();
-  const add=(/** @type {any} */ g)=>{ group.add(new THREE.Mesh(g, woodMat())); };
-  // 主干：左端是粗根（喇叭口扎进沙里），向右逐渐变细
-  add(barkTube(curve, t=>0.034+0.032*(1-t)+0.05*Math.max(0,1-t/0.07)**2+0.02*Math.max(0,(t-0.94)/0.06)**2, { segs:64, radial:14, seed }));
-  // 主侧枝 + 2~3 根随机细枝：从主干某点长出，向上外伸，末端收尖
-  const twig=(/** @type {any} */ t0, /** @type {any} */ dir, /** @type {number} */ len, /** @type {number} */ r0, /** @type {number} */ s)=>{
-    const a=curve.getPointAt(t0), pts=[a.clone()];
-    const d=dir.clone().normalize();
-    for(let i=1;i<=3;i++){
-      d.x+=rrange(rng,-0.35,0.35); d.y+=rrange(rng,-0.1,0.25); d.z+=rrange(rng,-0.15,0.15); d.normalize();
-      pts.push(pts[i-1].clone().addScaledVector(d, len/3));
-    }
-    add(barkTube(new THREE.CatmullRomCurve3(pts), t=>r0*(1-t*0.9), { segs:20, radial:8, seed:s, grooves:5 }));
+  const len=curve.getLength();
+  /** @type {THREE.BufferGeometry[]} */ const geos=[];
+  /** @type {{t:number, r:number, w:number}[]} */ const forks=[];
+  const mainR=(/** @type {number} */ t)=>0.034+0.032*(1-t)+0.05*Math.max(0,1-t/0.07)**2+0.02*Math.max(0,(t-0.94)/0.06)**2;
+  // 侧枝：从主干轴心长出（埋着的一段收细、出主干处鼓起颈圈），按持续转向弯出去；主侧枝再分一级杈，有的折断成短桩
+  const twig=(/** @type {number} */ t0, /** @type {THREE.Vector3} */ dir, /** @type {number} */ l, /** @type {number} */ r0, /** @type {number} */ depth)=>{
+    const rp=mainR(t0), ang=curve.getTangentAt(t0).angleTo(dir);
+    forks.push(forkOf(t0, r0, rp));
+    growLimb(rng, seed, ARCH_TWIG, geos, curve.getPointAt(t0), dir, l, r0, depth, false, exitOf(rp, Math.min(ang, Math.PI-ang)));
   };
-  twig(0.36, new THREE.Vector3(-0.45,0.9,-0.05), 0.48, 0.026, seed+1);
+  twig(0.36, new THREE.Vector3(-0.45,0.9,-0.05), 0.48, 0.026, 1);
   const n=2+Math.floor(rng()*2);
   for(let i=0;i<n;i++){
     const t=rrange(rng,0.45,0.85);
-    twig(t, new THREE.Vector3(rrange(rng,-0.3,0.6), 1, rrange(rng,-0.3,0.3)), rrange(rng,0.18,0.32), 0.014, seed+10+i);
+    twig(t, new THREE.Vector3(rrange(rng,-0.3,0.6), 1, rrange(rng,-0.3,0.3)), rrange(rng,0.18,0.32), 0.012, 0);
   }
+  // 主干：左端是粗根（喇叭口扎进沙里），向右逐渐变细；纵向裂缝、树瘤，两头埋沙处是劈裂断口
+  geos.push(woodTube(curve, mainR, { segs:Math.round(len*40), radial:16, seed, tint:WOOD_TINT, ridgeK:0.07, ridges:5,
+    cracks:1, knots:2, end:'break', start:'break', forks }));
   // 根须：粗端向两侧扎进沙里
   for(const dz of [-1,1]){
     const a=curve.getPointAt(0.02);
     const pts=[a.clone(), a.clone().add(new THREE.Vector3(-0.08,-0.06,dz*0.08)), a.clone().add(new THREE.Vector3(-0.14,-0.11,dz*0.16))];
-    add(barkTube(new THREE.CatmullRomCurve3(pts), t=>0.024*(1-t*0.85), { segs:10, radial:8, seed:seed+20+dz }));
+    geos.push(woodTube(new THREE.CatmullRomCurve3(pts), t=>0.024*(1-t*0.6), { segs:8, radial:8, seed:seed+20+dz, tint:WOOD_TINT, ridges:2, knots:0, end:'break', pinch:0.3, flareAt:0.03 }));
   }
-  // 苔藓团：贴在主干上表面
+  const group=new THREE.Group();
+  const merged=mergeGeometries(geos, false);
+  for(const g of geos) g.dispose();
+  if(merged) group.add(new THREE.Mesh(merged, woodMat()));
+  // 苔藓团：贴在主干上表面（主干截面有起伏，按半径抬到表面上）
   const ts=[0.2,0.34,0.5,0.63];
   const moss=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.32,1), mossMat, ts.length);
   const mm=new THREE.Matrix4(), mq=new THREE.Quaternion(), ms=new THREE.Vector3(), mp=new THREE.Vector3();
   ts.forEach((t,i)=>{
-    mp.copy(curve.getPointAt(t)); mp.y+=0.035;
-    mp.x+=rrange(rng,-0.04,0.04); mp.z+=rrange(rng,-0.03,0.03);
+    mp.copy(curve.getPointAt(t)); mp.y+=mainR(t)*0.88;
+    mp.x+=rrange(rng,-0.04,0.04); mp.z+=rrange(rng,-0.015,0.015);
     const s=rrange(rng,0.03,0.05);
-    ms.set(s*1.6,s*0.5,s*1.2);
+    ms.set(s*2,s*0.6,s*1.5);
     mq.setFromAxisAngle(UP, rng()*6.283);
     moss.setMatrixAt(i, mm.compose(mp,mq,ms));
   });

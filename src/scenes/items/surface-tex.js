@@ -97,3 +97,47 @@ varying vec3 vOPos, vONrm;\n`
   };
   return mat;
 }
+
+/**
+ * UV 照片表面（沉木：几何自带顺枝条的 UV，u 绕枝一周、v 沿弧长，木纹顺着枝条走）：albedo+法线按 uv 采样，
+ * 屏幕导数重建切线系。bark：第二对贴图按顶点属性 aBark 混合（沉木上残留的树皮片），scale 须为整数（绕一周无接缝）
+ * @param {any} mat
+ * @param {{ name:string, k?:number, gain?:number, key?:string, bark?:{ name:string, scale:number, k:number, gain:number } }} o
+ */
+export function injectUvTex(mat, { name, k=1, gain=1.8, key='uvtex', bark }){
+  const pair=surfacePair(name), bp=bark ? surfacePair(bark.name) : pair;
+  const uni={ tUvMap:{ value:pair.map }, tUvNor:{ value:pair.nor }, uUvOn:{ value:pair.loaded?1:0 }, uUvK:{ value:k }, uUvGain:{ value:gain },
+    tBkMap:{ value:bp.map }, tBkNor:{ value:bp.nor }, uBkOn:{ value:bark && bp.loaded?1:0 },
+    uBkS:{ value:bark?.scale ?? 1 }, uBkK:{ value:bark?.k ?? 1 }, uBkGain:{ value:bark?.gain ?? 1 } };
+  onTexPair(pair,(/** @type {any} */ t)=>{ uni.tUvMap.value=t.map; uni.tUvNor.value=t.nor; uni.uUvOn.value=1; });
+  if(bark) onTexPair(bp,(/** @type {any} */ t)=>{ uni.tBkMap.value=t.map; uni.tBkNor.value=t.nor; uni.uBkOn.value=1; });
+  const prev=mat.onBeforeCompile, prevKey=mat.customProgramCacheKey?.() ?? '';
+  mat.customProgramCacheKey=()=>`${prevKey}_${key}`;
+  mat.onBeforeCompile=(/** @type {any} */ sh)=>{
+    prev?.(sh);
+    Object.assign(sh.uniforms, uni);
+    sh.vertexShader='attribute float aBark;\nvarying vec2 vTexUv; varying float vBark;\n'
+      +sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vTexUv = uv; vBark = aBark;');
+    sh.fragmentShader=`uniform sampler2D tUvMap, tUvNor, tBkMap, tBkNor; uniform float uUvOn, uUvK, uUvGain, uBkOn, uBkS, uBkK, uBkGain;
+varying vec2 vTexUv; varying float vBark;\n`
+      +sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      {
+        vec3 alb = texture2D( tUvMap, vTexUv ).rgb * uUvGain;
+        vec3 tn = texture2D( tUvNor, vTexUv ).xyz * 2.0 - 1.0; tn.xy *= uUvK;
+        float bk = clamp( vBark, 0.0, 1.0 ) * uBkOn;
+        vec3 bn = texture2D( tBkNor, vTexUv * uBkS ).xyz * 2.0 - 1.0; bn.xy *= uBkK;
+        alb = mix( alb, texture2D( tBkMap, vTexUv * uBkS ).rgb * uBkGain, bk );
+        tn = mix( tn, bn, bk );
+        diffuseColor.rgb *= mix( vec3( 1.0 ), alb, uUvOn );
+        tn = mix( vec3( 0.0, 0.0, 1.0 ), tn, uUvOn );
+        vec3 dp1 = dFdx( -vViewPosition ), dp2 = dFdy( -vViewPosition );
+        vec2 duv1 = dFdx( vTexUv ), duv2 = dFdy( vTexUv );
+        vec3 dp2perp = cross( dp2, normal ), dp1perp = cross( normal, dp1 );
+        vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+        vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+        float invmax = inversesqrt( max( dot( T, T ), dot( B, B ) ) + 1e-12 );
+        normal = normalize( T * invmax * tn.x + B * invmax * tn.y + normal * max( tn.z, 0.2 ) );
+      }`);
+  };
+  return mat;
+}

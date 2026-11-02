@@ -24,7 +24,7 @@ export const ITEM_META = {
   liveRock:    { label:'活石',     group:'stone', radius:0.3,  scale:[0.4,2.0], hint:'海水缸礁岩，可叠放成礁' },
   wood:        { label:'沉木拱',   group:'stone', radius:0.75, scale:[0.5,1.3] },
   branchWood:  { label:'红沉木枝', group:'stone', radius:0.55, depth:0.24, scale:[0.5,1.8], hint:'从沙里斜伸出的分叉细枝，可交错堆成一组' },
-  logWood:     { label:'倒木',     group:'stone', radius:0.6,  depth:0.2, scale:[0.5,1.8], hint:'粗壮的深色沉木，一头扎沙斜搭着，几根交错成堆' },
+  logWood:     { label:'灰沉木枝', group:'stone', radius:0.6,  depth:0.2, scale:[0.5,1.8], hint:'褪色的灰褐漂木粗枝，带断头分杈，一头扎沙斜搭着，几根交错成堆' },
   mossRock:    { label:'苔石',     group:'stone', radius:0.22, scale:[0.4,3.0], hint:'浅色层岩，顶面长满苔藓垫，可叠成山' },
   mossBall:    { label:'苔球',     group:'stone', radius:0.09, scale:[0.6,2.0] },
   pebbles:     { label:'卵石滩',   group:'stone', radius:0.32, scale:[0.6,2.0], hint:'溪流河床常见的圆润卵石' },

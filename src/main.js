@@ -11,9 +11,11 @@ import { createEffects } from './systems/effects.js';
 import { Feeder } from './systems/feeder.js';
 import { createLure } from './systems/lure.js';
 import { SoundEngine } from './systems/sound.js';
-import { createQuality, budgetRatio } from './systems/quality.js';
+import { createQuality } from './systems/quality.js';
+import { createQualityEffects } from './systems/quality-effects.js';
 import { createAmbience } from './systems/ambience.js';
-import { createWeather, sanitizeWeather, pondTint } from './systems/weather.js';
+import { createWeather, pondTint } from './systems/weather.js';
+import { createSettingsStore } from './settings-store.js';
 import { reflectDim } from './systems/reflect.js';
 import { createSky } from './scene/sky-dome.js';
 import { createWaterReflect } from './scene/water-reflect.js';
@@ -21,10 +23,11 @@ import { SPECIES } from './entities/fish/species.js';
 import { loadSpeciesModels } from './entities/fish/species-models.js';
 import { SPECIES_META } from './ui/encyclopedia.js';
 import { MILESTONES } from './systems/care.js';
+import { createArrival } from './systems/arrival.js';
 import { createFishGrid, rebuildFishGrid } from './entities/fish/steering.js';
 import { fishRim } from './fish/glb-style.js';
 import { createSceneStore } from './scenes/scene-store.js';
-import { acquireWriter, canWrite } from './systems/write-lock.js';
+import { acquireWriter } from './systems/write-lock.js';
 import { TANK_STYLES, NATURAL_CAMS, isNatural } from './scenes/tank-styles.js';
 import { boundsFor } from './scenes/tank-bounds.js';
 import { createSceneRuntime } from './scenes/scene-runtime.js';
@@ -36,6 +39,7 @@ import { installBackup } from './ui/backup.js';
 import { createScenePicker } from './ui/scene-picker.js';
 import { createTankInput, randomFeedPoint } from './ui/tank-input.js';
 import { createPhotoMode } from './ui/photo-mode.js';
+import { createThumbnails } from './ui/thumbnails.js';
 import { createWaterPass } from './scene/water-pass.js';
 import { createScaledRenderPass } from './scene/render-scale.js';
 import { installDebug } from './debug.js';
@@ -93,21 +97,9 @@ const glbMap=await loadSpeciesModels(SPECIES, { only:blocking });
 console.info('[fish] GLB loaded:', blocking.filter(id=>/** @type {any} */ (glbMap)[id]).join(', ')||'none (procedural fallback)');
 const restModels=loadSpeciesModels(SPECIES, { skip:blocking });
 
-/* ---------- 设置（localStorage：音效 / 自动昼夜 / 昼晚状态 / 特效开关） ---------- */
-/** @type {Record<string, any>} */ const settings={ sound:true, cycle:false, clock:false, night:0, lamp:1, absorb:0.4, shafts:0.1, bubbles:true, snow:true, caustics:true, dof:true, haze:true,
-  weatherMode:'sunny', weatherI:0.7, weatherAuto:false, weatherWet:0, clarity:0.88, qualityMode:'auto' };
-try{ Object.assign(settings, JSON.parse(localStorage.getItem('aquarium.settings')||'{}')); }catch(err){ console.warn('[settings] 读取设置失败，使用默认值', err); }
-settings.lamp=Math.min(1.5, Math.max(0, +settings.lamp||1));   // 旧存档/坏值兜底：0~1.5，1=默认
-Object.assign(settings, sanitizeWeather(settings));
-if(typeof settings.clarity!=='number' || !Number.isFinite(settings.clarity)) settings.clarity=0.88;
-else settings.clarity=Math.min(1, Math.max(0.35, settings.clarity));
-{ // 画质模式：'auto' 或档位号（0..6，必须是合法档位），坏值回自动
-  const q=/** @type {any} */ (settings.qualityMode);
-  const lv=Number(q);
-  settings.qualityMode = q==='auto' || (Number.isInteger(lv) && lv>=0 && lv<=6 && String(lv)===String(q)) ? q : 'auto';
-}
+/* ---------- 设置（localStorage aquarium.settings：默认值 / 读取 / 迁移见 settings-store.js） ---------- */
+const { settings, save: saveSettings }=createSettingsStore();
 const weather=createWeather(settings);
-const saveSettings=()=>{ if(!canWrite()) return; try{ localStorage.setItem('aquarium.settings', JSON.stringify(settings)); }catch(err){ console.warn('[settings] 保存设置失败', err); } };
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
 snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
 const applyAbsorb=()=>{ waterPass.uniforms.uSigmaK.value=settings.haze===false?0:settings.absorb; };   // 水体雾化总开关（关=吸收清零，更通透）× 水色浓淡滑杆
@@ -271,39 +263,9 @@ function setHint(/** @type {boolean} */ natural){
   if(el) el.textContent=`拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击${natural ? '拍水面' : '敲玻璃'} · P 逗鱼`;
 }
 
-/* ---------- 缩略图：固定正面机位渲染一帧，裁成 16:9 小图（与玩家当前视角无关） ---------- */
-function captureThumb(){
-  const keepP=camera.position.clone(), keepQ=camera.quaternion.clone();
-  const halfTan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(camera.aspect, 16/9);
-  const thumb=TANK_STYLES[runtime.doc.tank]?.thumb;
-  if(thumb){ camera.position.set(thumb.pos[0], thumb.pos[1], thumb.pos[2]); camera.lookAt(thumb.tgt[0], thumb.tgt[1], thumb.tgt[2]); }
-  else if(isNatural(runtime.doc.tank)){ camera.position.set(0, 3.4, 4.4); camera.lookAt(0, 1.3, 0); }   // 自然水域：俯拍水面
-  else { camera.position.set(0, 1.2, 2.45/halfTan); camera.lookAt(0, 0.98, 0); }           // 缸：缸宽刚好填满裁切框
-  composer.render();
-  camera.position.copy(keepP); camera.quaternion.copy(keepQ);
-  const src=renderer.domElement, w=320, h=180, c=document.createElement('canvas');
-  if(!src.width || !src.height){ composer.render(); return null; }   // 画布尺寸为 0 时不拍，但把画面画回去
-  c.width=w; c.height=h;
-  let sw=src.width, sh=src.height, sx=0, sy=0;
-  if(sw/sh>w/h){ sw=sh*w/h; sx=(src.width-sw)/2; } else { sh=sw*h/w; sy=(src.height-sh)/2; }
-  /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')).drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
-  const url=c.toDataURL('image/jpeg', 0.8);
-  composer.render();                             // 同一轮里把画面画回玩家机位，避免缩略图闪一帧
-  return url;
-}
-/** @type {number|undefined} */ let thumbTimer;
-function scheduleThumb(){                  // 没有缩略图的场景：开场运镜结束后自动补拍一张
-  clearTimeout(thumbTimer);
-  const id=store.activeId;
-  if(store.thumb(id)) return;
-  thumbTimer=setTimeout(()=>{
-    if(store.activeId!==id || store.thumb(id)) return;
-    // 页面不可见时主循环不跑，粒子等实例矩阵还没初始化，晚点再拍
-    if(!(/** @type {any} */ (window)).__aqReady || document.hidden || editor.active || photo.on || ambience.turbidity>0){ scheduleThumb(); return; }
-    const shot=captureThumb();
-    if(shot) store.setThumb(id, shot); else scheduleThumb();
-  }, 3200);
-}
+/* ---------- 缩略图：固定正面机位补拍，实现与推迟条件见 ui/thumbnails.js ---------- */
+const thumbs=createThumbnails({ camera, composer, renderer, store, runtime, ambience,
+  isEditorActive:()=>!!editor?.active, isPhotoOn:()=>!!photo?.on });
 
 /* ---------- 场景切换（淡出 → 重建 → 淡入） ---------- */
 const hudScene=$('hudScene'), bScenes=$('bScenes'), fadeEl=$('sceneFade');
@@ -329,7 +291,7 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
       fadeEl.classList.remove('on');
       switching=false;
       ambience.enterScene(id);                  // 第一次来的水景（含新建空缸）：水由微浊转清
-      if(then) then(); else { toast(`欢迎来到「${runtime.doc.name}」`); scheduleThumb(); }
+      if(then) then(); else { toast(`欢迎来到「${runtime.doc.name}」`); thumbs.schedule(); }
     };
     // 黑场期间预编译新场景用到的着色器（并行编译扩展可用时不阻塞主线程），揭幕后第一帧不再卡顿；
     // 最多等 MAX_PRECOMPILE_MS，超时照常揭幕（剩下的由首帧同步编译兜底）
@@ -340,7 +302,7 @@ function switchScene(/** @type {string} */ id, /** @type {{ force?:boolean, then
 }
 
 /* ---------- 造景编辑器 / 水景选择 ---------- */
-editor=createSceneEditor({ canvas:renderer.domElement, camera, controls, runtime, store, tweenCam, toast, captureThumb,
+editor=createSceneEditor({ canvas:renderer.domElement, camera, controls, runtime, store, tweenCam, toast, captureThumb:thumbs.capture,
   onEnter:()=>{ fishCard.hide(); settingsPanel.close(); feeder.clear(); if(lure.on) setPlay(false); runtime.setBatching(false); applyWaterMode(); },   // 俯视时水面挡造景；拆批+关水恢复逐件拾取
   onExit:(/** @type {any} */ saved)=>{
     syncHud(); runtime.setBatching(true); applyWaterMode();   // 编辑结束立即重批+重开水体（apply 已跑过，这里补同步）
@@ -386,7 +348,6 @@ $('guideClose').addEventListener('click',closeGuide);
 guideEl.addEventListener('click',e=>{ if(e.target===guideEl) closeGuide(); });
 
 /* ---------- 设置弹层 ---------- */
-let qualityBloom=true;                           // 当前画质档是否开泛光（最低档连光柱一起停）
 const settingsPanel=createSettingsPanel({ settings, lightMode, isBowl:()=>!!TANK_STYLES[runtime.doc.tank]?.bowl,
   onChange:(/** @type {string} */ key,/** @type {any} */ value)=>{
   if(key==='light'){ setManualLight(value==='night'); return; }   // 光照"日间 / 夜间"：不是存档键，走手动昼夜
@@ -395,8 +356,8 @@ const settingsPanel=createSettingsPanel({ settings, lightMode, isBowl:()=>!!TANK
   if(key==='snow') snow.pts.visible=value;
   if(key==='caustics') setCausticsEnabled(value);
   if(key==='absorb' || key==='haze') applyAbsorb();   // 雾化总开关或浓度变了都重算吸收
-  if(key==='shafts') waterPass.setShafts(qualityBloom ? value : 0);
-  if(key==='dof') lens.setDof(!!value && qualityBloom);   // 画质最低档时与光柱一致：保持关闭
+  if(key==='shafts') waterPass.setShafts(qualityFX.bloom ? value : 0);
+  if(key==='dof') lens.setDof(!!value && qualityFX.bloom);   // 画质最低档时与光柱一致：保持关闭
   if(key==='lamp') dayNight.setLamp(value);
   if(key==='qualityMode') applyQualityLock();     // 手动锁档 / 切回自动
   if(key==='weatherMode') weather.set(String(value));
@@ -463,35 +424,9 @@ const reflect=createWaterReflect({ renderer, scene, camera, waterMesh, waterUnif
 
 /* ---------- 自动画质：阶梯降级（像素预算+像素比上限 → 1.25/1 + 低配玻璃 → 关泛光），帧率回升逐级恢复 ---------- */
 const coarsePointer=matchMedia?.('(pointer:coarse)').matches ?? false;   // 触屏上限 1.5（与 setup.js 一致）
-let shadowHz=30, shadowAcc=1/30;                // 阴影贴图刷新率（随画质档变化）与累计器；首帧就画一次
-const quality=createQuality({
-  baseRatio:Math.min(devicePixelRatio, coarsePointer?1.5:2),
-  onLevel(q){
-    // 像素预算：大窗口（4K 全屏等）按 sqrt(预算/窗口像素) 立即缩，不等帧率阶梯；小窗口仍用基准 dpr
-    const ratio=budgetRatio(q.pixels, innerWidth, innerHeight, q.ratio);
-    renderer.setPixelRatio(ratio);
-    composer.setPixelRatio(ratio);
-    composer.setSize(innerWidth,innerHeight);
-    for(const g of /** @type {any[]} */ (tankGroup.children)){
-      const gm=/** @type {any} */ (g);
-      if(gm.material===glassHigh || gm.material===glassLow) gm.material=q.glass==='low'?glassLow:glassHigh;
-    }
-    bloom.enabled=q.bloom; lens.setDof(q.bloom && settings.dof!==false);   // 最低一档连景深一起关（用户也关了才算数）
-    qualityBloom=q.bloom;
-    waterPass.setShafts(q.bloom ? settings.shafts : 0);   // 光柱 march 是最贵的逐像素步进：最低档停，其余按用户强度
-    waterPass.setSteps([14,12,11,10,8,6,5][q.level] ?? 8);  // march 步数随档缩放（贴图化焦散调制后每步也便宜了）
-    lens.setTaps([20,18,16,14,12,10,10][q.level] ?? 12);    // 景深采样点数随档缩放（半分辨率 + 弥散圆自适应后 20 点已满配）
-    renderPass.setMSAA(0);   // 场景 RT 不开 MSAA：多采样深度纹理的逐帧 resolve 是隐性大开销（实测拖累帧率），几何边缘靠 edge-aa（FXAA）兜底
-    renderPass.setAA(q.level<=4);   // 边缘抗锯齿（FXAA）：最低两档关
-    renderPass.setScale([0.85,0.8,0.75,0.7,0.68,0.65,0.6][q.level] ?? 0.8);   // 渲染尺度分离：场景降尺度，后期全分辨率
-    shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
-    precip.setLevel(q.level);
-    reflect.setLevel(q.level);
-    runtime.applyShore(q.level);
-    runtime.applyShell(q.level);
-    tank.setGrainLevel(q.level);
-  },
-});
+const qualityFX=createQualityEffects({ renderer, composer, bloom, lens, tankGroup, glassHigh, glassLow,
+  waterPass, renderPass, precip, reflect, runtime, tank, settings });   // 档位 → 渲染器/场景副作用（见 systems/quality-effects.js）
+const quality=createQuality({ baseRatio:Math.min(devicePixelRatio, coarsePointer?1.5:2), onLevel:qualityFX.apply });
 
 // 手动画质锁：'auto' 交给阶梯，数字档位直接锁定（不再采样自动升降）
 function applyQualityLock(){
@@ -505,26 +440,10 @@ function updateCareHud(){                // 圆环 pathLength=100：dashoffset =
   careFill.style.strokeDashoffset=`${100-Math.round(runtime.care.satiety*100)}`;
   careText.textContent=runtime.care.status();
 }
-/* ---------- 亲密度里程碑：攒够就发一条新鱼入缸（原地加，不重建鱼群） ---------- */
-function grantArrival(){
-  const care=runtime.care;
-  const present=SPECIES.filter(s=>runtime.doc.fish[s.id]>0);
-  const start=care.bondLevel%Math.max(1,present.length);
-  for(let k=0;k<present.length;k++){
-    const spec=present[(start+k)%present.length];
-    if(!runtime.addFish(spec.id)) continue;
-    care.takeMilestone();
-    try{ runtime.apply(store.save(runtime.doc)); }   // 计数已同步到文档：差量应用不会重建鱼群
-    catch(err){ console.warn('[bond] 入缸存档失败（本次仍可见）', err); }
-    toast(`亲密度 Lv.${care.bondLevel}：一条${SPECIES_META[spec.id].name}入缸了`);
-    sound.arrival();
-    updateCareHud();
-    return;
-  }
-  care.takeMilestone();                       // 缸满了：里程碑转为光泽度
-}
+/* ---------- 亲密度里程碑：攒够就发一条新鱼入缸（原地加，不重建鱼群；实现见 systems/arrival.js） ---------- */
+const arrival=createArrival({ runtime, store, toast, sound, updateHud:updateCareHud });
 syncHud();
-scheduleThumb();
+thumbs.schedule();
 
 function frame(){
   renderer.info.reset();                          // 与 autoReset=false 配对：统计覆盖主场景+阴影+后期整帧
@@ -550,7 +469,7 @@ function frame(){
   // 兴奋度：有饲料 → 升到食欲上限（饿 → 疯抢，饱 → 懒散）
   const care=runtime.care;
   care.update(dt);
-  if(care.milestoneDue() && !editor.active && !switching) grantArrival();
+  if(care.milestoneDue() && !editor.active && !switching) arrival.grant();
   runtime.setGloss(care.glossK());            // 里程碑领完后的余量换光泽（同值不重设）
   const appetite=care.appetite();
   const active=feeder.pellets;
@@ -588,8 +507,7 @@ function frame(){
 
   // 阴影贴图限频：鱼游得慢，降频更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）；
   // 频率随画质档走（高清 30 Hz → 极速 10 Hz，学自 aquarium-editor 的分级阴影）
-  shadowAcc+=rawDt;
-  if(shadowAcc>=1/shadowHz){ renderer.shadowMap.needsUpdate=true; shadowAcc%=1/shadowHz; }
+  qualityFX.shadowTick(rawDt);
 
   if(shake){                                    // 敲玻璃：镜头轻震（只影响本帧渲染）
     camera.position.x+=shake.x; camera.position.y+=shake.y;

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A "healing" desktop aquarium toy built on Three.js (0.180.0) with plain ES modules and Vite — no UI framework, no TypeScript. Code comments and docs are in Chinese; keep that convention. `DESIGN.md` is the game design doc (roadmap, feature acceptance criteria, design red lines: no quests, no hard economy, no IAP). `ARCHITECTURE.md` is the running log of architectural decisions — append to its "已落地的进度" section when landing structural changes.
+A "healing" desktop aquarium toy built on Three.js (0.180.0) with plain ES modules and Vite — no UI framework, no TypeScript. Code comments and docs are in Chinese; keep that convention. `DESIGN.md` is the game design doc (roadmap, feature acceptance criteria, design red lines: no quests, no hard economy, no IAP). `ARCHITECTURE.md` is the entry point of the architectural log: its "已落地的进度" section is only an index plus the 10 most recent changes, and the history itself lives per topic in `docs/architecture/NN-*.md`. When landing a structural change, append the entry to the end of the volume matching its main subject (01 渲染与后期 / 02 缸体与外壳与自然水域 / 03 鱼与鱼群 / 04 造景物件 / 05 场景文档与编辑器 / 06 系统与玩法 / 07 UI与交互 / 08 工程化与发布) and add one summary line at the top of "最近 10 条关键变更". That digest stays at ≤10 lines, newest first: each addition drops the oldest, which then lives only in its volume — keep the index from regrowing into a changelog.
 
 ## Commands
 

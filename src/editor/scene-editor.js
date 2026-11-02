@@ -4,6 +4,7 @@ import { clamp } from '../utils.js';
 import { groundY } from '../scene/ground.js';
 import { boundsFor } from '../scenes/tank-bounds.js';
 import { ITEM_META, placeLimits, MAX_ITEMS } from '../scenes/item-meta.js';
+import { clampTo } from '../scenes/item-reach.js';
 import { FISH_MAX, FISH_TOTAL_MAX, fishTotal, newId, cloneDoc } from '../scenes/scene-doc.js';
 import { createHistory } from './history.js';
 import { createEditorPanel } from './editor-panel.js';
@@ -77,8 +78,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     liveBefore??=snap();
     Object.assign(it, patch);
     runtime.moveItem(it);                       // 先让运行时按新 rot/s 算出真实包络的钳制范围
-    const lim=runtime.limitsOf(it.id);          // 再用同一套范围回钳文档：选中圈与视觉永远一致
-    it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
+    Object.assign(it, clampTo(runtime.limitsOf(it.id), it.x, it.z));   // 再用同一套范围回钳文档：选中圈与视觉永远一致
     panel.inspect(it);
     placeRing();
   }
@@ -127,9 +127,8 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     const it=selItem();
     if(!it) return;
     if(doc.items.length>=MAX_ITEMS){ toast(`物件最多 ${MAX_ITEMS} 件`); return; }
-    const lim=runtime.limitsOf(it.id);
     const copy={ ...it, id:newId('it'), seed:Math.floor(Math.random()*1e9),
-      x:clamp(it.x+0.25,-lim.x,lim.x), z:clamp(it.z+0.08,-lim.z,lim.z) };
+      ...clampTo(runtime.limitsOf(it.id), it.x+0.25, it.z+0.08) };
     commit(d=>d.items.push(copy));
     select(copy.id);
   }
@@ -147,8 +146,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     it.x=clamp(it.x,-lim.x,lim.x); it.z=clamp(it.z,-lim.z,lim.z);
   });
   const nudge=(/** @type {number} */ dx,/** @type {number} */ dz)=>edit(it=>{
-    const lim=runtime.limitsOf(it.id);
-    it.x=clamp(it.x+dx,-lim.x,lim.x); it.z=clamp(it.z+dz,-lim.z,lim.z);
+    Object.assign(it, clampTo(runtime.limitsOf(it.id), it.x+dx, it.z+dz));
   });
   const reseed=()=>edit(it=>{ it.seed=Math.floor(Math.random()*1e9); });
 
@@ -212,8 +210,7 @@ export function createSceneEditor({ canvas, camera, controls, runtime, store, tw
     if(!raycaster.ray.intersectPlane(plane, hitP)) return;
     const it=selItem();
     if(!it) return;
-    const lim=runtime.limitsOf(it.id);   // 拖不出玻璃：按真实包络钳住中心点
-    liveChange({ x:clamp(hitP.x+drag.dx,-lim.x,lim.x), z:clamp(hitP.z+drag.dz,-lim.z,lim.z) });
+    liveChange(clampTo(runtime.limitsOf(it.id), hitP.x+drag.dx, hitP.z+drag.dz));   // 拖不出玻璃：按真实轮廓钳住中心点
     canvas.style.cursor='grabbing';
   });
   const endPointer=(/** @type {any} */ e)=>{

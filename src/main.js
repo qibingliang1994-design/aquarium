@@ -139,6 +139,21 @@ function applyTankChrome(id){
   if(rig){ controls.minDistance=rig.min; controls.maxDistance=rig.max; camera.near=rig.near; camera.far=rig.far; }
   else { controls.minDistance=1; controls.maxDistance=11; camera.near=0.05; camera.far=60; }
   camera.updateProjectionMatrix();
+  camLow=style.kind!=='natural';
+}
+// 往下转的极限：玻璃缸可以压低到沙线附近往上仰视（像蹲在缸前看），相机高度不低于地板线——
+// 缸外是柜面之上 CAM_FLOOR，缸内是沙面之上 CAM_SAND；按当前距离反推最大俯仰角，拉远时自动收窄。
+// 自然水域低于地形会穿帮，仍以水平为限
+const CAM_FLOOR=0.14, CAM_SAND=0.12, CAM_LOW_MAX=Math.PI*0.62, CAM_FLAT=Math.PI*0.49;
+let camLow=true;
+function limitPolar(){
+  if(!camLow){ controls.maxPolarAngle=CAM_FLAT; return; }
+  const p=camera.position, g=boundsFor(runtime.doc.tank).glassInner;
+  const inside=Math.abs(p.x)<g.x+0.05 && Math.abs(p.z)<g.z+0.05;
+  const floor=inside ? groundY(p.x, p.z)+CAM_SAND : CAM_FLOOR;
+  const d=Math.max(0.5, p.distanceTo(controls.target));
+  const k=Math.max(-1, Math.min(1, (controls.target.y-floor)/d));
+  controls.maxPolarAngle=Math.max(CAM_FLAT, Math.min(CAM_LOW_MAX, Math.PI/2+Math.asin(k)));
 }
 /** @type {ReturnType<typeof createTankInput>|null} */ let input=null;
 const runtime=createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles, air, renderer,
@@ -532,6 +547,7 @@ function frame(){
     setFov(camTween.fov0+(camTween.fov1-camTween.fov0)*e);
     if(k>=1) camTween=null;
   }
+  limitPolar();
   controls.update();
   lens.focusOn(fishCard.focusPoint(focusPt) ?? controls.target, dt);   // 识鱼时拉焦到那条鱼
 

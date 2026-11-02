@@ -8,11 +8,11 @@ const ATTRS = ['aBark', 'color', 'normal', 'position', 'uv'];
 const straight = () => new THREE.LineCurve3(new THREE.Vector3(0, 0.2, 0), new THREE.Vector3(1, 0.2, 0));
 /** 红沉木枝的参数（与 hardscape.js 一致） */
 const BRANCH = { tint: TINT, r0: 0.042, len: [0.85, 1.05], elev: [0.3, 0.55], depth: 2, spread: [0.45, 0.62], kids: [0, 3, 4],
-  curl: 0.24, tipK: 0.1, brk: 0.18, stub: [0.22, 0.42], twigs: 0.55, mainEnd: 'tip', mainStart: 'break', rootFlare: 0.45,
+  curl: 0.24, tipK: 0.1, brk: 0.18, stub: [0.22, 0.42], twigs: 0.55, zMax: 0.34, mainEnd: 'tip', mainStart: 'break', rootFlare: 0.45,
   density: 2.6, oval: 0.2, ridgeK: 0.09, cracks: 0, knots: 1, bark: 0, top: 0.72 };
 /** 灰沉木枝（logWood）的参数（与 hardscape.js 一致） */
 const LOG = { ...BRANCH, tint: { base: 0x72675d, dark: 0x221c17, light: 0xb0a79c }, r0: 0.045, len: [1.15, 1.4], elev: [0.3, 0.72],
-  depth: 2, spread: [0.32, 0.5], kids: [0, 2, 3], curl: 0.18, tipK: 0.14, brk: 0.4, stub: [0.25, 0.55], twigs: 0.35, up: 0.35,
+  depth: 2, spread: [0.32, 0.5], kids: [0, 2, 3], curl: 0.18, tipK: 0.14, brk: 0.4, stub: [0.25, 0.55], twigs: 0.35, up: 0.35, zMax: 0.3,
   mainEnd: 'break', rootFlare: 0.3, density: 2.6, oval: 0.18, ridgeK: 0.09, cracks: 1, knots: 2, bark: 0.15 };
 
 const finite = (g) => ATTRS.every(k => g.attributes[k].array.every(Number.isFinite));

@@ -31,7 +31,7 @@ function growWood(rng, seed, o){
 export function buildBranchWood(/** @type {any} */ rng, /** @type {number} */ seed){
   return growWood(rng, seed, { tint:{ base:0x5c3324, dark:0x1c0d07, light:0x8a6a58 },   // 栗红褐，朝上的棱面泡得发灰发浅
     r0:0.042, len:[0.85,1.05], elev:[0.3,0.55], depth:2, spread:[0.45,0.62], kids:[0,3,4],
-    curl:0.24, tipK:0.1, brk:0.18, stub:[0.22,0.42], twigs:0.55, mainEnd:'tip', mainStart:'break', rootFlare:0.45,
+    curl:0.24, tipK:0.1, brk:0.18, stub:[0.22,0.42], twigs:0.55, zMax:0.34, mainEnd:'tip', mainStart:'break', rootFlare:0.45,
     density:2.6, oval:0.2, ridgeK:0.09, cracks:0, knots:1, bark:0 });
 }
 
@@ -41,7 +41,7 @@ export function buildBranchWood(/** @type {any} */ rng, /** @type {number} */ se
 export function buildLogWood(/** @type {any} */ rng, /** @type {number} */ seed){
   return growWood(rng, seed, { tint:{ base:0x72675d, dark:0x221c17, light:0xb0a79c },   // 灰褐，朝上的棱面泡得发白
     r0:0.045, len:[1.15,1.4], elev:[0.3,0.72], depth:2, spread:[0.32,0.5], kids:[0,2,3],   // 仰角 17°~41°：陡的几根撑起木堆的高处
-    curl:0.18, tipK:0.14, brk:0.4, stub:[0.25,0.55], twigs:0.35, up:0.35, mainEnd:'break', mainStart:'break', rootFlare:0.3,
+    curl:0.18, tipK:0.14, brk:0.4, stub:[0.25,0.55], twigs:0.35, up:0.35, zMax:0.3, mainEnd:'break', mainStart:'break', rootFlare:0.3,
     density:2.6, oval:0.18, ridgeK:0.09, cracks:1, knots:2, bark:0.15 });
 }
 

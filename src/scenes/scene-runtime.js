@@ -15,6 +15,7 @@ import { careKey } from './scene-store.js';
 import { cloneDoc, FISH_MAX, FISH_TOTAL_MAX } from './scene-doc.js';
 import { ITEM_META } from './item-meta.js';
 import { boundsFor } from './tank-bounds.js';
+import { footprintOf, reachOf, rangeIn, symRange, clampTo } from './item-reach.js';
 import { shoreLod, plantKeep } from '../systems/shore-lod.js';
 import { lanternGlow, fireflyMat } from './items/shore.js';
 
@@ -37,7 +38,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   // 静态物件绘制批处理：同材质网格合批（Draw Calls 大减）；编辑器打开时拆批恢复逐件交互
   const batch=createItemBatch({ renderer, parent:itemsGroup });
   const rootsOf=()=>[...live.values()].map((/** @type {any} */ e)=>e.root);
-  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, lim:{x:number,z:number}, shadow?:import('./contact-shadow.js').ContactHandle|null }>} */
+  /** @type {Map<string, { item:any, root:THREE.Group, local:{c:THREE.Vector3,r:number}[], ext:{x:number,z:number}, fp:number[], lim:import('./item-reach.js').Range, shadow?:import('./contact-shadow.js').ContactHandle|null }>} */
   const live=new Map();
   /** @type {any} */ let doc=null;
   /** @type {any} */ let care=null;
@@ -72,6 +73,23 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     onTheme?.(t);
   }
 
+  /* ---------- 玻璃裁剪面 ----------
+   * 水草按包络 55% 让开、还会摆，叶尖难免越过玻璃；硬物按轮廓摆放后也可能有摆动的触手、浮叶探出一点。
+   * 所有物件材质挂同一组四个裁剪面（玻璃内壁，往里 2 mm）：越界的部分被切掉，从缸外看就是叶子顶在玻璃上。
+   * 材质是按类型共享的，挂一次全场景生效；自然水域没有玻璃，四个面推到远处 */
+  renderer.localClippingEnabled=true;
+  const clip=[new THREE.Plane(), new THREE.Plane(), new THREE.Plane(), new THREE.Plane()];
+  function setClip(){
+    const g=boxOf().glassInner, far=isNatural(doc?.tank ?? 'classic');
+    const gx=far ? 1e4 : g.x-0.002, gz=far ? 1e4 : g.z-0.002;
+    clip[0].set(new THREE.Vector3(-1,0,0), gx); clip[1].set(new THREE.Vector3(1,0,0), gx);
+    clip[2].set(new THREE.Vector3(0,0,-1), gz); clip[3].set(new THREE.Vector3(0,0,1), gz);
+  }
+  const clipMaterials=(/** @type {THREE.Object3D} */ object)=>object.traverse((/** @type {any} */ o)=>{
+    if(!o.material) return;
+    for(const m of Array.isArray(o.material) ? o.material : [o.material]) if(m.clippingPlanes!==clip){ m.clippingPlanes=clip; m.needsUpdate=true; }
+  });
+
   /* ---------- 物件 ---------- */
   // 物件局部满幅（含 InstancedMesh 的每个实例）：build 时根节点还没有变换，量出来的就是本体的包络
   function localExtents(/** @type {any} */ object){
@@ -83,26 +101,26 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     });
     return { x:Math.max(Math.abs(box.min.x),Math.abs(box.max.x)), z:Math.max(Math.abs(box.min.z),Math.abs(box.max.z)) };
   }
-  /** 中心点允许范围：玻璃内壁 − 真实包络（含旋转/缩放，水草加摆动余量）。
-   *  岸边物件在 shore 大于水面摆放框时改收到岸线内。数据侧估算见 item-meta.placeLimits */
+  /** 中心点允许范围（区间，各方向分别算）：
+   *  - 硬物（石头、沉木、珊瑚、器材……）：按真实俯视轮廓（item-reach.js）贴着玻璃内壁，一个顶点都不探出去
+   *  - 水草是软的：叶尖可以贴着玻璃（真缸后景草都顶着后玻璃长），只按包围盒的 55% 让开——外圈斜伸的叶会把包络撑得很大，
+   *    全量让开会把后景草整丛挤到缸中间；越过玻璃的叶尖由裁剪面切掉（setClip），看上去是顶在玻璃上
+   *  - 岸边物件在 shore 大于水面摆放框时改收到岸线内。数据侧估算见 item-meta.placeLimits */
   function limitsOf(/** @type {any} */ e){
-    const it=e.item, c=Math.abs(Math.cos(it.rot)), sn=Math.abs(Math.sin(it.rot));
-    const meta=ITEM_META[it.type];
-    // 水草是软的：叶尖可以贴着玻璃（真缸后景草都顶着后玻璃长），只按包络的 55% 让开；
-    // 外圈斜伸的叶会把包络撑得很大，全量让开会把后景草整丛挤到缸中间。石头的包络含外挂的苔团与不规则凸角，按 85%
-    const kx=meta?.group==='plant' ? 0.55 : meta?.group==='stone' ? 0.85 : 1;
-    const b=boxOf();
-    const hx=(e.ext.x*c+e.ext.z*sn)*it.s*kx+0.03, hz=(e.ext.x*sn+e.ext.z*c)*it.s*kx+0.03;
+    const it=e.item, meta=ITEM_META[it.type], b=boxOf();
     const land=!!meta?.land && (b.shore.x>b.place.x+1e-4 || b.shore.z>b.place.z+1e-4);
-    if(land) return { x:Math.max(0.15, b.shore.x-hx), z:Math.max(0.15, b.shore.z-hz) };
-    return { x:Math.min(b.place.x, Math.max(0.15, b.glassInner.x-hx)),
-             z:Math.min(b.place.z, Math.max(0.15, b.glassInner.z-hz)) };
+    if(meta?.group!=='plant' && !land) return rangeIn(reachOf(e.fp, it.rot, it.s), b.glassInner, b.place);
+    const c=Math.abs(Math.cos(it.rot)), sn=Math.abs(Math.sin(it.rot)), kx=land ? 1 : 0.55;
+    const hx=(e.ext.x*c+e.ext.z*sn)*it.s*kx+0.03, hz=(e.ext.x*sn+e.ext.z*c)*it.s*kx+0.03;
+    if(land) return symRange({ x:Math.max(0.15, b.shore.x-hx), z:Math.max(0.15, b.shore.z-hz) });
+    return symRange({ x:Math.min(b.place.x, Math.max(0.15, b.glassInner.x-hx)),
+                      z:Math.min(b.place.z, Math.max(0.15, b.glassInner.z-hz)) });
   }
   function place(/** @type {any} */ e){
     const it=e.item;
     e.lim=limitsOf(e);
-    it.x=clamp(it.x,-e.lim.x,e.lim.x);   // 写回运行时副本：旧存档里贴边的物件在这里被拉回缸内，
-    it.z=clamp(it.z,-e.lim.z,e.lim.z);   // 接地暗斑也跟着钳制后的位置贴沙面
+    const q=clampTo(e.lim, it.x, it.z);  // 写回运行时副本：旧存档里贴边的物件在这里被拉回缸内，
+    it.x=q.x; it.z=q.z;                   // 接地暗斑也跟着钳制后的位置贴沙面
     const y=groundY(it.x,it.z);
     e.root.position.set(it.x, y, it.z);
     e.root.rotation.set(0, it.rot, 0);
@@ -118,12 +136,13 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
   }
   function build(/** @type {any} */ item){
     const { object, obstacles:local }=buildItem(item.type, item.seed);
+    clipMaterials(object);
     const root=new THREE.Group();
     root.matrixAutoUpdate=false;                 // 变换只在 place() 里更新
     root.userData.itemId=item.id;
     root.add(object);
     itemsGroup.add(root);
-    const e={ item:{ ...item }, root, local, ext:localExtents(object) };
+    const e={ item:{ ...item }, root, local, ext:localExtents(object), fp:footprintOf(object) };
     place(e);
     return e;
   }
@@ -243,6 +262,7 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     if(fresh || !prev || prev.theme!==doc.theme) setTheme(doc.theme);
     const tankChanged=fresh || !prev || prev.tank!==doc.tank;
     if(tankChanged){
+      setClip();
       tank.setShell(doc.tank);
       gravel.visible=!(TANK_STYLES[doc.tank]?.bowl);   // 小缸碎石会浮在碗形底上方
       onTank?.(TANK_STYLES[doc.tank] ?? TANK_STYLES.classic, doc.tank);
@@ -264,8 +284,9 @@ export function createSceneRuntime({ tankGroup, tank, glbMap, schools, obstacles
     batchStats: () => batch.stats(),
     /** @param {string} id */
     rootOf: (/** @type {string} */ id) => live.get(id)?.root ?? null,
-    /** 编辑器摆放钳制用：该物件中心点允许范围（真实几何包络，place() 同一套） */
-    limitsOf: (/** @type {string} */ id) => live.get(id)?.lim ?? { x:boxOf().place.x, z:boxOf().place.z },
+    /** 编辑器摆放钳制用：该物件中心点允许区间（真实俯视轮廓，place() 同一套），配 item-reach.clampTo 用
+     * @returns {import('./item-reach.js').Range} */
+    limitsOf: (/** @type {string} */ id) => live.get(id)?.lim ?? symRange(boxOf().place),
     /** 编辑器拖拽时的轻量更新：只改变换，不重建 */
     moveItem(/** @type {any} */ item){
       const e=live.get(item.id);

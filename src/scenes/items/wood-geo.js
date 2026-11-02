@@ -182,9 +182,10 @@ function endCap(pos, o0, radial, C, T, N, B, R, kind, flip, tint, density, so){
  * 一根枝条的中心线：方向按"缓变的弯矩"转向（上一步的转向衰减着带到下一步 → S 形弯而不是折线）
  * 高处自动平伸 / 下垂（不出水面），侧枝不往沙里钻
  * @param {()=>number} rng @param {THREE.Vector3} start @param {THREE.Vector3} dir @param {number} len
- * @param {{ curl:number, top:number, step?:number, ground?:boolean }} o ground：允许贴沙（主枝起点埋在沙里）
+ * @param {{ curl:number, top:number, step?:number, ground?:boolean, zMax?:number }} o ground：允许贴沙（主枝起点埋在沙里）；
+ *   zMax：局部 |z| 上限——长条沉木的侧枝往两边伸到六成就开始收、到上限就折回，占地保持细长（缩放 1.8 也放得进缸深）
  */
-export function branchCurve(rng, start, dir, len, { curl, top, step=0.09, ground=false }){
+export function branchCurve(rng, start, dir, len, { curl, top, step=0.09, ground=false, zMax }){
   const n=Math.max(4, Math.round(len/step));
   const pts=[start.clone()], d=dir.clone().normalize(), w=new THREE.Vector3();
   const cs=curl*Math.pow(len/n/0.09, 0.8);                        // 按每步长度折算：细枝步子密，不然弯成钩
@@ -196,6 +197,10 @@ export function branchCurve(rng, start, dir, len, { curl, top, step=0.09, ground
     const prev=pts[k-1];
     if(prev.y>top-0.1 && d.y>-0.05){ d.y=-0.05-rng()*0.2; d.normalize(); w.y=Math.min(w.y,0); }
     const sl=len/n;
+    if(zMax){
+      const sz=Math.sign(prev.z), over=Math.abs(prev.z)/zMax;
+      if(d.z*sz>0 && over>0.6){ d.z*=over>=1 ? -0.3 : (1-over)/0.4; if(w.z*sz>0) w.z*=0.3; d.normalize(); }
+    }
     if(!ground && prev.y+d.y*sl<0.05){ d.y=Math.max(d.y, Math.min(0.6, (0.05-prev.y)/sl)); d.normalize(); w.y=Math.max(w.y,0); }
     pts.push(prev.clone().addScaledVector(d, sl));
   }
@@ -211,6 +216,7 @@ export function branchCurve(rng, start, dir, len, { curl, top, step=0.09, ground
  * @property {number} tipK 收尖枝末端半径 / 起点半径 @property {number} brk 侧枝折断概率
  * @property {[number,number]} stub 折断的侧枝保留的长度比例
  * @property {number} [twigs] 末梢细枝簇的概率（杜鹃根那种发丝细枝）
+ * @property {number} [zMax] 局部 |z| 上限（长条沉木的占地半宽，见 branchCurve）
  * @property {number} [up] 侧枝朝上偏的程度（默认 0.8；堆成一堆的粗枝取小值，侧杈多往两边伸、少朝天）
  * @property {number} density @property {number} oval @property {number} ridgeK
  * 以下只用于主枝（growDriftwood）：
@@ -230,7 +236,7 @@ export function branchCurve(rng, start, dir, len, { curl, top, step=0.09, ground
 export function growLimb(rng, seed, o, geos, start, dir, len, r0, depth, main, exit){
   const broken=!main && rng()<o.brk;
   if(broken){ len*=rrange(rng,o.stub[0],o.stub[1]); depth=0; }
-  const curve=branchCurve(rng, start, dir, len, { curl:main ? o.curl*0.7 : o.curl, top:o.top, ground:main, step:clamp(r0*3, 0.04, 0.11) });
+  const curve=branchCurve(rng, start, dir, len, { curl:main ? o.curl*0.7 : o.curl, top:o.top, ground:main, step:clamp(r0*3, 0.04, 0.11), zMax:o.zMax });
   const end=main ? (o.mainEnd ?? 'tip') : broken ? 'break' : 'tip';
   const tipK=end==='tip' ? o.tipK : rrange(rng,0.5,0.7);
   // 管道模型：每分出一根侧枝，母枝往后按截面积守恒收细一截（真实枝条是分一次细一次，不是一根均匀的锥）

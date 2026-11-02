@@ -36,6 +36,8 @@ vec2 waterGrad(vec2 xz, float t, float flow){
  *  半分辨率让采样量减半且缓存命中翻两番——散景本来就是模糊，视觉无损 */
 /** 弥散圆强度（像素 / 屈光度，按 1000 px 画面高归一）与最大半径（像素） */
 const DOF_K=26, DOF_MAX=11;
+/** 俯视水面的折射晃动倍率（1 = 物理值：波面折射方向差 × 水中路径长） */
+const REFR_K=1.0;
 /** 水中每单位路径的雾化系数与上限（上限防止背景整片糊成单色） */
 const HAZE_K=0.24, HAZE_MAX=0.42;
 
@@ -92,6 +94,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       uniform sampler2D tShadow, tMirror, tMirrorL, tMirrorR, tCau;
       uniform float uSteps;
       varying vec2 vUv;
+      #define REFR_K ${REFR_K.toFixed(2)}
       ${GRAD_GLSL}
       float ign(vec2 p){ return fract(52.9829189*fract(dot(p, vec2(0.06711056,0.00583715)))); }
       float viewZ(float d){ d=d*2.0-1.0; return 2.0*uNear*uFar/(uFar+uNear-d*(uFar-uNear)); }
@@ -157,8 +160,12 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
         if(fromTop){
           vec2 gr=waterGrad(pIn.xz, uTime, uFlow);
           refrN=normalize(vec3(-gr.x,1.0,-gr.y));
-          vec2 off=gr*0.55*clamp((tOut-tIn)*4.0,0.0,1.0);
-          refrUv=clamp(vUv+off*vec2(uRes.y/uRes.x,1.0), vec2(0.001), vec2(0.999));
+          // 物理折射：波面与静水面的折射方向之差 × 水中路径长，投回屏幕得到采样偏移——
+          // 水越深晃得越多、相机越远晃得越少。原来是固定的屏幕比例 gr*0.55（均方约画面高 3%），
+          // 俯视时整缸像隔着哈哈镜；按物理算，1.5 深的水在 3 米外看只晃零点几个百分点
+          vec3 tw=refract(d, refrN, 0.75), tf=refract(d, vec3(0.0,1.0,0.0), 0.75);
+          vec4 sc=uVP*vec4(P+(tw-tf)*max(tSc-tIn, 0.0)*REFR_K, 1.0);
+          refrUv=clamp(sc.xy/max(sc.w,1e-4)*0.5+0.5, vec2(0.001), vec2(0.999));
         }
         // ---- 景深：黄金角螺旋聚集，样本只有自己的弥散圆够大才计入（清晰的鱼不被晕到背景上）----
         if(uDofOn>0.5){

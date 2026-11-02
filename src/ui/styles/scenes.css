@@ -25,11 +25,6 @@
 .scene-thumb .ph .icon{width:42px;height:42px;stroke-width:1.2;opacity:.8}
 .scene-thumb .ph-art{position:absolute;inset:0;width:100%;height:100%;opacity:.85;transition:transform .5s var(--ease)}
 .scene-card:hover .ph-art{transform:scale(1.04)}
-.scene-thumb .go{position:absolute;inset:auto 10px 10px auto;padding:5px 12px;border-radius:999px;font-size:11px;letter-spacing:.12em;
-  color:var(--accent-ink);background:linear-gradient(180deg,#72def0,var(--accent-2));opacity:0;transform:translateY(4px);
-  transition:opacity .2s,transform .2s var(--ease)}
-.scene-card:hover .go{opacity:1;transform:none}
-.scene-card.active .go{display:none}
 .scene-badge{position:absolute;top:10px;left:10px;padding:3px 9px;border-radius:999px;font-size:10.5px;letter-spacing:.12em;
   color:var(--ink);background:rgba(4,14,20,.62);border:1px solid rgba(var(--th),.5);backdrop-filter:blur(6px)}
 .scene-badge.now{color:var(--accent-ink);background:var(--accent);border-color:transparent}
@@ -38,13 +33,26 @@
 .scene-name input{flex:1;min-width:0;font:inherit;color:var(--ink);background:rgba(255,255,255,.06);
   border:1px solid var(--line-2);border-radius:8px;padding:2px 8px;outline:none}
 .scene-meta{font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
-.scene-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.scene-actions{display:flex;align-items:center;gap:6px;margin-top:6px}
 .chip-btn{appearance:none;padding:5px 11px;border-radius:999px;font:500 11.5px/1.2 var(--font);letter-spacing:.06em;cursor:pointer;
   color:var(--ink-2);background:rgba(255,255,255,.04);border:1px solid var(--line);transition:color .15s,border-color .15s,background .15s}
 .chip-btn:hover{color:var(--ink);border-color:var(--line-2);background:rgba(95,212,232,.1)}
 .chip-btn.primary{color:var(--accent);border-color:rgba(95,212,232,.4)}
 .chip-btn.danger:hover{color:#ffb4a6;border-color:rgba(255,140,120,.5);background:rgba(255,110,90,.1)}
 .chip-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+.chip-btn.more{display:inline-grid;place-items:center;margin-left:auto;padding:4px 9px}
+.chip-btn.more .icon{width:15px;height:15px}
+.chip-btn.more[aria-expanded=true]{color:var(--ink);border-color:var(--line-2);background:rgba(95,212,232,.12)}
+/* 卡片「⋯」菜单：挂在 #scenes 根上（fixed，坐标由 scene-picker.js 按按钮算） */
+.scene-menu{position:fixed;z-index:3;min-width:136px;display:flex;flex-direction:column;gap:2px;padding:5px;
+  border-radius:var(--r-md);animation:popIn .16s var(--ease)}
+.scene-menu button{appearance:none;padding:9px 12px;border:0;border-radius:8px;cursor:pointer;text-align:left;
+  font:500 12.5px/1.2 var(--font);letter-spacing:.08em;color:var(--ink-2);background:transparent;transition:color .15s,background .15s}
+.scene-menu button:hover,.scene-menu button:focus-visible{color:var(--ink);background:rgba(95,212,232,.1)}
+.scene-menu button.danger{position:relative;margin-top:5px}
+.scene-menu button.danger::before{content:"";position:absolute;left:8px;right:8px;top:-4px;height:1px;background:var(--line)}
+.scene-menu button.danger:hover{color:#ffb4a6;background:rgba(255,110,90,.1)}
+.scene-menu button:disabled{opacity:.4;cursor:default}
 .scene-confirm{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:#ffc8bc}
 
 .scene-new{display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:220px;padding:18px;
@@ -64,7 +72,6 @@
   background:var(--glass-strong);border:1px solid var(--line-2);box-shadow:var(--shadow);
   transition:opacity .25s,transform .25s var(--ease)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
-#hudScene{color:var(--ink-2)}
 
 @media (max-width:640px){
   .scene-grid{padding:16px;grid-template-columns:1fr}

@@ -1,5 +1,5 @@
 /* ================================================================
- * 设计令牌 + 全局 + HUD（品牌 / 饱食度 / Dock / 状态栏 / 加载）
+ * 设计令牌 + 全局 + HUD（品牌与水景切换 / 饱食度 / Dock / 提示 / 拍照条 / 加载）
  * 视觉语言：深海磨砂玻璃——低饱和深青底、单一青色强调、暖金色只用于"喂养"相关
  * ================================================================ */
 :root{
@@ -45,13 +45,22 @@ button{font-family:inherit}
 #vignette{position:fixed;inset:0;z-index:5;pointer-events:none;
   background:radial-gradient(ellipse at 50% 46%,transparent 55%,rgba(2,6,12,.5) 100%)}
 
-/* ---------- 品牌 ---------- */
-#hud{position:fixed;top:max(22px, env(safe-area-inset-top));left:max(24px, env(safe-area-inset-left));z-index:10;display:flex;align-items:center;gap:12px;pointer-events:none}
+/* ---------- 品牌 + 水景切换（缸名即"我的水景"入口） ---------- */
+#hud{position:fixed;top:max(22px, env(safe-area-inset-top));left:max(24px, env(safe-area-inset-left));z-index:10;display:flex;align-items:flex-start;gap:12px;pointer-events:none}
 .brand-mark{width:30px;height:30px;color:var(--accent);stroke-width:1.5;
   filter:drop-shadow(0 0 10px rgba(95,212,232,.5))}
+.brand-txt{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;padding-top:2px}
 #title{font-size:15px;font-weight:600;letter-spacing:.38em;line-height:1;color:var(--ink);
   text-shadow:0 2px 16px rgba(60,190,230,.35)}
-.brand-sub{margin-top:7px;font-size:11px;letter-spacing:.22em;line-height:1;color:var(--ink-3)}
+.scene-switch{pointer-events:auto;appearance:none;display:inline-flex;align-items:center;gap:6px;max-width:min(260px, 46vw);
+  margin-left:-2px;padding:5px 8px 5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--glass);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);cursor:pointer;
+  color:var(--ink-2);font:500 12px/1.2 var(--font);letter-spacing:.1em;
+  transition:color .18s,border-color .18s,background .18s}
+.scene-switch:hover{color:var(--ink);border-color:var(--line-2);background:rgba(95,212,232,.12)}
+.scene-switch .icon{width:14px;height:14px;color:var(--ink-3);transition:transform .2s var(--ease),color .18s}
+.scene-switch:hover .icon{color:var(--accent);transform:translateY(1px)}
+#hudScene{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ---------- 饱食度 ---------- */
 #care{position:fixed;top:max(20px, env(safe-area-inset-top));right:max(22px, env(safe-area-inset-right));z-index:10;display:flex;align-items:center;gap:10px;
@@ -65,38 +74,41 @@ button{font-family:inherit}
 .care-txt small{font-size:10px;letter-spacing:.16em;color:var(--ink-3)}
 #careText{font-size:13px;letter-spacing:.06em;color:var(--ink)}
 
-/* ---------- Dock ---------- */
+/* ---------- Dock：互动 | 观赏 | 我的缸 | 设置 ---------- */
 #dock{position:fixed;left:50%;bottom:max(22px, env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10;
   display:flex;align-items:center;gap:2px;padding:6px;border-radius:var(--r-lg)}
+.dock-group{display:flex;align-items:center;gap:2px}
 .dock-btn{appearance:none;border:0;background:transparent;color:var(--ink-2);cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-  min-width:60px;height:54px;padding:0 10px;border-radius:var(--r-md);
-  font-size:11px;font-weight:500;letter-spacing:.1em;line-height:1;
+  min-width:58px;height:54px;padding:0 8px;border-radius:var(--r-md);
+  font-size:11px;font-weight:500;letter-spacing:.1em;line-height:1;white-space:nowrap;
   transition:background .18s,color .18s,transform .12s var(--ease)}
 .dock-btn:hover{background:rgba(120,210,230,.09);color:var(--ink)}
 .dock-btn:active{transform:scale(.93)}
 .dock-btn.on{background:rgba(95,212,232,.14);color:var(--ink)}
-.dock-btn.compact{min-width:46px}
 .dock-btn.primary{color:var(--accent-ink);background:linear-gradient(180deg,#72def0,var(--accent-2));
-  box-shadow:0 6px 20px rgba(60,190,220,.32),inset 0 1px 0 rgba(255,255,255,.35);margin-right:4px}
+  box-shadow:0 6px 20px rgba(60,190,220,.32),inset 0 1px 0 rgba(255,255,255,.35);margin-right:2px}
 .dock-btn.primary:hover{filter:brightness(1.07);color:var(--accent-ink)}
 .dock-btn .i-sun{display:none}
 .dock-btn.is-night .i-sun{display:block}
 .dock-btn.is-night .i-moon{display:none}
-.dock-sep{width:1px;height:30px;margin:0 6px;background:var(--line)}
+.dock-sep{flex:0 0 auto;width:1px;height:30px;margin:0 6px;background:var(--line)}
 
-/* ---------- 状态栏 / 提示 ---------- */
-#stats{position:fixed;bottom:18px;left:24px;z-index:10;font-size:10.5px;letter-spacing:.08em;
-  color:var(--ink-3);opacity:.55;pointer-events:none;font-variant-numeric:tabular-nums}
+/* ---------- 操作提示 ---------- */
 #hint{position:fixed;bottom:94px;left:50%;transform:translateX(-50%);z-index:10;white-space:nowrap;
   font-size:12px;letter-spacing:.14em;color:var(--ink-2);text-shadow:0 1px 10px rgba(0,0,0,.85);
   pointer-events:none;animation:hintOut .9s var(--ease) 14s forwards}
 @keyframes hintOut{to{opacity:0;transform:translate(-50%,6px)}}
 
-#photoTip{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:30;display:none;
-  padding:9px 18px;border-radius:999px;border:1px solid var(--line-2);
-  background:var(--glass);backdrop-filter:blur(14px);color:var(--ink);font-size:12px;letter-spacing:.12em}
-#photoTip.on{display:block}
+/* ---------- 拍照条（拍照模式下替代 Dock；DOM 浮层，不进照片） ---------- */
+#photoTip{position:fixed;left:50%;bottom:max(22px, env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;
+  display:none;align-items:center;gap:8px;padding:6px 6px 6px 18px;border-radius:999px;white-space:nowrap;
+  color:var(--ink);font-size:12px;letter-spacing:.12em;animation:popIn .2s var(--ease)}
+#photoTip.on{display:flex}
+#photoTip small{font-size:11px;color:var(--ink-3);letter-spacing:.08em}
+#photoTip span{margin-right:6px}
+#photoTip .btn-ghost{border-radius:999px}
+#photoTip .btn-primary{border-radius:999px;padding:8px 18px}
 
 /* ---------- 加载 ---------- */
 #loading{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;gap:18px;
@@ -119,32 +131,26 @@ button{font-family:inherit}
   #careFill{transition:none}
 }
 
-/* ---------- 窄屏 ---------- */
+/* ---------- 窄屏：Dock 保留短文字；再窄就铺满底边、按钮均分宽度 ---------- */
 @media (max-width:640px){
-  #hud{top:16px;left:16px}
-  .brand-sub{display:none}
-  #care{top:14px;right:14px;padding-right:12px}
-  #dock{bottom:14px;padding:5px;gap:0}
-  .dock-btn{min-width:46px;height:46px;padding:0 6px}
-  .dock-btn span{display:none}
-  #hint{bottom:76px;font-size:11px;letter-spacing:.06em}
-  #stats{display:none}
+  #hud{top:max(14px, env(safe-area-inset-top));left:max(14px, env(safe-area-inset-left));align-items:center;gap:10px}
+  .brand-mark{width:26px;height:26px}
+  #title{display:none}
+  .brand-txt{padding-top:0}
+  .scene-switch{max-width:calc(100vw - 210px)}
+  #care{top:max(14px, env(safe-area-inset-top));right:max(14px, env(safe-area-inset-right));padding-right:12px}
+  #dock{bottom:max(12px, env(safe-area-inset-bottom));padding:4px;gap:0}
+  .dock-group{gap:0}
+  .dock-btn{min-width:46px;height:50px;padding:0 4px;gap:5px;font-size:10px;letter-spacing:.04em}
+  .dock-sep{margin:0 3px;height:26px}
+  #hint{bottom:78px;font-size:11px;letter-spacing:.06em}
+  #photoTip small{display:none}
 }
-#bMore{display:none}
-#dockMore{position:fixed;z-index:21;display:flex;flex-direction:column;gap:4px;padding:6px;border-radius:var(--r-md)}
-#dockMore[hidden]{display:none}
-#dockMore button{appearance:none;min-width:44px;min-height:44px;padding:0 14px;border:0;border-radius:var(--r-sm);
-  background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
-#dockMore button:hover{background:rgba(120,210,230,.1)}
-@media (max-width:420px){
-  /* 9 个 44px 按钮是 396px，360 宽的屏排不下。设置和说明收进「更多」，条上留 8 个 44px。 */
-  #dock{left:env(safe-area-inset-left, 0px);right:env(safe-area-inset-right, 0px);
-    width:max-content;max-width:calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
-    margin-inline:auto;transform:none;gap:0;padding:2px;
-    bottom:max(8px, env(safe-area-inset-bottom))}
-  .dock-btn,.dock-btn.compact{min-width:44px;width:44px;max-width:44px;height:44px;padding:0;flex:0 0 44px}
+@media (max-width:480px){
+  #dock{left:max(8px, env(safe-area-inset-left));right:max(8px, env(safe-area-inset-right));transform:none;padding:3px}
+  .dock-group{flex:var(--n, 1) 1 0;min-width:0}
+  .dock-group .dock-btn,#bSettings{flex:1 1 0;min-width:0;padding:0}
   .dock-btn.primary{margin-right:0}
-  #dock .dock-sep,#bSettings,#bHelp{display:none}
-  #bMore{display:flex}
-  #hint{bottom:68px}
+  .dock-sep{margin:0 2px}
+  #hint{bottom:72px;white-space:normal;width:calc(100vw - 32px);text-align:center;line-height:1.7}
 }

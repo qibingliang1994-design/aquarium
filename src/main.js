@@ -199,24 +199,6 @@ input=createTankInput({ camera, canvas:renderer.domElement, schools, fishCard, f
   isBlocked:()=>editor?.active || lure.on });     // 逗鱼时点击让位给光点（不喂食/识鱼/敲玻璃）
 input.setBounds(boundsFor(runtime.doc.tank));
 $('bFeed').addEventListener('click',()=>input.feedAt(randomFeedPoint()));
-const bMore=/** @type {HTMLButtonElement} */ ($('bMore'));
-const dockMore=$('dockMore');
-function closeDockMore(){ dockMore.hidden=true; bMore.setAttribute('aria-expanded','false'); }
-bMore.addEventListener('click',e=>{
-  e.stopPropagation();
-  if(!dockMore.hidden){ closeDockMore(); return; }
-  dockMore.hidden=false;
-  bMore.setAttribute('aria-expanded','true');
-  const r=bMore.getBoundingClientRect(), w=dockMore.offsetWidth;
-  dockMore.style.left=`${Math.max(8, Math.min(r.right-w, innerWidth-w-8))}px`;
-  dockMore.style.bottom=`${innerHeight-r.top+8}px`;
-});
-$('moreSettings').addEventListener('click',e=>{ e.stopPropagation(); closeDockMore(); $('bSettings').click(); });
-$('moreHelp').addEventListener('click',e=>{ e.stopPropagation(); closeDockMore(); $('bHelp').click(); });
-document.addEventListener('click',e=>{
-  const t=e.target;
-  if(!dockMore.hidden && t instanceof Node && !dockMore.contains(t) && !bMore.contains(t)) closeDockMore();
-});
 
 /* ---------- 逗鱼模式：光标化作水中光点，引导鱼群追逐盘旋 ---------- */
 const bPlay=/** @type {HTMLButtonElement} */ ($('bPlay'));
@@ -272,12 +254,16 @@ function syncLightButton(){              // 按钮显示"点击后会切到"的�
   bLight.setAttribute('aria-label', lightLabel);
 }
 syncLightButton();
-bLight.addEventListener('click',()=>{
-  for(const k of ['cycle','clock']){ settings[k]=false; settingsPanel.set(k,false); }   // 手动切换视为关闭自动循环与定时器
-  dayNight.target=dayNight.target>0.5?0:1;
+/** 手动定昼夜：视为关闭自动循环与定时器（Dock 按钮 / 设置里的"日间""夜间"） @param {boolean} night */
+function setManualLight(night){
+  settings.cycle=false; settings.clock=false;
+  dayNight.target=night?1:0;
   settings.night=dayNight.target; saveSettings();
   syncLightButton();
-});
+}
+/** 设置弹层"光照"四选一的当前值 @returns {'day'|'night'|'cycle'|'clock'} */
+const lightMode=()=>settings.clock ? 'clock' : settings.cycle ? 'cycle' : dayNight.target>0.5 ? 'night' : 'day';
+bLight.addEventListener('click',()=>{ setManualLight(!(dayNight.target>0.5)); settingsPanel.refresh(); });
 
 /* ---------- 底部操作提示：自然水域没有玻璃，双击改叫"拍水面" ---------- */
 function setHint(/** @type {boolean} */ natural){
@@ -320,8 +306,11 @@ function scheduleThumb(){                  // 没有缩略图的场景：开场�
 }
 
 /* ---------- 场景切换（淡出 → 重建 → 淡入） ---------- */
-const hudScene=$('hudScene'), fadeEl=$('sceneFade');
-const syncHud=()=>{ hudScene.textContent=`「${runtime.doc.name}」`; };
+const hudScene=$('hudScene'), bScenes=$('bScenes'), fadeEl=$('sceneFade');
+const syncHud=()=>{                               // 左上角水景名兼"我的水景"入口
+  hudScene.textContent=runtime.doc.name;
+  bScenes.setAttribute('aria-label', `我的水景（当前：${runtime.doc.name}）`);
+};
 /** @type {boolean} */ let switching=false;
 /** 刚新建、还没保存过的空缸（放弃造景时删掉） @type {{ id:string, back:string }|null} */ let pendingNew=null;
 const MAX_PRECOMPILE_MS=1500;               // 切场景黑场里等着色器预编译的上限
@@ -367,16 +356,20 @@ const picker=createScenePicker({ store, toast,
   onEdit:(/** @type {string} */ id)=>switchScene(id, { then:()=>editor.enter() }),
   onCreate:(/** @type {string} */ id)=>{ pendingNew={ id, back:store.activeId }; switchScene(id, { then:()=>editor.enter() }); } });
 picker.onRenamed=(/** @type {string} */ id)=>{ if(id===store.activeId){ runtime.doc.name=(store.get(id) ?? { name:'' }).name; syncHud(); } };
-$('bScenes').addEventListener('click',()=>{ settingsPanel.close(); fishCard.hide(); picker.open(); });
+bScenes.addEventListener('click',()=>{ settingsPanel.close(); fishCard.hide(); picker.open(); });
 $('bEdit').addEventListener('click',()=>editor.enter());
 
-/* ---------- 帮助 / 图鉴 ---------- */
+/* ---------- 帮助（设置 › 更多 里打开）/ 图鉴 ---------- */
 const helpEl=$('help');
 const castEl=helpEl.querySelector('.help-cast');
 if(castEl) castEl.textContent='缸中居民：'+SPECIES.map(s=>SPECIES_META[s.id]?.name).filter(Boolean).join(' · ');
 const openHelp=()=>holdDialog(helpEl, '#helpClose');
 const closeHelp=()=>{ if(!helpEl.hidden) releaseDialog(helpEl); };
-$('bHelp').addEventListener('click', openHelp);
+$('bHelp').addEventListener('click',()=>{
+  settingsPanel.close();
+  $('bSettings').focus();                         // 关掉说明后焦点回到设置按钮（弹层已收起）
+  openHelp();
+});
 $('helpClose').addEventListener('click', closeHelp);
 helpEl.addEventListener('click',e=>{ if(e.target===helpEl) closeHelp(); });
 const guideEl=$('encyclopedia');
@@ -394,7 +387,9 @@ guideEl.addEventListener('click',e=>{ if(e.target===guideEl) closeGuide(); });
 
 /* ---------- 设置弹层 ---------- */
 let qualityBloom=true;                           // 当前画质档是否开泛光（最低档连光柱一起停）
-const settingsPanel=createSettingsPanel({ settings, onChange:(/** @type {string} */ key,/** @type {any} */ value)=>{
+const settingsPanel=createSettingsPanel({ settings, lightMode, isBowl:()=>!!TANK_STYLES[runtime.doc.tank]?.bowl,
+  onChange:(/** @type {string} */ key,/** @type {any} */ value)=>{
+  if(key==='light'){ setManualLight(value==='night'); return; }   // 光照"日间 / 夜间"：不是存档键，走手动昼夜
   settings[key]=value;
   if(key==='sound'){ sound.setEnabled(value); if(value){ sound.ensure(); sound.blip(); } }
   if(key==='snow') snow.pts.visible=value;
@@ -429,15 +424,15 @@ if(import.meta.env?.PROD && 'serviceWorker' in navigator){
 }
 
 /* ---------- 拍照模式 / 全局按键 ---------- */
-const photo=createPhotoMode({ renderer, composer, hideTargets:['hud','dock','care','stats','hint'],
+const photo=createPhotoMode({ renderer, composer, hideTargets:['hud','dock','care','hint'],
   onEnter:()=>{ fishCard.hide(); settingsPanel.close(); },
   onShot:ok=>toast(ok?'照片已保存':'拍摄失败，请稍后再试') });
+$('bPhoto').addEventListener('click',()=>photo.set(true));
 addEventListener('keydown',e=>{
   if(editor.active) return;                    // 编辑器有自己的快捷键
   if(e.key==='Escape'){
     if(!guideEl.hidden) closeGuide();
     closeHelp();
-    closeDockMore();
     if(picker.isOpen) picker.close();
     fishCard.hide(); settingsPanel.close();
     if(photo.on) photo.set(false);
@@ -451,6 +446,7 @@ addEventListener('keydown',e=>{
  * ================================================================ */
 const clock=new THREE.Clock();
 const statsEl=$('stats'), careFill=$('careFill'), careText=$('careText');
+$('verText').textContent=`Aquarium ${VERSION}`;
 let fpsFrames=0, fpsTime=0, realT=0;
 renderer.info.autoReset=false;                    // 整帧统计（含阴影/后期）由主循环手动重置（__aqDebug.perf 用）
 
@@ -615,7 +611,7 @@ function frame(){
   if(rawDt<=0.5) fpsTime+=rawDt; else fpsFrames=0;
   if(fpsTime>=0.5){
     const fps=Math.round(fpsFrames/fpsTime);
-    statsEl.textContent=`${fps} FPS · ${runtime.fishTotal()} 条鱼 · ${quality.label}${settings.qualityMode==='auto' ? '模式' : '·锁定'} · ${VERSION}`;
+    statsEl.textContent=`实时 ${fps} FPS · ${quality.label}${settings.qualityMode==='auto' ? '（自动调节）' : '（已锁定）'} · ${runtime.fishTotal()} 条鱼`;   // 设置 › 画面
     fpsFrames=0; fpsTime=0;
     updateCareHud();
     if(settings.qualityMode==='auto') quality.sample(fps, realT);   // 门槛/迟滞按真实秒计：低帧率下模拟时间会被 clamp 拖慢

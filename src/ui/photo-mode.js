@@ -1,6 +1,7 @@
 // @ts-check
 /* ================================================================
- * 拍照模式：H 隐藏 UI · 再按 H 拍摄保存高清 PNG · Esc 退出
+ * 拍照模式：H / Dock「拍照」隐藏 UI · 再按 H 或点「拍摄」保存高清 PNG · Esc / 「退出」离开
+ * 底部的拍摄条只是 DOM 浮层，不进画布，拍出来的照片里没有它
  * ================================================================ */
 
 const MAX_SHOT_PIXELS=24e6;          // 约 6500×3700：再大显存吃紧，核显可能直接丢上下文
@@ -12,14 +13,24 @@ export function createPhotoMode({ renderer, composer, hideTargets, onEnter, onSh
   const targets=hideTargets.flatMap((/** @type {string} */ id)=>{ const el=document.getElementById(id); return el?[el]:[]; });
   const tip=document.createElement('div');
   tip.id='photoTip';
-  tip.textContent='拍照模式 · H 拍摄保存 · Esc 退出';
+  tip.className='glass';
+  tip.setAttribute('role','toolbar');
+  tip.setAttribute('aria-label','拍照模式');
+  tip.innerHTML='<span>拍照模式<small> · H 拍摄 · Esc 退出</small></span>'
+    +'<button type="button" class="btn-primary" data-act="shoot">拍摄</button>'
+    +'<button type="button" class="btn-ghost" data-act="exit">退出</button>';
+  tip.addEventListener('click',e=>{
+    const act=e.target instanceof Element ? e.target.closest('button')?.dataset.act : null;
+    if(act==='shoot') shoot();
+    if(act==='exit') set(false);
+  });
   document.body.appendChild(tip);
 
   function set(/** @type {boolean} */ v){
     on=v;
     targets.forEach((/** @type {HTMLElement} */ el)=>{ el.style.visibility=v?'hidden':'visible'; });
     tip.classList.toggle('on',v);
-    if(v) onEnter?.();
+    if(v){ onEnter?.(); tip.querySelector('button')?.focus({ preventScroll:true }); }   // Dock 按钮被藏起来了，焦点交给「拍摄」
   }
   // 拍摄中（toBlob 异步编码）不接受新的拍摄：否则第二次会把放大后的像素比当成"原值"恢复，渲染器永久卡在高分辨率
   let busy=false;

@@ -6,7 +6,8 @@ import { TANK_STYLES } from '../scenes/tank-styles.js';
 import { scenePlaceholder } from './scene-placeholder.js';
 
 /* ================================================================
- * "我的水景"弹层：场景卡片（缩略图 / 名称 / 统计）+ 切换、造景、复制、改名、恢复预设、删除、新建
+ * "我的水景"弹层：场景卡片（缩略图 / 名称 / 统计）+ 切换、造景、新建；
+ * 低频的复制、改名、恢复预设、删除收在每张卡的「⋯」菜单里
  * 所有写操作经 store；切换/编辑交给 main 提供的回调
  * ================================================================ */
 
@@ -20,9 +21,62 @@ export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, to
   /** @type {string|null} */ let renameId=null;
 
   const open=()=>{ confirmId=null; renameId=null; render(); holdDialog(modal, '#scenesClose'); };
-  const close=()=>{ if(!modal.hidden) releaseDialog(modal); };
+  const close=()=>{ closeMenu(); if(!modal.hidden) releaseDialog(modal); };
   $('scenesClose').addEventListener('click', close);
-  modal.addEventListener('click',e=>{ if(e.target===modal) close(); });
+  modal.addEventListener('click',e=>{
+    if(menuEl && !(e.target instanceof Node && menuEl.contains(e.target))) closeMenu();
+    if(e.target===modal) close();
+  });
+  $('scenesCard').addEventListener('scroll', ()=>closeMenu(), { passive:true });
+
+  /* ---------- 卡片「⋯」菜单：挂在弹层根节点上（卡片 overflow:hidden 会裁掉） ---------- */
+  /** @type {HTMLElement|null} */ let menuEl=null;
+  function closeMenu(){
+    if(!menuEl) return;
+    menuEl.remove(); menuEl=null;
+    for(const b of grid.querySelectorAll('[aria-expanded=true]')) b.setAttribute('aria-expanded','false');
+  }
+  function openMenu(/** @type {HTMLButtonElement} */ anchor, /** @type {any} */ doc){
+    const reopen=menuEl && anchor.getAttribute('aria-expanded')==='true';
+    closeMenu();
+    if(reopen) return;                              // 再点一次「⋯」= 收起
+    const m=document.createElement('div');
+    m.className='scene-menu glass-strong';
+    m.setAttribute('role','menu');
+    m.setAttribute('aria-label',`「${doc.name}」更多操作`);
+    const item=(/** @type {string} */ label, /** @type {()=>void} */ fn, cls='')=>{
+      const b=document.createElement('button');
+      b.type='button'; b.className=cls; b.textContent=label;
+      b.setAttribute('role','menuitem');
+      b.addEventListener('click',e=>{ e.stopPropagation(); closeMenu(); fn(); });
+      return b;
+    };
+    m.append(
+      item('复制',()=>{ const c=store.duplicate(doc.id); if(c){ render(); toast(`已复制为「${c.name}」`); } else toast('水景数量已达上限'); }),
+      item('改名',()=>{ renameId=doc.id; render(); }),
+    );
+    if(doc.presetId) m.append(item('恢复预设',()=>{
+      const d=store.reset(doc.id);
+      if(d && doc.id===store.activeId) onSwitch(doc.id, { force:true });
+      render(); toast(`「${doc.name}」已恢复为预设布局`);
+    }));
+    const del=item('删除',()=>{ confirmId=doc.id; render(); }, 'danger');
+    if(store.list().length<=1){ del.disabled=true; del.title='至少要留一个水景'; }
+    m.append(del);
+    m.addEventListener('keydown',e=>{               // 菜单内上下键移动，Esc 收起回到「⋯」
+      const items=/** @type {HTMLButtonElement[]} */ ([...m.querySelectorAll('button:not(:disabled)')]);
+      const i=items.indexOf(/** @type {any} */ (document.activeElement));
+      if(e.key==='ArrowDown' || e.key==='ArrowUp'){ e.preventDefault(); items[(i+(e.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus(); }
+      if(e.key==='Escape'){ e.stopPropagation(); closeMenu(); anchor.focus(); }
+    });
+    modal.appendChild(m);
+    const r=anchor.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
+    m.style.left=`${Math.max(8, Math.min(r.right-w, innerWidth-w-8))}px`;
+    m.style.top=`${r.bottom+6+h>innerHeight-8 ? r.top-6-h : r.bottom+6}px`;
+    anchor.setAttribute('aria-expanded','true');
+    menuEl=m;
+    /** @type {HTMLButtonElement|null} */ (m.querySelector('button:not(:disabled)'))?.focus();
+  }
 
   const btn=(/** @type {string} */ label, /** @type {string} */ cls, /** @type {()=>void} */ fn, /** @type {string} */ title)=>{
     const b=document.createElement('button');
@@ -44,7 +98,7 @@ export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, to
     const src=store.thumb(doc.id);
     if(src){ const img=document.createElement('img'); img.alt=''; img.src=src; thumb.appendChild(img); }
     else thumb.insertAdjacentHTML('beforeend', `<span class="ph">${scenePlaceholder(doc.tank)}</span>`);
-    thumb.insertAdjacentHTML('beforeend', `<span class="scene-badge${active?' now':''}">${active?'当前':theme.label}</span><span class="go">进入</span>`);
+    thumb.insertAdjacentHTML('beforeend', `<span class="scene-badge${active?' now':''}">${active?'当前':theme.label}</span>`);
     thumb.addEventListener('click',()=>{ if(!active){ close(); onSwitch(doc.id); } });
 
     const body=document.createElement('div');
@@ -80,19 +134,14 @@ export function createScenePicker({ store, onSwitch, onEdit, onCreate=onEdit, to
           if(wasActive) onSwitch(store.activeId, { force:true }); render(); toast(`已删除「${doc.name}」`); }),
         btn('取消','',()=>{ confirmId=null; render(); }));
     } else {
-      acts.append(
-        btn('造景','primary',()=>{ close(); onEdit(doc.id); }, '进入造景编辑'),
-        btn('复制','',()=>{ const c=store.duplicate(doc.id); if(c){ render(); toast(`已复制为「${c.name}」`); } else toast('水景数量已达上限'); }),
-        btn('改名','',()=>{ renameId=doc.id; render(); }),
-      );
-      if(doc.presetId) acts.append(btn('恢复预设','',()=>{
-        const d=store.reset(doc.id);
-        if(d && doc.id===store.activeId) onSwitch(doc.id, { force:true });
-        render(); toast(`「${doc.name}」已恢复为预设布局`);
-      }, '造景与鱼群回到最初的样子'));
-      const del=btn('删除','danger',()=>{ confirmId=doc.id; render(); });
-      del.disabled=store.list().length<=1;
-      acts.append(del);
+      if(!active) acts.append(btn('进入','primary',()=>{ close(); onSwitch(doc.id); }, `切换到「${doc.name}」`));
+      acts.append(btn('造景',active ? 'primary' : '',()=>{ close(); onEdit(doc.id); }, '进入造景编辑'));
+      const more=btn('','more',()=>openMenu(more, doc),'复制 / 改名 / 恢复预设 / 删除');
+      more.innerHTML='<svg class="icon" aria-hidden="true"><use href="#i-more"/></svg>';
+      more.setAttribute('aria-label',`「${doc.name}」更多操作`);
+      more.setAttribute('aria-haspopup','menu');
+      more.setAttribute('aria-expanded','false');
+      acts.append(more);
     }
     body.appendChild(acts);
     el.append(thumb, body);

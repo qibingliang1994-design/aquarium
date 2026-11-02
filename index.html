@@ -38,6 +38,8 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.6A8.2 8.2 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></symbol>
   <symbol id="i-cam" viewBox="0 0 24 24"><path d="M3.5 8.5h3.2l1.9-2.8h6.8l1.9 2.8h3.2v10.8h-17z"/><circle cx="12" cy="13.6" r="3.4"/></symbol>
+  <symbol id="i-orbit" viewBox="0 0 24 24"><path d="M7 7.6C4.3 8.4 2.5 9.8 2.5 11.5c0 2.6 4.3 4.7 9.5 4.7s9.5-2.1 9.5-4.7-4.3-4.7-9.5-4.7"/><path d="M9.6 4.6L12 6.8 9.6 9"/><circle cx="12" cy="11.5" r="1.6" fill="currentColor" stroke="none"/><path d="M9 20h6"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M4.5 5.5c2.8-1.3 5.3-1.3 7.5 0v14c-2.2-1.3-4.7-1.3-7.5 0z"/><path d="M19.5 5.5c-2.8-1.3-5.3-1.3-7.5 0v14c2.2-1.3 4.7-1.3 7.5 0z"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
   <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.4v.6"/><circle cx="12" cy="16.8" r=".9" fill="currentColor" stroke="none"/></symbol>
@@ -55,11 +57,14 @@
 <div id="app"></div>
 <div id="vignette"></div>
 
+<!-- 左上：品牌 + 当前水景名（点开 = 我的水景） -->
 <header id="hud">
   <svg class="brand-mark icon" aria-hidden="true"><use href="#i-fish"/></svg>
-  <div>
+  <div class="brand-txt">
     <div id="title">AQUARIUM</div>
-    <div class="brand-sub"><span id="hudScene">治愈系桌面水族箱</span></div>
+    <button id="bScenes" class="scene-switch" type="button" title="我的水景：切换 / 新建 / 管理" aria-haspopup="dialog">
+      <span id="hudScene">治愈系桌面水族箱</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg>
+    </button>
   </div>
 </header>
 
@@ -71,70 +76,99 @@
   <div class="care-txt"><small>饱食度</small><span id="careText">…</span></div>
 </div>
 
+<!-- 底栏：互动 | 观赏 | 我的缸 | 设置（--n = 组内按钮数，窄屏按它均分宽度） -->
 <nav id="dock" class="glass" aria-label="水族箱操作">
-  <button id="bFeed" class="dock-btn primary" title="在随机位置投喂" aria-label="喂食"><svg class="icon"><use href="#i-feed"/></svg><span>喂食</span></button>
-  <button id="bPlay" class="dock-btn" title="逗鱼：光标化作光点引导鱼群 (P)" aria-pressed="false" aria-label="逗鱼"><svg class="icon"><use href="#i-spark"/></svg><span>逗鱼</span></button>
-  <button id="bLight" class="dock-btn" title="切换到月光"><svg class="icon i-moon"><use href="#i-moon"/></svg><svg class="icon i-sun"><use href="#i-sun"/></svg><span>夜间</span></button>
-  <button id="bCam" class="dock-btn" title="切换预设机位" aria-label="视角"><svg class="icon"><use href="#i-cam"/></svg><span>视角</span></button>
-  <button id="bScenes" class="dock-btn" title="我的水景：切换 / 新建 / 管理" aria-label="水景"><svg class="icon"><use href="#i-layers"/></svg><span>水景</span></button>
-  <button id="bEdit" class="dock-btn" title="造景：摆放岩石、水草、珊瑚，调整鱼群" aria-label="造景"><svg class="icon"><use href="#i-plant"/></svg><span>造景</span></button>
-  <button id="bGuide" class="dock-btn" title="鱼类图鉴" aria-label="图鉴"><svg class="icon"><use href="#i-book"/></svg><span>图鉴</span></button>
-  <i class="dock-sep" aria-hidden="true"></i>
-  <button id="bSettings" class="dock-btn compact" title="设置" aria-label="设置" aria-expanded="false"><svg class="icon"><use href="#i-sliders"/></svg></button>
-  <button id="bHelp" class="dock-btn compact" title="操作说明" aria-label="操作说明"><svg class="icon"><use href="#i-help"/></svg></button>
-  <button id="bMore" class="dock-btn compact" type="button" title="更多" aria-label="更多" aria-expanded="false" aria-controls="dockMore"><svg class="icon"><use href="#i-more"/></svg></button>
-  <div id="dockMore" class="glass-strong" hidden>
-    <button id="moreSettings" type="button">设置</button>
-    <button id="moreHelp" type="button">操作说明</button>
+  <div class="dock-group" role="group" aria-label="互动" style="--n:2">
+    <button id="bFeed" class="dock-btn primary" title="在随机位置投喂（也可以直接点水面）"><svg class="icon" aria-hidden="true"><use href="#i-feed"/></svg><span>喂食</span></button>
+    <button id="bPlay" class="dock-btn" title="逗鱼：光标化作光点引导鱼群 (P)" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg><span>逗鱼</span></button>
   </div>
+  <i class="dock-sep" aria-hidden="true"></i>
+  <div class="dock-group" role="group" aria-label="观赏" style="--n:3">
+    <button id="bLight" class="dock-btn" title="切换到月光"><svg class="icon i-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="icon i-sun" aria-hidden="true"><use href="#i-sun"/></svg><span>夜间</span></button>
+    <button id="bCam" class="dock-btn" title="在几个预设机位之间切换"><svg class="icon" aria-hidden="true"><use href="#i-orbit"/></svg><span>视角</span></button>
+    <button id="bPhoto" class="dock-btn" title="拍照：隐藏界面，拍一张高清照片 (H)"><svg class="icon" aria-hidden="true"><use href="#i-cam"/></svg><span>拍照</span></button>
+  </div>
+  <i class="dock-sep" aria-hidden="true"></i>
+  <div class="dock-group" role="group" aria-label="我的缸" style="--n:2">
+    <button id="bEdit" class="dock-btn" title="造景：摆放岩石、水草、珊瑚，调整鱼群与水体"><svg class="icon" aria-hidden="true"><use href="#i-plant"/></svg><span>造景</span></button>
+    <button id="bGuide" class="dock-btn" title="鱼类图鉴"><svg class="icon" aria-hidden="true"><use href="#i-book"/></svg><span>图鉴</span></button>
+  </div>
+  <i class="dock-sep" aria-hidden="true"></i>
+  <button id="bSettings" class="dock-btn" title="设置：光照、天气、画面、存档" aria-expanded="false" aria-controls="settingsPop"><svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg><span>设置</span></button>
 </nav>
 
-<div id="stats">…</div>
 <div id="hint">拖拽旋转 · 滚轮缩放 · 点水喂食 · 点鱼识鱼 · 双击敲玻璃 · P 逗鱼</div>
 
-<div id="settingsPop" class="glass-strong" hidden>
-  <p class="pop-title">设置</p>
-  <label class="switch-row"><span>环境音效</span><input type="checkbox" id="setSound" role="switch"/><i class="switch"></i></label>
-  <label class="switch-row"><span>自动昼夜循环</span><input type="checkbox" id="setCycle" role="switch"/><i class="switch"></i></label>
-  <label class="switch-row"><span>跟随本地时间<small>8:00 开灯 · 21:30 关灯</small></span><input type="checkbox" id="setClock" role="switch"/><i class="switch"></i></label>
-  <p class="pop-title">画面</p>
-  <label class="select-row"><span>画质</span>
-    <select id="setQuality" aria-label="画质">
-      <option value="auto">自动（推荐）</option>
-      <option value="0">高清</option>
-      <option value="2">均衡</option>
-      <option value="4">流畅</option>
-      <option value="6">极速</option>
-    </select>
-  </label>
-  <label class="slider-row"><span class="sr-head"><em>灯光亮度<small>缸灯强弱 · 100% 为默认</small></em><b></b></span><input type="range" id="setLamp" min="0" max="1.5" step="0.01"/></label>
-  <label class="slider-row"><span class="sr-head"><em>水色浓淡<small>水体吸收 · 越高越浓</small></em><b></b></span><input type="range" id="setAbsorb" min="0.1" max="1" step="0.01"/></label>
-  <label class="slider-row"><span class="sr-head"><em>光柱<small>水中光束 · 随造景剪影</small></em><b></b></span><input type="range" id="setShafts" min="0" max="1" step="0.01"/></label>
-  <label class="switch-row"><span>景深<small>拉近看鱼时背景虚化</small></span><input type="checkbox" id="setDof" role="switch"/><i class="switch"></i></label>
-  <label class="switch-row"><span>水体雾化<small>远景沉入水色 · 关=通透</small></span><input type="checkbox" id="setHaze" role="switch"/><i class="switch"></i></label>
-  <label class="switch-row"><span>气泡</span><input type="checkbox" id="setBubbles" role="switch"/><i class="switch"></i></label>
-  <label class="switch-row"><span>悬浮颗粒</span><input type="checkbox" id="setSnow" role="switch"/><i class="switch"></i></label>
-  <label class="switch-row"><span>水面焦散</span><input type="checkbox" id="setCaustics" role="switch"/><i class="switch"></i></label>
-  <p class="pop-title">天气</p>
-  <label class="select-row"><span>天气</span>
-    <select id="setWeather" aria-label="天气">
-      <option value="sunny">晴天</option>
-      <option value="cloudy">多云</option>
-      <option value="drizzle">小雨</option>
-      <option value="rain">中雨</option>
-      <option value="fog">薄雾</option>
-      <option value="snow">小雪</option>
-    </select>
-  </label>
-  <label class="slider-row"><span class="sr-head"><em>强度<small>0 时与晴天相同</small></em><b></b></span><input type="range" id="setWeatherI" min="0" max="1" step="0.01"/></label>
-  <label class="slider-row"><span class="sr-head"><em>清澈度<small>户外池塘水色 · 玻璃缸不变</small></em><b></b></span><input type="range" id="setClarity" min="0.35" max="1" step="0.01"/></label>
-  <label class="switch-row"><span>自动天气<small>约半分钟换一种</small></span><input type="checkbox" id="setWeatherAuto" role="switch"/><i class="switch"></i></label>
-  <p class="pop-title">存档</p>
-  <div class="backup-row">
-    <button id="bExport" class="chip-btn" type="button">导出存档</button>
-    <button id="bImport" class="chip-btn" type="button">导入存档</button>
+<!-- 设置弹层：环境 / 画面 / 更多 三页（ui/settings-panel.js） -->
+<div id="settingsPop" class="glass-strong" role="dialog" aria-label="设置" hidden>
+  <div class="pop-tabs" role="tablist" aria-label="设置分页">
+    <button type="button" role="tab" id="tabEnv" data-tab="env" aria-controls="paneEnv" aria-selected="true">环境</button>
+    <button type="button" role="tab" id="tabView" data-tab="view" aria-controls="paneView" aria-selected="false" tabindex="-1">画面</button>
+    <button type="button" role="tab" id="tabMore" data-tab="more" aria-controls="paneMore" aria-selected="false" tabindex="-1">更多</button>
   </div>
-  <input type="file" id="importFile" accept="application/json,.json" hidden/>
+
+  <section class="pop-pane" id="paneEnv" data-pane="env" role="tabpanel" aria-labelledby="tabEnv">
+    <div class="field">
+      <p class="field-head"><span id="lightLabel">光照</span><small id="lightHint"></small></p>
+      <div class="seg" id="setLight" role="radiogroup" aria-labelledby="lightLabel">
+        <button type="button" role="radio" data-v="day">日间</button>
+        <button type="button" role="radio" data-v="night">夜间</button>
+        <button type="button" role="radio" data-v="cycle">循环</button>
+        <button type="button" role="radio" data-v="clock">定时</button>
+      </div>
+    </div>
+    <label class="slider-row"><span class="sr-head"><em>缸灯亮度<small>100% 为默认</small></em><b></b></span><input type="range" id="setLamp" min="0" max="1.5" step="0.01"/></label>
+    <div class="field">
+      <p class="field-head"><span id="weatherLabel">天气</span><small id="weatherHint"></small></p>
+      <div class="seg" id="setWeather" role="radiogroup" aria-labelledby="weatherLabel">
+        <button type="button" role="radio" data-v="sunny">晴天</button>
+        <button type="button" role="radio" data-v="cloudy">多云</button>
+        <button type="button" role="radio" data-v="drizzle">小雨</button>
+        <button type="button" role="radio" data-v="rain">中雨</button>
+        <button type="button" role="radio" data-v="fog">薄雾</button>
+        <button type="button" role="radio" data-v="snow">小雪</button>
+        <button type="button" role="radio" data-v="auto" title="约半分钟换一种">自动</button>
+      </div>
+    </div>
+    <label class="slider-row"><span class="sr-head"><em>天气强度<small>0 时与晴天相同</small></em><b></b></span><input type="range" id="setWeatherI" min="0" max="1" step="0.01"/></label>
+    <label class="switch-row"><span>环境音效</span><input type="checkbox" id="setSound" role="switch"/><i class="switch"></i></label>
+  </section>
+
+  <section class="pop-pane" id="paneView" data-pane="view" role="tabpanel" aria-labelledby="tabView" hidden>
+    <label class="select-row"><span>画质</span>
+      <select id="setQuality">
+        <option value="auto">自动（推荐）</option>
+        <option value="0">高清</option>
+        <option value="2">均衡</option>
+        <option value="4">流畅</option>
+        <option value="6">极速</option>
+      </select>
+    </label>
+    <p id="stats" class="pop-note" aria-live="off">…</p>
+    <p class="pop-title">效果</p>
+    <div class="tchips">
+      <label class="tchip" title="拉近看鱼时背景虚化"><input type="checkbox" id="setDof" role="switch"/><span>景深</span></label>
+      <label class="tchip" title="远景沉入水色，关掉更通透"><input type="checkbox" id="setHaze" role="switch"/><span>水体雾化</span></label>
+      <label class="tchip" title="水面投到沙床上的光纹"><input type="checkbox" id="setCaustics" role="switch"/><span>水面焦散</span></label>
+      <label class="tchip"><input type="checkbox" id="setBubbles" role="switch"/><span>气泡</span></label>
+      <label class="tchip" title="水中漂浮的细小颗粒"><input type="checkbox" id="setSnow" role="switch"/><span>悬浮颗粒</span></label>
+    </div>
+    <label class="slider-row"><span class="sr-head"><em>光柱<small>水中光束，随造景投下剪影</small></em><b></b></span><input type="range" id="setShafts" min="0" max="1" step="0.01"/></label>
+    <label class="slider-row"><span class="sr-head"><em>水色浓淡<small>越高水越浓，远处越朦胧</small></em><b></b></span><input type="range" id="setAbsorb" min="0.1" max="1" step="0.01"/></label>
+    <label class="slider-row" id="clarityRow"><span class="sr-head"><em>池水清澈度<small>户外池塘的水色</small></em><b></b></span><input type="range" id="setClarity" min="0.35" max="1" step="0.01"/></label>
+  </section>
+
+  <section class="pop-pane" id="paneMore" data-pane="more" role="tabpanel" aria-labelledby="tabMore" hidden>
+    <button id="bHelp" class="menu-row" type="button"><svg class="icon" aria-hidden="true"><use href="#i-help"/></svg><span>怎么玩<small>操作方式与快捷键</small></span></button>
+    <p class="pop-title">存档</p>
+    <p class="pop-note">水景、鱼的成长和设置都只存在这台设备的浏览器里。换设备或清理浏览器数据前，先导出一份。</p>
+    <div class="backup-row">
+      <button id="bExport" class="chip-btn" type="button">导出存档</button>
+      <button id="bImport" class="chip-btn" type="button">导入存档</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" hidden/>
+    <p class="pop-foot" id="verText"></p>
+  </section>
 </div>
 
 <div id="fishCard" class="glass-strong" hidden>
@@ -162,16 +196,24 @@
 <div id="help" class="modal" hidden>
   <div id="helpCard" class="glass-strong" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <h2 id="helpTitle">怎么玩</h2>
+    <p class="help-group">互动</p>
     <ul class="help-list">
       <li><kbd>点击水面</kbd><span>撒饲料，鱼群会争抢前来；吃饱了就懒得理，约 3 分钟后又会饿</span></li>
       <li><kbd>点击鱼</kbd><span>认识它：名字与个性由真实行为养成——常吃饲料的鱼会长大，喂得越多亲密度越高，攒够会有新鱼入缸</span></li>
       <li><kbd>快速双击</kbd><span>敲玻璃，鱼群受惊四散，片刻后重新聚拢</span></li>
-      <li><kbd>逗鱼 / P</kbd><span>光标化作水中的光点，引导鱼群追逐盘旋，凑近时它们还会调皮地咬一口光</span></li>
-      <li><kbd>拖拽 / 滚轮</kbd><span>旋转、缩放视角；右键拖拽平移</span></li>
-      <li><kbd>水景</kbd><span>在多个水族箱之间切换，或复制、新建一个自己的缸</span></li>
+      <li><kbd>逗鱼 · P</kbd><span>光标化作水中的光点，引导鱼群追逐盘旋，凑近时它们还会调皮地咬一口光</span></li>
+    </ul>
+    <p class="help-group">观赏</p>
+    <ul class="help-list">
+      <li><kbd>拖拽 · 滚轮</kbd><span>旋转、缩放视角，右键拖拽平移；「视角」在几个预设机位之间切换</span></li>
+      <li><kbd>夜间</kbd><span>切到月光，鱼群放慢游动、沉到下层休息；设置 › 环境里可以改成昼夜循环或跟随本地时间</span></li>
+      <li><kbd>拍照 · H</kbd><span>隐藏界面，再按一次 H（或点「拍摄」）保存高清照片，Esc 退出</span></li>
+    </ul>
+    <p class="help-group">我的缸</p>
+    <ul class="help-list">
+      <li><kbd>左上角缸名</kbd><span>打开「我的水景」：在多个水族箱之间切换，或复制、新建一个自己的缸</span></li>
       <li><kbd>造景</kbd><span>拖动岩石水草珊瑚、增删物件、调整鱼群与水色；Ctrl+Z 撤销</span></li>
-      <li><kbd>H</kbd><span>拍照模式：隐藏界面，再按一次 H 保存高清截图，Esc 退出</span></li>
-      <li><kbd>夜间</kbd><span>切到月光，鱼群放慢游动、沉到下层休息</span></li>
+      <li><kbd>图鉴</kbd><span>认识缸里的每一种鱼，看看亲密度离下一位新朋友还有多远</span></li>
     </ul>
     <p class="help-cast">缸中居民：霓虹脂鲤 · 金鱼 · 蝴蝶鱼 · 鼠鱼 · 锦鲤 · 小丑鱼 · 狮子鱼 · 麒麟鱼 · 鹦鹉鱼 · 孔雀鱼 · 半月斗鱼 · 金三角灯</p>
     <button id="helpClose" class="btn-primary">知道了</button>

@@ -2,8 +2,9 @@
  * 造景编辑器：顶栏 / 左侧面板（造景·鱼群·水体）/ 底部检视器
  * 编辑中隐藏观赏 UI（body.is-editing）
  * ================================================================ */
-body.is-editing #dock, body.is-editing #care, body.is-editing #hint, body.is-editing #stats,
+body.is-editing #dock, body.is-editing #care, body.is-editing #hint,
 body.is-editing #hud{opacity:0;pointer-events:none;transition:opacity .25s}
+body.is-editing .scene-switch{pointer-events:none}   /* 缸名按钮自带 pointer-events:auto，编辑中也要失效 */
 #editor[hidden]{display:none}
 
 #edBar{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:22;display:flex;align-items:center;gap:8px;

@@ -12,7 +12,7 @@ import { boundsFor } from './tank-bounds.js';
 
 /** @typedef {{ id:string, type:string, x:number, z:number, rot:number, s:number, seed:number }} SceneItem */
 /** @typedef {{ id:string, name:string, presetId?:string, theme:string, tank:string, fish:Record<string,number>,
- *   items:SceneItem[], updatedAt?:number, homage?:string }} SceneDoc */
+ *   items:SceneItem[], updatedAt?:number, homage?:string, absorb?:number }} SceneDoc */
 // homage：只出现在预设数据里（致敬的 IAPLC 原作与作者），存档清洗时丢弃
 
 // 与 entities/fish/species.js 的 SPECIES 顺序一致（单测校验）
@@ -91,6 +91,7 @@ export function sanitizeDoc(raw){
   };
   if(typeof r.presetId==='string') doc.presetId = r.presetId;
   if(typeof r.updatedAt==='number') doc.updatedAt = r.updatedAt;
+  if(typeof r.absorb==='number' && Number.isFinite(r.absorb)) doc.absorb = Math.min(1, Math.max(0.1, r.absorb));   // 该景默认水色浓淡（滑杆同刻度 0.1~1），缺省走全局设置
   return doc;
 }
 

@@ -68,6 +68,11 @@ export function createSceneStore(){
       if(!scenes.some(s=>s.id===p.id)) scenes.push(seedDoc(p));
       seeded.push(p.id);
     }
+    // 存档迁移：预设后来新增的字段补进已播种的旧景（如 ADA 致敬景的默认水色浓淡 absorb）
+    for(const s of scenes){
+      const p=s.presetId ? findPreset(s.presetId) : null;
+      if(p && typeof p.absorb==='number' && typeof s.absorb!=='number') s.absorb=p.absorb;
+    }
   }else{
     scenes = PRESETS.map(seedDoc);
     seeded = PRESETS.map(p=>p.id);

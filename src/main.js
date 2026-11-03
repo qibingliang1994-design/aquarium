@@ -43,6 +43,7 @@ import { createThumbnails } from './ui/thumbnails.js';
 import { createWaterPass } from './scene/water-pass.js';
 import { createScaledRenderPass } from './scene/render-scale.js';
 import { installDebug } from './debug.js';
+import { createPromo } from './promo/promo.js';
 import { holdDialog, releaseDialog } from './ui/dialog.js';
 
 /* ================================================================
@@ -102,7 +103,8 @@ const { settings, save: saveSettings }=createSettingsStore();
 const weather=createWeather(settings);
 const sound=new SoundEngine(); sound.setEnabled(settings.sound);
 snow.pts.visible=settings.snow; setCausticsEnabled(settings.caustics);
-const applyAbsorb=()=>{ waterPass.uniforms.uSigmaK.value=settings.haze===false?0:settings.absorb; };   // 水体雾化总开关（关=吸收清零，更通透）× 水色浓淡滑杆
+/** @type {number|null} */ let docAbsorb=null;                                // 当前水景自带的水色浓淡（scene-doc.absorb，ADA 致敬景默认 1）
+const applyAbsorb=()=>{ waterPass.uniforms.uSigmaK.value=settings.haze===false?0:(docAbsorb ?? settings.absorb); };   // 水体雾化总开关（关=吸收清零，更通透）× 水色浓淡（景内覆盖 > 全局滑杆）
 applyAbsorb();
 waterPass.setShafts(settings.shafts);                          // 光柱强度（画质最低档时由 onLevel 归零）
 lens.setDof(settings.dof!==false);                             // 景深（画质最低档时由 onLevel 连带关闭）
@@ -120,6 +122,8 @@ function applyWaterMode(){
  * @param {string} id */
 function applyTankChrome(id){
   const b=boundsFor(id), style=TANK_STYLES[id] ?? TANK_STYLES.classic, rig=style.rig;
+  const docA=store.active().absorb;                  // 景内默认水色浓淡（ADA 岩组/悠然/灰色山脉 = 1）
+  docAbsorb=(typeof docA==='number') ? docA : (style.absorb ?? null);
   fishGrid=createFishGrid(0.7, b.grid);
   feeder.setHalf(b.feed.x, b.feed.z);
   snow.setArea(b.swim.x, b.swim.z);
@@ -131,6 +135,7 @@ function applyTankChrome(id){
   if(rig){ controls.minDistance=rig.min; controls.maxDistance=rig.max; camera.near=rig.near; camera.far=rig.far; }
   else { controls.minDistance=1; controls.maxDistance=11; camera.near=0.05; camera.far=60; }
   camera.updateProjectionMatrix();
+  applyAbsorb();                                    // 水色浓淡跟着景走（切景即生效）
   camLow=style.kind!=='natural';
 }
 // 往下转的极限：玻璃缸可以压低到沙线附近往上仰视（像蹲在缸前看），相机高度不低于地板线——
@@ -564,3 +569,6 @@ installDebug({ composer, schools, obstacles, air, feeder, dayNight, ambience, se
   // 隐藏页面里 rAF 停摆（three 的动画循环已被启动占位）时重启主循环；
   // 配合先把 window.requestAnimationFrame 换成 setTimeout 垫片使用
   restartLoop(){ renderer.setAnimationLoop(null); renderer.setAnimationLoop(frame); } });
+
+/* ---------- 宣传片导演模式：?promo=1 才激活（分镜/逐帧导出，见 promo/promo.js），正常启动零开销 ---------- */
+createPromo({ clock, renderer, composer, camera, controls, photo, settings, quality });

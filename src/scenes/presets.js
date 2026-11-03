@@ -154,7 +154,7 @@ const RAW = [
     ].map((o,i)=>({ id:`garden-${i}`, ...o })),
   },
   {
-    id:'iwagumi', presetId:'iwagumi', name:'ADA 岩组', theme:'nature', tank:'ada',
+    id:'iwagumi', presetId:'iwagumi', name:'ADA 岩组', theme:'nature', tank:'ada', absorb:1,   // 默认水色浓淡 100%（存档字段，见 scene-doc.absorb）
     fish:{ rummy:24, oto:3 },
     items:[
       // 岩组（Iwagumi）：主石立在左侧黄金分割点附近，副石倚着它、添石压阵；石纹朝向一致（rot≈0.5），像一道山脊
@@ -205,7 +205,7 @@ const RAW = [
     ].map((o,i)=>({ id:`donha-${i}`, ...o })),
   },
   {
-    id:'yururi', presetId:'yururi', name:'悠然', theme:'nature', tank:'ada', homage:'IAPLC 2018 冠军《Yururi》· Hironori Handa',
+    id:'yururi', presetId:'yururi', name:'悠然', theme:'nature', tank:'ada', absorb:1, homage:'IAPLC 2018 冠军《Yururi》· Hironori Handa',   // absorb=默认水色浓淡 100%
     fish:{ ember:30, oto:2 },   // 两厘米的火焰灯把山景衬得更大
     items:[
       // 原作是"左低右高"的斜坡：左侧大片留白透出白光屏，右侧三分之二的水草从底一直堆到水面；
@@ -238,7 +238,7 @@ const RAW = [
     ].map((o,i)=>({ id:`yururi-${i}`, ...o })),
   },
   {
-    id:'ashy', presetId:'ashy', name:'灰色山脉', theme:'nature', tank:'ada', homage:'IAPLC 2007 冠军《Ashy Range》· Chow Wai Sun',
+    id:'ashy', presetId:'ashy', name:'灰色山脉', theme:'nature', tank:'ada', absorb:1, homage:'IAPLC 2007 冠军《Ashy Range》· Chow Wai Sun',   // absorb=默认水色浓淡 100%
     fish:{ harlequin:22, oto:2 },
     items:[
       // 中左：九根灰褐沉木枝堆成楔形——右下端扎在缸宽 60%~73% 的沙里，向左上斜搭（rot≈π：从右端扎沙向左上搭起）。

@@ -16,7 +16,7 @@
 /** @typedef {{ W:number, H:number, D:number, glass:number, waterY:number }} TankVolume */
 /** @typedef {{ min:number, max:number, near:number, far:number }} CamRig */
 /** dof：景深强度倍率（缺省 1；ADA 作品照近乎全景深）；grade：[饱和度, 反差]（缺省 1.08 / 1.06，调色尾段）
- * @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean, dof?:number, grade?:[number,number],
+ * @typedef {{ label:string, hint:string, kind:'tank'|'natural', bowl?:boolean, dof?:number, grade?:[number,number], absorb?:number,
  *   light:{ spotCol:number, spotK:number, spotY:number, strip:number, sun?:SunRig },
  *   env?:WaterEnv, volume?:TankVolume, shore?:{ x:number, z:number }, rig?:CamRig,
  *   cams?:{pos:number[], tgt:number[], fit?:number[], fov?:number}[], thumb?:{pos:number[], tgt:number[]} }} TankStyle */

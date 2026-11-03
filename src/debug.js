@@ -82,6 +82,7 @@ export function installDebug(/** @type {any} */  d){
     projectFish:(/** @type {number} */ si,/** @type {number} */ ii)=>{ const p=schools[si].pos[ii].clone(); p.project(camera);
       return { x:Math.round((p.x+1)/2*innerWidth), y:Math.round((1-p.y)/2*innerHeight) }; },
     look:(/** @type {any} */ pos,/** @type {any} */ tgt)=>{ camera.position.set(...pos); controls.target.set(...tgt); stopCamTween(); },
+    stopCamTween,                                      // 停掉开场/机位运镜（宣传片导演模式接管相机用）
     // —— 常识与时间：灯光定时器 / 开缸浊度 / 混养提示 / 在缸时长 ——
     // clockAt('21:50')：本次运行打开"跟随本地时间"并把"现在"钉在该时刻（不落盘）；clockAt(null) 恢复真实时间并关掉
     clockAt:(/** @type {string|null} */ hhmm)=>{
@@ -103,6 +104,11 @@ export function installDebug(/** @type {any} */  d){
     obstacleCount:()=>d.obstacles.length,
     air:()=>({ ...d.air }),
     editor:()=>editor,
+    // 宣传片"造缸"用：直接把文档差量应用到运行时（不落盘）、取当前文档副本、拿物件根节点做落石动画
+    applyDoc:(/** @type {any} */ doc)=>runtime.apply(doc),
+    docOf:()=>structuredClone(runtime.doc),
+    moveItem:(/** @type {any} */ item)=>runtime.moveItem(item),
+    itemRoot:(/** @type {string} */ id)=>runtime.rootOf(id),
     projectItem:(/** @type {string} */ id)=>{ const r=runtime.rootOf(id); if(!r) return null; const p=r.position.clone(); p.y+=0.05; p.project(camera);
       return { x:Math.round((p.x+1)/2*innerWidth), y:Math.round((1-p.y)/2*innerHeight) }; },
     // —— 性能与批处理（优化验证用） ——

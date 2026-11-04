@@ -1,7 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { makeRng, rrange } from '../../utils.js';
-import { shared, injectSway, UP } from './common.js';
+import { shared, injectSway, injectTranslucency, UP } from './common.js';
 import { rosette, ribbons, stemPlant, carpetClump, bushMass, starStem } from './leaf-shapes.js';
 
 /* ================================================================
@@ -61,6 +61,7 @@ export const bladeMat = () => shared('mat:blade', ()=>{
     sheen:0.5, sheenRoughness:0.45, sheenColor:new THREE.Color(0xb8f08a), specularIntensity:0.45});
   injectSway(m, 0.1, 2.1, 'blade', true);
   injectLeafDetail(m);
+  injectTranslucency(m, { k:1.2, mask:'step( 0.0001, vLfUV.y )' });   // 茎没有叶片 UV：不透光
   return m;
 });
 

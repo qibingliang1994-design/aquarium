@@ -77,6 +77,11 @@ export function installDebug(/** @type {any} */  d){
       if(params) for(const [n, v] of Object.entries(params)) if(rp.ao.uniforms[n]) rp.ao.uniforms[n].value=v;
       return { k:rp.aoK, radius:rp.ao.uniforms.uRadius.value, power:rp.ao.uniforms.uPower.value, maxPx:rp.ao.uniforms.uMaxPx.value, thin:rp.ao.uniforms.uThin.value };
     },
+    leafTr:(/** @type {number|undefined} */ k)=>{   // 叶片透光强度（水草 / 海扇 / 海葵触手；按材质首个值返回）
+      /** @type {number[]} */ const vals=[]; const seen=new Set();
+      scene.traverse((/** @type {any} */ o)=>{ const u=o.material?.userData?.leafTr; if(!u || seen.has(u)) return; seen.add(u); if(k!==undefined) u.value=k; vals.push(u.value); });
+      return vals;
+    },
     caustics:(/** @type {'fine'|'broad'} */ layer='fine')=>causticStats(renderer, layer),   // 焦散生成图统计：mean ≈ 1、dark = 暗区占比、max = 峰值
     haze:(/** @type {boolean} */ on, /** @type {number} */ k, /** @type {number} */ max)=>{ lens.setHaze(on); if(k!==undefined) lens.uniforms.uDensity.value=k; if(max!==undefined) lens.uniforms.uMaxMix.value=max; },   // 水体纵深（k = 每单位雾化系数）
     dof:(/** @type {boolean} */ on, /** @type {number} */ k)=>{ lens.setDof(on); if(k!==undefined) lens.uniforms.uK.value=k; },   // 景深（k = 弥散圆强度）

@@ -218,7 +218,8 @@ export const CAU_U = {
 /** GLSL：焦散查找（需要 CAU_U 的 uniform；片元着色器用）。
  *  cauEntry(P, depth)：平水面时到达 P 的光的入水点（图案按它对齐）
  *  cauRGB(P)：带色散的焦散光强（均值 ≈ 1），按像素足迹各向异性滤波（textureGrad）——远处/掠射的底面不闪烁
- *  cauMono(P, lvl)：单通道、固定模糊档（光柱 ray march 用，无导数） */
+ *  cauMono(P, lvl)：单通道、固定模糊档（光柱 ray march / 顶点着色器用，无导数）
+ *  顶点着色器里引用前先 #define CAU_VERTEX：cauRGB 用到 dFdx，顶点阶段没有，整段跳过 */
 export const CAUSTICS_GLSL = `
 uniform sampler2D uCauF, uCauB;
 uniform vec4 uCauA;
@@ -232,6 +233,7 @@ float cauBroad(vec2 e, float depth){
   vec2 b = textureLod(uCauB, e * uCauA.y, 1.5).rg * uCauA.w;
   return mix(1.0, mix(b.x, b.y, clamp((depth - ${BROAD.depths[0].toFixed(2)}) / ${(BROAD.depths[1] - BROAD.depths[0]).toFixed(2)}, 0.0, 1.0)), 0.6);
 }
+#ifndef CAU_VERTEX
 vec3 cauRGB(vec3 P){
   float depth = max(uCauA.z - P.y, 0.0);
   vec2 e = cauEntry(P, depth);
@@ -249,6 +251,7 @@ vec3 cauRGB(vec3 P){
   vec3 c = vec3(mix(tr.x, tr.y, wD), mix(tg.x, tg.y, wD), mix(tb.x, tb.y, wD)) * uCauA.w;
   return c * cauBroad(e, depth);
 }
+#endif
 float cauMono(vec3 P, float lvl){
   float depth = max(uCauA.z - P.y, 0.0);
   vec2 e = cauEntry(P, depth);

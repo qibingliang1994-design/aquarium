@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeWaveSet, wavePhases, waveGrad, gridFor, FINE, BROAD, MARGIN, LOW_GRID_LEVEL } from '../src/scene/caustics-gen.js';
+import { makeWaveSet, wavePhases, waveGrad, gridFor, FINE, BROAD, MARGIN, LOW_GRID_LEVEL, CAUSTICS_GLSL } from '../src/scene/caustics-gen.js';
 
 const TAU = Math.PI * 2;
 
@@ -71,5 +71,13 @@ describe('焦散生成：画质档', () => {
       expect(L.gridLo).toBeLessThan(L.grid);
       expect(L.res / L.gridLo).toBeLessThanOrEqual(4);
     }
+  });
+
+  it('顶点着色器可引用：#define CAU_VERTEX 后剩下的代码不含导数函数（悬浮颗粒在顶点阶段查 cauMono）', () => {
+    const m = /#ifndef CAU_VERTEX([\s\S]*?)#endif/.exec(CAUSTICS_GLSL);
+    expect(m).toBeTruthy();
+    const outside = CAUSTICS_GLSL.replace(/** @type {RegExpExecArray} */ (m)[0], '');
+    expect(outside).not.toMatch(/dFd[xy]|fwidth|textureGrad/);
+    expect(outside).toContain('float cauMono(');
   });
 });

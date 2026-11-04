@@ -29,18 +29,16 @@
 
 ### 最近 10 条关键变更（新 → 旧）
 
-1. **按景默认水色浓淡**（v2.3.1）：场景文档新增可选 `absorb`（0.1~1，滑杆同刻度），《ADA 岩组》《悠然》《灰色山脉》预设默认 1（100%）；切景即生效，景内覆盖 > 全局滑杆，旧存档自动迁移。→ [场景文档与编辑器](docs/architecture/05-场景文档与编辑器.md)
-2. **宣传片导演模式**（v2.3.1）：新增 `src/promo/promo.js`（`?promo=1` 激活）——确定性时钟钉死 dt、数据化分镜表、逐帧 PNG 序列导出（1080×1920 竖屏），配 `scripts/promo-encode.mjs` 合成 mp4（生成流程文档见 [docs/promo-video.md](docs/promo-video.md)）；`__aqDebug` 补 `stopCamTween`。→ [系统与玩法](docs/architecture/06-系统与玩法.md)
-2. **界面重组**（2026-11-02）：Dock 分「互动 / 观赏 / 我的缸 / 设置」四组，新增拍照按钮与拍照条；水景入口改为左上角缸名药丸，帮助移入设置；设置弹层拆成环境 / 画面 / 更多三页，存档键不变。→ [UI与交互](docs/architecture/07-UI与交互.md)
-2. **俯视水面折射**：tank-lens 的固定屏幕比例偏移改为按水深与相机距离的物理折射（`refract(d, 波面法线) − refract(d, 静水面法线)`），俯视不再像隔着哈哈镜。→ [渲染与后期](docs/architecture/01-渲染与后期.md)
-3. **物件不穿玻璃 + 相机可压低**：新增 `scenes/item-reach.js` 按 48 个方向的支撑点求分侧区间，越界叶尖交给四个裁剪面；玻璃缸相机可按距离压低到沙线仰看。→ [场景文档与编辑器](docs/architecture/05-场景文档与编辑器.md)
-4. **沉木 / 树枝写实化**：新增 `scenes/items/wood-geo.js`（扁圆截面、顺纹沟、树瘤、断口），`growLimb` 逐级分叉并收细，三种沉木共用一个材质同批绘制。→ [造景物件](docs/architecture/04-造景物件.md)
-5. **照片皮鱼实例化游动**：`fish/photo-fish.js` 每物种一个 InstancedMesh（头→尾行波、鳍姿态、眼睛扫视），`fish/photo-gait.js` 由真实运动连续混合步态；同时换模并新增六种鱼。→ [鱼与鱼群](docs/architecture/03-鱼与鱼群.md)
-6. **致敬水景还原度第四轮**：背光幕两种布局、`cams` 支持 `fit` / `fov` 与缸型 `dof` / `grade`、圆顶灌丛等水草形态、长条物件按椭圆占地钳制。→ [场景文档与编辑器](docs/architecture/05-场景文档与编辑器.md)
-7. **基础材质换照片级（第三轮）**：苔石 / 苔藓 / 倒木 / 圆石四组 CC0 贴图，`injectSurfaceTex` 增加 `world` 采样模式，水草叶片按 UV 画叶脉。→ [造景物件](docs/architecture/04-造景物件.md)
-8. **鱼群贴墙"龙卷风"修复**：`steering.js` 的 `wallFlat` 在墙边压低竖直分离、放大竖直聚合，边界弹簧按自身 z 向拐弯；墙边竖直峰值 0.68–0.82 → 0.52–0.59 m。→ [鱼与鱼群](docs/architecture/03-鱼与鱼群.md)
-9. **致敬 IAPLC 三预设**：`donha` / `yururi` / `ashy` 带 `homage` 字段，新增 `branchWood` 红沉木枝、`mossRock` 苔石、`fern` 与新主题 `azure`。→ [造景物件](docs/architecture/04-造景物件.md)
-10. **沙面立体颗粒**：`scene/sand-grains.js` 一次绘制约 2 万颗八面体颗粒，形态按主题 `sandTex` 取，画质档 0..6 保留 100%→0%。→ [缸体与外壳与自然水域](docs/architecture/02-缸体与外壳与自然水域.md)
+1. **屏幕空间环境光遮蔽**（学自 tidewater 的 GTAO）：新增 `scene/gtao.js`，只读场景深度、半分辨率切片积分 + 薄遮挡补偿 + 4×4 去噪，在 FXAA 收尾处乘上；石缝、水草根部、苔藓与沉木下方有了接触暗部。→ [渲染与后期](docs/architecture/01-渲染与后期.md)
+2. **焦散改为实时光子泼溅**（学自 tidewater）：新增 `scene/caustics-gen.js`，每帧把周期水面网格按波面法线折射后泼溅进离屏 RT（面积比 = 光的汇聚度），浅/深两焦平面 + fine/broad 两层，波随天气浪与水流；物件、鱼与光柱统一查这张图。→ [渲染与后期](docs/architecture/01-渲染与后期.md)
+3. **按景默认水色浓淡**（v2.3.1）：场景文档新增可选 `absorb`（0.1~1，滑杆同刻度），《ADA 岩组》《悠然》《灰色山脉》预设默认 1（100%）；切景即生效，景内覆盖 > 全局滑杆，旧存档自动迁移。→ [场景文档与编辑器](docs/architecture/05-场景文档与编辑器.md)
+4. **宣传片导演模式**（v2.3.1）：新增 `src/promo/promo.js`（`?promo=1` 激活）——确定性时钟钉死 dt、数据化分镜表、逐帧 PNG 序列导出（1080×1920 竖屏），配 `scripts/promo-encode.mjs` 合成 mp4（生成流程文档见 [docs/promo-video.md](docs/promo-video.md)）；`__aqDebug` 补 `stopCamTween`。→ [系统与玩法](docs/architecture/06-系统与玩法.md)
+5. **界面重组**（2026-11-02）：Dock 分「互动 / 观赏 / 我的缸 / 设置」四组，新增拍照按钮与拍照条；水景入口改为左上角缸名药丸，帮助移入设置；设置弹层拆成环境 / 画面 / 更多三页，存档键不变。→ [UI与交互](docs/architecture/07-UI与交互.md)
+6. **俯视水面折射**：tank-lens 的固定屏幕比例偏移改为按水深与相机距离的物理折射（`refract(d, 波面法线) − refract(d, 静水面法线)`），俯视不再像隔着哈哈镜。→ [渲染与后期](docs/architecture/01-渲染与后期.md)
+7. **物件不穿玻璃 + 相机可压低**：新增 `scenes/item-reach.js` 按 48 个方向的支撑点求分侧区间，越界叶尖交给四个裁剪面；玻璃缸相机可按距离压低到沙线仰看。→ [场景文档与编辑器](docs/architecture/05-场景文档与编辑器.md)
+8. **沉木 / 树枝写实化**：新增 `scenes/items/wood-geo.js`（扁圆截面、顺纹沟、树瘤、断口），`growLimb` 逐级分叉并收细，三种沉木共用一个材质同批绘制。→ [造景物件](docs/architecture/04-造景物件.md)
+9. **照片皮鱼实例化游动**：`fish/photo-fish.js` 每物种一个 InstancedMesh（头→尾行波、鳍姿态、眼睛扫视），`fish/photo-gait.js` 由真实运动连续混合步态；同时换模并新增六种鱼。→ [鱼与鱼群](docs/architecture/03-鱼与鱼群.md)
+10. **致敬水景还原度第四轮**：背光幕两种布局、`cams` 支持 `fit` / `fov` 与缸型 `dof` / `grade`、圆顶灌丛等水草形态、长条物件按椭圆占地钳制。→ [场景文档与编辑器](docs/architecture/05-场景文档与编辑器.md)
 
 ## 后续拆分顺序
 

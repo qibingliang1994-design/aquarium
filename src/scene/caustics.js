@@ -1,10 +1,10 @@
 // @ts-check
 import * as THREE from 'three';
-import { U } from '../uniforms.js';
-import { TANK } from './tank.js';   // 循环依赖安全：TANK 只在着色器编译时（onBeforeCompile）读取
+import { CAU_U, CAUSTICS_GLSL } from './caustics-gen.js';
 
 /* ================================================================
- * 焦散纹理（Voronoi 网纹，程序生成）
+ * Voronoi 网纹贴图（程序生成）：现在只给水面着色器当噪声用。
+ * 水下物体的焦散改由 caustics-gen.js 按波面实时生成（光子泼溅），见 injectCaustics
  * ================================================================ */
 function makeCausticsTexture(size=256, pts=26){
   const P = [];
@@ -40,15 +40,21 @@ export function setCausticsEnabled(/** @type {boolean} */ on){ causticsOn.value 
  * 竖直的岩壁、鱼身两侧被 xz 投影拉成竖条纹）。GLSL 表达式，需在 normal 算好之后求值 */
 export const CAUSTIC_FACING = 'mix( 0.22, 1.0, smoothstep( -0.1, 0.85, inverseTransformDirection( normal, viewMatrix ).y ) )';
 
+/** GLSL：焦散生成图（均值 ≈ 1、峰值数倍）→ 提亮量。只取高于均值附近的那部分：
+ * 网纹亮线把表面本色提亮，暗区保持原样（整体亮度与旧 Voronoi 版大致相当，不把场景压暗） */
+export const CAUSTIC_LIFT_GLSL = `
+vec3 cauLift(vec3 P){ return max(cauRGB(P) - 0.7, vec3(0.0)) * 0.55; }
+`;
+export { CAU_U, CAUSTICS_GLSL };
+
 // 把焦散注入任意 MeshStandardMaterial（按世界坐标采样，仅投在水下物体上）
 /** @param {any} mat @param {number} strength @param {string} key */
 export function injectCaustics(mat, strength, key){
   mat.customProgramCacheKey = ()=> 'caustic_'+key;
   mat.onBeforeCompile = (/** @type {any} */ sh)=>{
-    sh.uniforms.uCausticMap = { value: causticsTex };
+    Object.assign(sh.uniforms, CAU_U);
     sh.uniforms.uCausticK   = { value: strength };
     sh.uniforms.uOn        = causticsOn;
-    sh.uniforms.uTimeF      = U.time;
     mat.userData.causticK   = sh.uniforms.uCausticK;
     sh.vertexShader = 'varying vec3 vWPos;\n' + sh.vertexShader.replace(
       '#include <begin_vertex>',
@@ -61,22 +67,12 @@ export function injectCaustics(mat, strength, key){
         vWPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
       #endif`);
     sh.fragmentShader =
-      'uniform sampler2D uCausticMap;\nuniform float uCausticK;\nuniform float uOn;\nuniform float uTimeF;\nvarying vec3 vWPos;\n'
+      'uniform float uCausticK;\nuniform float uOn;\nvarying vec3 vWPos;\n' + CAUSTICS_GLSL + CAUSTIC_LIFT_GLSL
       + sh.fragmentShader.replace('#include <normal_fragment_maps>',
       `#include <normal_fragment_maps>
       {
-        vec2 cuv = vWPos.xz;
-        // 色散（学自 aquarium-editor 的 aqCaustic）：RGB 沿一轴错开采样，入水越深错得越多——
-        // 焦散网纹的边缘透出一点微彩虹，白光透过水面被"拆开"的物理感
-        float dsp = 0.006 + clamp( ${TANK.waterY.toFixed(2)} - vWPos.y, 0.0, 1.0 ) * 0.02;
-        vec3 c1, c2;
-        c1.r = texture2D( uCausticMap, ( cuv + vec2( dsp, 0.0 ) )*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
-        c1.g = texture2D( uCausticMap, cuv*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
-        c1.b = texture2D( uCausticMap, ( cuv - vec2( dsp, 0.0 ) )*0.55 + vec2( uTimeF*0.021,  uTimeF*0.017 ) ).r;
-        c2.r = texture2D( uCausticMap, ( cuv + vec2( dsp, 0.0 ) )*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
-        c2.g = texture2D( uCausticMap, cuv*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
-        c2.b = texture2D( uCausticMap, ( cuv - vec2( dsp, 0.0 ) )*0.92 - vec2( uTimeF*0.013, -uTimeF*0.019 ) ).r;
-        vec3 ca = pow( min( c1, c2 ), vec3( 1.4 ) ) * smoothstep( 1.75, 1.0, vWPos.y ) * ${CAUSTIC_FACING};
+        // 焦散来自实时波面（caustics-gen.js）：亮网纹的形状、色散边、深处变糊都由生成图给出
+        vec3 ca = cauLift( vWPos ) * smoothstep( 1.75, 1.0, vWPos.y ) * ${CAUSTIC_FACING};
         // 按表面本色提亮（光透过水打在上面），而不是叠一层白——白色网纹会盖住沙粒、像画上去的，显得不通透
         diffuseColor.rgb += diffuseColor.rgb * ( ca * vec3( 0.78, 0.94, 1.0 ) ) * uCausticK * 1.8 * uOn;
       }`);

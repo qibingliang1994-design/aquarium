@@ -1,8 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { causticsTex, causticsOn, CAUSTIC_FACING } from '../scene/caustics.js';
-import { U } from '../uniforms.js';
+import { causticsOn, CAUSTIC_FACING, CAU_U, CAUSTICS_GLSL, CAUSTIC_LIFT_GLSL } from '../scene/caustics.js';
 import { VAT_VERT_HEAD } from './vat-glsl.js';
 
 /* ================================================================
@@ -173,9 +172,9 @@ export function decorateFishMaterial(mat, opts={}){
     }
     if(vat){ Object.assign(sh.uniforms, vat); vHead += VAT_VERT_HEAD; }
     if(causticK){
-      Object.assign(sh.uniforms, { uCMap:{value:causticsTex}, uCK:causticK, uCOn:causticsOn, uCT:U.time });
+      Object.assign(sh.uniforms, CAU_U, { uCK:causticK, uCOn:causticsOn });
       vHead += 'varying vec3 vFxW;\n';
-      fHead += 'uniform sampler2D uCMap; uniform float uCK, uCOn, uCT; varying vec3 vFxW;\n';
+      fHead += 'uniform float uCK, uCOn; varying vec3 vFxW;\n' + CAUSTICS_GLSL + CAUSTIC_LIFT_GLSL;
     }
     if(paint){
       const [c0,c1,c2] = paint.grad.map(srgb);
@@ -200,9 +199,8 @@ export function decorateFishMaterial(mat, opts={}){
           diffuseColor.rgb *= g; }` : ''}
 `)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        ${causticK ? `{ float c1=texture2D(uCMap,vFxW.xz*0.55+vec2(uCT*0.021,uCT*0.017)).r;
-          float c2=texture2D(uCMap,vFxW.xz*0.92-vec2(uCT*0.013,-uCT*0.019)).r;
-          diffuseColor.rgb += vec3(0.62,0.85,0.95)*pow(min(c1,c2),1.4)*smoothstep(1.75,1.0,vFxW.y)*${CAUSTIC_FACING}*uCK*uCOn; }` : ''}`)
+        ${causticK ? `{ vec3 ca=cauLift(vFxW)*smoothstep(1.75,1.0,vFxW.y)*${CAUSTIC_FACING};
+          diffuseColor.rgb += vec3(0.62,0.85,0.95)*ca*uCK*uCOn; }` : ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         ${paint ? 'totalEmissiveRadiance += uG1*uGlow*(1.0-smoothstep(0.0,uGB,abs(vYN-uGM)));' : ''}
         ${eye ? `{ float en = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);

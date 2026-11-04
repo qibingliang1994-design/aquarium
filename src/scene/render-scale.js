@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { createEdgeAA } from './edge-aa.js';
+import { createGTAO } from './gtao.js';
 
 /* ================================================================
  * 渲染尺度分离（render scale）：3D 场景渲进自己的降尺度 RT（画质档驱动 0.6~0.9），
@@ -14,7 +15,7 @@ import { createEdgeAA } from './edge-aa.js';
 
 /**
  * @param {{ scene:THREE.Scene, camera:THREE.PerspectiveCamera }} opts
- * @returns {Pass & { target:THREE.WebGLRenderTarget, source:{ readonly texture:THREE.Texture, readonly depthTexture:THREE.DepthTexture }, setScale(k:number):void, setMSAA(n:number):void, setAA(on:boolean):void }}
+ * @returns {Pass & { target:THREE.WebGLRenderTarget, source:{ readonly texture:THREE.Texture, readonly depthTexture:THREE.DepthTexture }, ao:ReturnType<typeof createGTAO>, setScale(k:number):void, setMSAA(n:number):void, setAA(on:boolean):void, setAO(k:number):void, readonly aoK:number }}
  */
 export function createScaledRenderPass({ scene, camera }){
   const rt=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType});
@@ -22,7 +23,9 @@ export function createScaledRenderPass({ scene, camera }){
   // 边缘抗锯齿：场景 RT 不开 MSAA，改在颜色上跑一遍 FXAA（写进 aaRT）；深度仍取场景 RT
   const aaRT=new THREE.WebGLRenderTarget(2,2,{type:THREE.HalfFloatType, depthBuffer:false});
   const aa=createEdgeAA();
-  let scale=1, lastW=2, lastH=2, aaOn=true;
+  // 环境光遮蔽：只读场景深度，结果在 FXAA 收尾时乘上（所以 AA 关的最低两档也没有 AO）
+  const ao=createGTAO({ camera });
+  let scale=1, lastW=2, lastH=2, aaOn=true, aoK=0.9;
 
   class ScaledRenderPass extends Pass {
     constructor(){ super(); this.needsSwap=false; this.clear=true; }
@@ -31,7 +34,10 @@ export function createScaledRenderPass({ scene, camera }){
       renderer.setRenderTarget(rt);
       if(this.clear) renderer.clear();
       renderer.render(scene, camera);
-      if(aaOn) aa.render(renderer, rt.texture, aaRT);
+      if(!aaOn) return;
+      const useAO=aoK>0;
+      if(useAO) ao.render(renderer, /** @type {THREE.DepthTexture} */ (rt.depthTexture), rt.width, rt.height);
+      aa.render(renderer, rt.texture, aaRT, useAO ? { texture:ao.texture, k:aoK } : null);
     }
     /** @param {number} w @param {number} h */
     setSize(w, h){
@@ -45,10 +51,13 @@ export function createScaledRenderPass({ scene, camera }){
     setMSAA(n){ if(rt.samples!==n){ rt.samples=n; rt.dispose(); } }
     /** 边缘抗锯齿开关（最低画质档关，省一遍全屏 pass） @param {boolean} on */
     setAA(on){ aaOn=on; }
-    dispose(){ rt.dispose(); aaRT.dispose(); aa.dispose(); }
+    /** 环境光遮蔽强度（0 = 关；只在抗锯齿开着的档位生效） @param {number} k */
+    setAO(k){ aoK=Math.max(0, Math.min(1, k)); }
+    get aoK(){ return aoK; }
+    dispose(){ rt.dispose(); aaRT.dispose(); aa.dispose(); ao.dispose(); }
   }
   const pass=new ScaledRenderPass();
   /** 后续 pass 读取的场景颜色（抗锯齿后或原样）+ 深度 */
   const source={ get texture(){ return aaOn ? aaRT.texture : rt.texture; }, get depthTexture(){ return /** @type {THREE.DepthTexture} */ (rt.depthTexture); } };
-  return Object.assign(pass, { target: rt, source });
+  return Object.assign(pass, { target: rt, source, ao });
 }

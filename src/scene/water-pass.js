@@ -38,6 +38,8 @@ vec2 waterGrad(vec2 xz, float t, float flow){
 const DOF_K=26, DOF_MAX=11;
 /** 俯视水面的折射晃动倍率（1 = 物理值：波面折射方向差 × 水中路径长） */
 const REFR_K=1.0;
+/** 下行光程吸收相对视线吸收的倍率：光从水面到物体这段的衰减（1 = 与视线同一吸收系数） */
+const LIGHT_ATT=0.9;
 /** 水中每单位路径的雾化系数与上限（上限防止背景整片糊成单色） */
 const HAZE_K=0.24, HAZE_MAX=0.42;
 
@@ -66,6 +68,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     uMin:{value:box.min.clone()}, uMax:{value:box.max.clone()},
     uSigma:{value:new THREE.Vector3(0.5,0.18,0.24)}, uSigmaK:{value:0.4},
     uShafts:{value:0.1}, uShaftCol:{value:new THREE.Vector3(1,0.95,0.85)},
+    uLightAtt:{value:LIGHT_ATT},                      // 下行光程吸收倍率（0 = 关）
     uSteps:{value:14}, ...CAU_U,   // march 步数随画质档缩放；焦散调制读实时波面生成的焦散图（caustics-gen.js）
     uShadowOn:{value:0}, tShadow:{value:/** @type {THREE.Texture|null} */ (null)}, uShadowM:{value:new THREE.Matrix4()},
     uLightDir:{value:new THREE.Vector3(0.05,-1,0.1)},
@@ -87,7 +90,7 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       uniform mat4 uProjInv, uViewInv, uVP;
       uniform vec2 uRes, uLampHalf, uLampXZ, uLampXZ2, uTexel;
       uniform vec3 uCam, uSky, uDeep, uLampCol, uSigma, uShaftCol, uLightDir, uMin, uMax, uColor;
-      uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb,
+      uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb, uLightAtt,
                     uMirrorOn, uSideOn, uWaterOn,
                     uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uTaps, uHazeOn, uDensity, uMaxMix;
       uniform mat4 uShadowM, uMirrorVP, uMirrorLVP, uMirrorRVP;
@@ -263,6 +266,13 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
             }
             S*=phase*uShafts*3.4*scat;
             S+=scat*(1.0-T.g)*0.05*uShafts;   // 深水微弱悬浮纱
+          }
+          // 下行光程（学自 tidewater Underwater 的"按水深衰减的日光/天光"）：照到缸内物体上的光
+          // 先从水面走下来 dn 深——红光丢得最快，越深越暗、越偏青，缸里自然上亮下暗。
+          // 只对落在水体盒内的命中点（背光幕、房间不经过水）；视线那一段由下面的 T 负责
+          if(tSc<=th.y+1e-3 && uLightAtt>0.0){
+            float dn=max(uWaterY-P.y, 0.0);
+            col*=exp(-sig*dn*uLightAtt);
           }
           col=col*T+S;
           // ---- 弯月线：水面贴玻璃处一条银线 ----

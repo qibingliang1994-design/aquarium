@@ -78,6 +78,7 @@ export function installDebug(/** @type {any} */  d){
       if(params) for(const [n, v] of Object.entries(params)) if(rp.ao.uniforms[n]) rp.ao.uniforms[n].value=v;
       return { k:rp.aoK, radius:rp.ao.uniforms.uRadius.value, power:rp.ao.uniforms.uPower.value, maxPx:rp.ao.uniforms.uMaxPx.value, thin:rp.ao.uniforms.uThin.value };
     },
+    lightAtt:(/** @type {number|undefined} */ k)=>{ if(k!==undefined) d.waterPass.uniforms.uLightAtt.value=k; return d.waterPass.uniforms.uLightAtt.value; },   // 下行光程吸收倍率（0 = 关）
     mossShells:(/** @type {number} */ level)=>setMossShells(level),   // 苔藓绒毛壳层：按画质档的层数表（0 = 满层，6 = 只剩核）
     leafTr:(/** @type {number|undefined} */ k)=>{   // 叶片透光强度（水草 / 海扇 / 海葵触手；按材质首个值返回）
       /** @type {number[]} */ const vals=[]; const seen=new Set();

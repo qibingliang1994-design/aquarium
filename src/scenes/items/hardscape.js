@@ -8,6 +8,7 @@ import { makeRockGeo } from './natural-geo.js';
 import { woodMat } from './decor.js';
 import { growDriftwood } from './wood-geo.js';
 import { injectSurfaceTex } from './surface-tex.js';
+import { addMossShells } from './moss-shell.js';
 
 /* ================================================================
  * 造景硬景（IAPLC 致敬作品用）：分叉沉木枝 / 苔石
@@ -53,13 +54,15 @@ const paleMat = () => shared('mat:rockPale', ()=>{
   injectSurfaceTex(m, { name:'r_pale', scale:2.2, k:1.5, gain:1.75, key:'pale' });
   return m;
 });
-const mossTuftMat = () => shared('mat:mossTuft', ()=>{
+/** 苔藓垫材质（核与壳层同款：壳层由 moss-shell.js 各自生成一份） */
+const makeMossTuftMat = () => {
   const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95});
   injectCaustics(m, 0.45, 'mosstuft');
   injectSurfaceDetail(m, { freq:150, k:0.5, ao:0.4, key:'mosstuftdet' });  // 照片之上再加一层更细的绒毛噪声
   injectSurfaceTex(m, { name:'m_moss', scale:5.5, k:1.6, gain:2.1, key:'moss', world:true });   // 原作的苔是亮黄绿
   return m;
-});
+};
+const mossTuftMat = () => shared('mat:mossTuft', makeMossTuftMat);
 // 苔藓垫单元：表面起伏的扁球，顶部偏亮绿、底部偏暗；所有苔石共用一份
 const tuftGeo = () => shared('geo:mossTuft', ()=>{
   // 20 面体 + 平滑法线：单团 1.5~3 cm、一块石头几百团叠成苔垫，面数要省
@@ -164,5 +167,7 @@ export function buildMossRock(/** @type {any} */ rng, /** @type {number} */ seed
   if(tuft.instanceColor) tuft.instanceColor.needsUpdate=true;
   group.add(tuft);
   castAll(group);
+  // 绒毛壳层：单位球苔团外推 0.32 半径（≈ 1 cm），每半径 16 格茎；castAll 之后加，壳层不投影
+  addMossShells(tuft, 'mossTuft', makeMossTuftMat, { len:0.32, freq:16 });
   return { object:group, obstacles };
 }

@@ -1,6 +1,7 @@
 // @ts-check
 import { budgetRatio } from './quality.js';
 import { setCausticsLevel } from '../scene/caustics-gen.js';
+import { setMossShells } from '../scenes/items/moss-shell.js';
 
 /* ================================================================
  * 画质档位 → 渲染器 / 场景的副作用收口（createQuality 的 onLevel 回调）
@@ -40,7 +41,8 @@ export function createQualityEffects({ renderer, composer, bloom, lens, tankGrou
     renderPass.setScale([0.85,0.8,0.75,0.7,0.68,0.65,0.6][q.level] ?? 0.8);   // 渲染尺度分离：场景降尺度，后期全分辨率
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);
-    setCausticsLevel(q.level);                     // 焦散泼溅：低档隔帧更新
+    setCausticsLevel(q.level);
+    setMossShells(q.level);                        // 苔藓绒毛壳层随档减层                     // 焦散泼溅：低档隔帧更新
     reflect.setLevel(q.level);
     runtime.applyShore(q.level);
     runtime.applyShell(q.level);

@@ -7,6 +7,7 @@ import { shared, castAll, injectSurfaceDetail, UP } from './common.js';
 import { injectSurfaceTex, injectUvTex } from './surface-tex.js';
 import { makeRockGeo } from './natural-geo.js';
 import { woodTube, growLimb, forkOf, exitOf } from './wood-geo.js';
+import { addMossShells } from './moss-shell.js';
 
 /* ================================================================
  * 硬景：圆石 / 立石（青龙石）/ 活石 / 沉木 / 苔球 / 气石
@@ -137,11 +138,12 @@ export function buildWood(/** @type {any} */ rng, /** @type {number} */ seed){
 
 /** 苔球：毛茸茸的绿色小球，半埋在沙里 */
 export function buildMossBall(/** @type {any} */ rng, /** @type {number} */ seed){
-  const mat=shared('mat:moss', ()=>{
+  const make=()=>{
     const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:1});
     injectCaustics(m, 0.45, 'moss');
     return m;
-  });
+  };
+  const mat=shared('mat:moss', make);
   const r=0.075, g=new THREE.IcosahedronGeometry(r,4), o=(seed%577)*0.53;
   const p=g.attributes.position, v=new THREE.Vector3(), col=new Float32Array(p.count*3);
   const c1=new THREE.Color(0x2f5a22), c2=new THREE.Color(0x6f9c3c), tmp=new THREE.Color();
@@ -158,6 +160,8 @@ export function buildMossBall(/** @type {any} */ rng, /** @type {number} */ seed
   g.computeVertexNormals();
   g.translate(0, r*0.62, 0);
   const mesh=castAll(new THREE.Mesh(g, mat));
+  // 绒毛壳层：外推 8 mm 量级（球半径 0.075），每格约半径的 1/16
+  addMossShells(mesh, 'mossBall', make, { len:0.009, freq:16/r });
   return { object:mesh, obstacles:[{ c:new THREE.Vector3(0,r*0.62,0), r:r }] };
 }
 

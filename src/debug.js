@@ -5,6 +5,7 @@ import { schoolNames, personaTags } from './entities/fish/identity.js';
 import { mixNoteFor } from './ui/encyclopedia.js';
 import { vatSelfCheck } from './fish/fish-pose.js';
 import { causticStats } from './scene/caustics-gen.js';
+import { setMossShells } from './scenes/items/moss-shell.js';
 
 /* ================================================================
  * window.__aqDebug：自动化验证用的调试钩子
@@ -77,6 +78,7 @@ export function installDebug(/** @type {any} */  d){
       if(params) for(const [n, v] of Object.entries(params)) if(rp.ao.uniforms[n]) rp.ao.uniforms[n].value=v;
       return { k:rp.aoK, radius:rp.ao.uniforms.uRadius.value, power:rp.ao.uniforms.uPower.value, maxPx:rp.ao.uniforms.uMaxPx.value, thin:rp.ao.uniforms.uThin.value };
     },
+    mossShells:(/** @type {number} */ level)=>setMossShells(level),   // 苔藓绒毛壳层：按画质档的层数表（0 = 满层，6 = 只剩核）
     leafTr:(/** @type {number|undefined} */ k)=>{   // 叶片透光强度（水草 / 海扇 / 海葵触手；按材质首个值返回）
       /** @type {number[]} */ const vals=[]; const seen=new Set();
       scene.traverse((/** @type {any} */ o)=>{ const u=o.material?.userData?.leafTr; if(!u || seen.has(u)) return; seen.add(u); if(k!==undefined) u.value=k; vals.push(u.value); });

@@ -38,7 +38,7 @@ const RAW = [
   },
   {
     id:'reef', presetId:'reef', name:'珊瑚礁', theme:'reef', tank:'reef',
-    fish:{ clown:6, angel:4, lion:2, mandarin:3, parrot:4 },
+    fish:{ clown:6, angel:4, mandarin:3, ytang:3, btang:3, idol:2 },
     items:[
       // 礁岩骨架：左右两座礁台 + 中后方矮礁，前景留白沙给鱼活动
       it('liveRock',-1.3,-0.48,2.0,0.3), it('liveRock',-0.92,-0.6,1.5,1.9), it('liveRock',-1.65,-0.2,1.2,3.1),

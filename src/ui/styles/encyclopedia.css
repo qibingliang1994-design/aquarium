@@ -26,9 +26,10 @@
 .species-card:has(.cory){--sp:#cdb48e}
 .species-card:has(.koi){--sp:#ff6a4f}
 .species-card:has(.clown){--sp:#ff7a1a}
-.species-card:has(.lion){--sp:#ef5a3c}
 .species-card:has(.mandarin){--sp:#2fd8c8}
-.species-card:has(.parrot){--sp:#3fe0b0}
+.species-card:has(.ytang){--sp:#f5d22e}
+.species-card:has(.btang){--sp:#3d6cff}
+.species-card:has(.idol){--sp:#e8e4d0}
 .species-card:has(.guppy){--sp:#ff6f9c}
 .species-card:has(.betta){--sp:#5a6cff}
 .species-card:has(.harlequin){--sp:#e8845a}

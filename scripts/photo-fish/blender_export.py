@@ -31,9 +31,11 @@ for loop in me.loops:
 
 fin = me.attributes.new('_FIN', 'FLOAT_VECTOR', 'POINT')
 piv = me.attributes.new('_PIV', 'FLOAT_VECTOR', 'POINT')
+pv = d.get('piv') or [[0.0, 0.0, 0.0]] * len(d['fin'])
 for i, f in enumerate(d['fin']):
     fin.data[i].vector = f
-    piv.data[i].vector = (0.0, 0.0, 0.0)
+    x, y, z = pv[i]
+    piv.data[i].vector = (x, -z, y)                # 与顶点同样换到 Blender 坐标：导出器不转换自定义属性，着色器按 (x, z, -y) 读回
 for p in me.polygons:
     p.use_smooth = True
 

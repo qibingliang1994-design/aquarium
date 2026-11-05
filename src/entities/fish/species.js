@@ -171,26 +171,6 @@ export const SPECIES = [
       out.lerp(new THREE.Color(0.98,0.96,0.9), Math.max(b1,b2)*0.95);
     },
   },
-  { // 狮子鱼：红白条纹 + 张扬鳍条
-    id:'lion', count:2, L:0.26, H:0.15,
-    profileH:[[0,0.1],[0.18,0.62],[0.4,1],[0.6,0.85],[0.8,0.5],[1,0.18]],
-    profileW:[[0,0.48],[0.18,0.72],[0.4,0.6],[0.6,0.44],[0.8,0.3],[1,0.2]],
-    topK:1.06, botK:1.0,
-    tailLen:0.42, tailSpread:1.05, tailFork:0.4,
-    dorsalH:0.9, dorsalL:0.4, analH:0.6, analL:0.28, pectL:0.26,
-    finOpacity:0.62, finColor:0xc07a6a,
-    rough:0.42, metal:0.18, scaleI:0.5, irid:0.3, scaleTiles:22, eyeSize:0.058,
-    amp:0.055, beat:3.2, waveK:3.6,
-    schoolRad:1.3, wSep:1.8, wAli:0.2, wCoh:0.4,
-    minSpeed:0.04, maxSpeed:0.22, wander:0.16, turn:1.9,
-    band:[0.68,1.48], senseR:2.6, hunts:true,
-    paint(u,c,y,z,out){
-      out.setRGB(0.72,0.32,0.25);
-      const st=sstep(0.3,0.38,u)*(1-sstep(0.55,0.62,u));
-      out.lerp(new THREE.Color(0.92,0.88,0.84), st*0.85);
-      if(c<-0.4) out.lerp(new THREE.Color(0.9,0.86,0.82), sstep(-0.4,-1,c)*0.6);
-    },
-  },
   { // 麒麟鱼（花斑连鳍䲗）：蓝橙花纹底栖
     id:'mandarin', count:2, L:0.16, H:0.09,
     profileH:[[0,0.14],[0.16,0.68],[0.38,1],[0.58,0.9],[0.78,0.55],[1,0.22]],
@@ -211,23 +191,62 @@ export const SPECIES = [
       if(n<0.34) out.lerp(new THREE.Color(0.05,0.1,0.28), sstep(0.34,0.18,n)*0.8);
     },
   },
-  { // 鹦鹉鱼：青蓝礁石种
-    id:'parrot', count:3, L:0.24, H:0.13,
-    profileH:[[0,0.11],[0.16,0.64],[0.36,1],[0.56,0.9],[0.76,0.55],[1,0.2]],
-    profileW:[[0,0.5],[0.16,0.76],[0.36,0.64],[0.58,0.48],[0.78,0.3],[1,0.2]],
-    topK:1.06, botK:1.0,
-    tailLen:0.44, tailSpread:1.05, tailFork:0.3,
-    dorsalH:0.7, dorsalL:0.34, analH:0.5, analL:0.24, pectL:0.2,
-    finOpacity:0.6, finColor:0x7fc4b8,
-    rough:0.4, metal:0.18, scaleI:0.5, irid:0.32, scaleTiles:24, eyeSize:0.058,
-    amp:0.07, beat:5.5, waveK:4.6,
-    schoolRad:0.85, wSep:2.0, wAli:0.4, wCoh:0.45,
-    minSpeed:0.07, maxSpeed:0.32, wander:0.2, turn:2.4,
+  { // 黄高鳍刺尾鱼：通体柠檬黄的高扁身，主要靠胸鳍划水，松散成群巡游（照片生成模型）
+    id:'ytang', count:3, L:0.24, H:0.17,
+    profileH:[[0,0.16],[0.15,0.72],[0.38,1],[0.6,0.9],[0.8,0.5],[1,0.2]],
+    profileW:[[0,0.42],[0.15,0.6],[0.38,0.5],[0.6,0.4],[0.8,0.26],[1,0.18]],
+    topK:1.12, botK:1.06,
+    tailLen:0.36, tailSpread:1.0, tailFork:0.2,
+    dorsalH:0.9, dorsalL:0.55, analH:0.75, analL:0.4, pectL:0.18,
+    finOpacity:0.7, finColor:0xf2d640,
+    rough:0.4, metal:0.12, scaleI:0.4, irid:0.2, scaleTiles:26, eyeSize:0.06,
+    amp:0.06, beat:4.2, waveK:4.0,
+    schoolRad:0.9, wSep:2.0, wAli:0.35, wCoh:0.35,
+    minSpeed:0.07, maxSpeed:0.36, wander:0.22, turn:2.2, pectSwim:0.6,
     band:[0.68,1.48], senseR:2.4, hunts:true,
     paint(u,c,y,z,out){
-      out.setRGB(0.2,0.55,0.58);
-      if(c>0.3) out.lerp(new THREE.Color(0.1,0.28,0.34), sstep(0.3,0.9,c)*0.6);
-      if(c<-0.4) out.lerp(new THREE.Color(0.75,0.85,0.8), sstep(-0.4,-1,c)*0.5);
+      out.setRGB(0.96,0.84,0.12);
+      if(c<-0.4) out.lerp(new THREE.Color(0.9,0.86,0.3), sstep(-0.4,-1,c)*0.4);
+    },
+  },
+  { // 蓝倒吊（拟刺尾鲷）：宝蓝身配黑色"调色盘"纹与黄尾，靠胸鳍划水（照片生成模型）
+    id:'btang', count:3, L:0.26, H:0.15,
+    profileH:[[0,0.14],[0.15,0.68],[0.38,1],[0.6,0.9],[0.8,0.5],[1,0.2]],
+    profileW:[[0,0.44],[0.15,0.62],[0.38,0.52],[0.6,0.42],[0.8,0.28],[1,0.18]],
+    topK:1.08, botK:1.04,
+    tailLen:0.38, tailSpread:1.05, tailFork:0.25,
+    dorsalH:0.6, dorsalL:0.6, analH:0.5, analL:0.42, pectL:0.2,
+    finOpacity:0.7, finColor:0x1c2440,
+    rough:0.4, metal:0.14, scaleI:0.4, irid:0.25, scaleTiles:26, eyeSize:0.058,
+    amp:0.065, beat:4.6, waveK:4.2,
+    schoolRad:0.9, wSep:2.0, wAli:0.35, wCoh:0.35,
+    minSpeed:0.07, maxSpeed:0.38, wander:0.24, turn:2.3, pectSwim:0.6,
+    band:[0.68,1.48], senseR:2.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.18,0.32,0.9);
+      const band=sstep(0.15,0.35,c)*sstep(0.2,0.3,u)*(1-sstep(0.82,0.9,u));
+      out.lerp(new THREE.Color(0.06,0.06,0.12), band*0.9);
+    },
+  },
+  { // 镰鱼（角蝶）：黑黄白竖纹、拖一根长长的背鳍丝，成对优雅缓游（照片生成模型）
+    id:'idol', count:2, L:0.24, H:0.18,
+    profileH:[[0,0.14],[0.12,0.6],[0.36,1],[0.6,0.88],[0.8,0.45],[1,0.18]],
+    profileW:[[0,0.4],[0.12,0.58],[0.36,0.48],[0.6,0.38],[0.8,0.24],[1,0.16]],
+    topK:1.14, botK:1.08,
+    tailLen:0.34, tailSpread:1.1, tailFork:0.35,
+    dorsalH:1.6, dorsalL:0.4, analH:0.9, analL:0.36, pectL:0.16,
+    finOpacity:0.75, finColor:0xf0f0e8,
+    rough:0.4, metal:0.12, scaleI:0.4, irid:0.2, scaleTiles:24, eyeSize:0.056,
+    amp:0.055, beat:3.6, waveK:3.8,
+    schoolRad:1.1, wSep:1.8, wAli:0.3, wCoh:0.45,
+    minSpeed:0.05, maxSpeed:0.26, wander:0.16, turn:1.9, pectSwim:0.5,
+    band:[0.72,1.5], senseR:2.4, hunts:true,
+    paint(u,c,y,z,out){
+      out.setRGB(0.96,0.95,0.9);
+      const b1=sstep(0.18,0.22,u)*(1-sstep(0.36,0.4,u));
+      const b2=sstep(0.62,0.66,u)*(1-sstep(0.8,0.84,u));
+      out.lerp(new THREE.Color(0.05,0.05,0.06), Math.max(b1,b2)*0.95);
+      if(u>0.4 && u<0.62) out.lerp(new THREE.Color(0.95,0.85,0.2), 0.6);
     },
   },
   { // 孔雀鱼（雄）：虹彩蓝绿小身 + 大红尾，上层松散小群（模型：aquarium-editor，MIT）

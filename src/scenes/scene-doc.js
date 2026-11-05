@@ -16,12 +16,14 @@ import { boundsFor } from './tank-bounds.js';
 // homage：只出现在预设数据里（致敬的 IAPLC 原作与作者），存档清洗时丢弃
 
 // 与 entities/fish/species.js 的 SPECIES 顺序一致（单测校验）
-export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot','guppy','betta','harlequin',
+export const FISH_IDS = ['tetra','gold','angel','cory','koi','clown','mandarin','ytang','btang','idol','guppy','betta','harlequin',
   'rummy','ember','oto','ram','scalare','gourami'];
 /** @type {Record<string, number>} */
-export const FISH_MAX = { tetra:40, gold:10, angel:8, cory:12, koi:6, clown:10, lion:4, mandarin:6, parrot:8, guppy:10, betta:2, harlequin:24,
+export const FISH_MAX = { tetra:40, gold:10, angel:8, cory:12, koi:6, clown:10, mandarin:6, ytang:6, btang:6, idol:4, guppy:10, betta:2, harlequin:24,
   rummy:30, ember:40, oto:10, ram:4, scalare:6, gourami:4 };
 export const FISH_TOTAL_MAX = 90;
+/** 已下架的物种 → 接替它的物种：旧存档里的数量换给接替者（接替者已有数量时不动） @type {Record<string, string>} */
+export const RETIRED_FISH = { lion:'idol', parrot:'btang' };
 export const NAME_MAX = 16;
 
 /** @param {string} prefix */
@@ -57,7 +59,10 @@ export function sanitizeItem(raw, bounds){
 /** 鱼群：只认识的物种、整数、单种上限、总数上限（超出时按物种顺序截断）
  * @param {unknown} raw @returns {Record<string, number>} */
 export function sanitizeFish(raw){
-  const src = raw && typeof raw==='object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  const src = raw && typeof raw==='object' ? { .../** @type {Record<string, unknown>} */ (raw) } : {};
+  for(const [gone, heir] of Object.entries(RETIRED_FISH)){
+    if(src[gone]!==undefined && src[heir]===undefined) src[heir] = src[gone];
+  }
   /** @type {Record<string, number>} */
   const out = {};
   let left = FISH_TOTAL_MAX;

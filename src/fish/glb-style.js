@@ -43,21 +43,10 @@ const PALETTES = {
     [/Light/, { color:'#ecebe4' }],
     [/Dark/,  { color:'#131313', rough:0.45 }],
   ],
-  lion: [
-    [/Main/,  { grad:['#f4d8cb','#cc3a20','#7c1e12'], mid:0.5, scale:22 }],
-    [/Light/, { color:'#eee4d8', scale:22 }],
-    [/Fins/,  { color:'#e0a07a', fin:0.7 }],
-  ],
   mandarin: [
     [/Main/,  { color:'#ff7d1f', scale:0 }],                // 花斑连鳍䲗无鳞：只留斑驳
     [/Light/, { color:'#19d6c8', glow:0.35, scale:0 }],
     [/Dark/,  { color:'#1a4fd0', glow:0.2, scale:0 }],
-  ],
-  parrot: [
-    [/Main/,  { grad:['#93e6c6','#1fb28d','#11806e'], mid:0.5, irid:0.2 }],
-    [/Light/, { color:'#ff7ea6' }],
-    [/Fins/,  { color:'#3592ff', fin:0.8 }],
-    [/Teeth/, { color:'#f1efe6' }],
   ],
 };
 const EYE = { color:'#050607', rough:0.04 };

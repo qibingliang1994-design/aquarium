@@ -105,6 +105,14 @@ describe('场景文档校验', () => {
     expect(Object.values(all).reduce((a, n) => a + n, 0)).toBe(FISH_TOTAL_MAX);
   });
 
+  it('鱼群：下架的狮子鱼 / 鹦鹉鱼在旧存档里换成镰鱼 / 蓝倒吊，接替者已有数量时不动', () => {
+    const f = sanitizeFish({ clown: 4, lion: 2, parrot: 3 });
+    expect(f).toEqual(expect.objectContaining({ clown: 4, idol: 2, btang: 3 }));
+    expect(f).not.toHaveProperty('lion');
+    expect(f).not.toHaveProperty('parrot');
+    expect(sanitizeFish({ lion: 2, idol: 1 }).idol).toBe(1);
+  });
+
   it('文档：缺 id 拒绝；名称/主题兜底；物件数量封顶；重复 id 重新生成', () => {
     expect(sanitizeDoc({ name: 'x' })).toBeNull();
     const items = Array.from({ length: MAX_ITEMS + 5 }, () => ({ id: 'dup', type: 'rock', x: 0, z: 0 }));
@@ -155,7 +163,7 @@ describe('预设', () => {
 
   it('经典混养只养淡水鱼：海水卡通鱼只留在珊瑚礁缸，两种画风不同缸', () => {
     const classic = PRESETS.find(p => p.id === 'classic');
-    for (const id of ['angel','clown','lion','mandarin','parrot']) expect(classic.fish[id] ?? 0).toBe(0);
+    for (const id of ['angel','clown','mandarin','ytang','btang','idol']) expect(classic.fish[id] ?? 0).toBe(0);
     // 旧版的淡水老面孔还在，条数与物种表默认一致
     for (const id of ['tetra','gold','cory','koi']) expect(classic.fish[id]).toBe(SPECIES.find(s => s.id === id).count);
     expect(Object.values(classic.fish).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(FISH_TOTAL_MAX);

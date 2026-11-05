@@ -1,7 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { U } from '../../uniforms.js';
-import { causticsTex, causticsOn } from '../../scene/caustics.js';
+import { causticsOn, CAU_U, CAUSTICS_GLSL, CAUSTIC_LIFT_GLSL } from '../../scene/caustics.js';
 import { TANK } from '../../scene/tank.js';   // 循环依赖安全：TANK 只在着色器编译时（onBeforeCompile）读取
 
 /* ================================================================
@@ -59,17 +59,43 @@ export function injectSway(/** @type {any} */ mat, /** @type {number} */ amp, /*
         vSwW = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
       #endif`);
     if(!shade) return;
-    Object.assign(sh.uniforms, { uCMap:{value:causticsTex}, uCOn:causticsOn });
-    sh.fragmentShader='uniform sampler2D uCMap; uniform float uTimeS, uCOn;\nvarying vec3 vSwW;\n'
+    Object.assign(sh.uniforms, CAU_U, { uCOn:causticsOn });
+    sh.fragmentShader='uniform float uCOn;\nvarying vec3 vSwW;\n' + CAUSTICS_GLSL + CAUSTIC_LIFT_GLSL
       + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
-        {
-          float c1=texture2D(uCMap, vSwW.xz*0.55+vec2(uTimeS*0.021, uTimeS*0.017)).r;
-          float c2=texture2D(uCMap, vSwW.xz*0.92-vec2(uTimeS*0.013,-uTimeS*0.019)).r;
-          diffuseColor.rgb += diffuseColor.rgb*pow(min(c1,c2),1.4)*smoothstep(1.75,1.0,vSwW.y)*1.6*uCOn;
-        }`)
+        // 焦散：实时波面生成图（caustics-gen.js）；叶片薄、两面都受光，不按朝向衰减
+        diffuseColor.rgb += diffuseColor.rgb*cauLift(vSwW)*smoothstep(1.75,1.0,vSwW.y)*1.2*uCOn;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += diffuseColor.rgb * 0.1;`);
+  };
+}
+
+/** three 物理光照里逐盏直射光的入口（MeshStandard / MeshPhysical 共用）；单测守着它在升级后仍存在 */
+export const DIRECT_ANCHOR = 'vec3 irradiance = dotNL * directLight.color;';
+
+/**
+ * 叶片透光（学自 tidewater VegMaterials 的 translucency：透射光 = 光色 × 本色 × 透光率，光色已含阴影）：
+ * 光从叶子背面照来时，叶片透出偏黄的亮绿——顶灯下平看、仰看水草，叶子不再像不透光的塑料片。
+ * 改的是 three 的 RE_Direct_Physical（每盏直射光调用一次，directLight.color 已乘过阴影与聚光衰减），
+ * 所以被石头、沉木挡住的叶子不会透光。双面材质的法线已朝向观察者：-N·L > 0 即光在叶子背后；
+ * 再按"看向光源"加一点前向散射。mask：GLSL 表达式（0..1），例如茎没有叶片 UV 时不透光。
+ * @param {any} mat @param {{ k:number, mask?:string, tint?:[number,number,number] }} opts
+ */
+export function injectTranslucency(mat, { k, mask='1.0', tint=[1.0, 1.15, 0.5] }){
+  const prev=mat.onBeforeCompile, prevKey=mat.customProgramCacheKey?.() ?? '';
+  mat.customProgramCacheKey=()=>`${prevKey}_tl`;
+  mat.onBeforeCompile=(/** @type {any} */ sh, /** @type {any} */ r)=>{
+    prev?.(sh, r);
+    sh.uniforms.uLeafTr={ value:k };
+    mat.userData.leafTr=sh.uniforms.uLeafTr;
+    const chunk=THREE.ShaderChunk.lights_physical_pars_fragment.replace(DIRECT_ANCHOR, `${DIRECT_ANCHOR}
+      {
+        float tlBack = saturate( -dot( geometryNormal, directLight.direction ) );
+        float tlFwd = pow( saturate( dot( geometryViewDir, -directLight.direction ) ), 4.0 );
+        reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseColor )
+          * vec3( ${tint.map(v=>v.toFixed(3)).join(', ')} ) * ( tlBack * ( 0.35 + 1.4 * tlFwd ) ) * uLeafTr * ( ${mask} );
+      }`);
+    sh.fragmentShader='uniform float uLeafTr;\n'+sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', chunk);
   };
 }
 

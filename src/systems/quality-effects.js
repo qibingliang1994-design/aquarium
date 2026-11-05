@@ -1,5 +1,7 @@
 // @ts-check
 import { budgetRatio } from './quality.js';
+import { setCausticsLevel } from '../scene/caustics-gen.js';
+import { setMossShells } from '../scenes/items/moss-shell.js';
 
 /* ================================================================
  * 画质档位 → 渲染器 / 场景的副作用收口（createQuality 的 onLevel 回调）
@@ -34,10 +36,13 @@ export function createQualityEffects({ renderer, composer, bloom, lens, tankGrou
     waterPass.setSteps([14,12,11,10,8,6,5][q.level] ?? 8);  // march 步数随档缩放（贴图化焦散调制后每步也便宜了）
     lens.setTaps([20,18,16,14,12,10,10][q.level] ?? 12);    // 景深采样点数随档缩放（半分辨率 + 弥散圆自适应后 20 点已满配）
     renderPass.setMSAA(0);   // 场景 RT 不开 MSAA：多采样深度纹理的逐帧 resolve 是隐性大开销（实测拖累帧率），几何边缘靠 edge-aa（FXAA）兜底
-    renderPass.setAA(q.level<=4);   // 边缘抗锯齿（FXAA）：最低两档关
+    renderPass.setAA(q.level<=4);
+    renderPass.ao.setLevel(q.level);              // 环境光遮蔽：切片/步数随档减（随 AA 一起在最低两档关）   // 边缘抗锯齿（FXAA）：最低两档关
     renderPass.setScale([0.85,0.8,0.75,0.7,0.68,0.65,0.6][q.level] ?? 0.8);   // 渲染尺度分离：场景降尺度，后期全分辨率
     shadowHz=q.shadowHz; shadowAcc=Math.max(shadowAcc, 1/q.shadowHz);   // 变档立即按新频率走
     precip.setLevel(q.level);
+    setCausticsLevel(q.level);
+    setMossShells(q.level);                        // 苔藓绒毛壳层随档减层                     // 焦散泼溅：低档隔帧更新
     reflect.setLevel(q.level);
     runtime.applyShore(q.level);
     runtime.applyShell(q.level);

@@ -1,7 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { causticsTex } from './caustics.js';
+import { CAU_U, CAUSTICS_GLSL } from './caustics-gen.js';
 
 /* ================================================================
  * 水体合成 + 镜头 pass（v2.2.4 合并：原 water-pass 与 lens-pass 合为一体）
@@ -38,6 +38,8 @@ vec2 waterGrad(vec2 xz, float t, float flow){
 const DOF_K=26, DOF_MAX=11;
 /** 俯视水面的折射晃动倍率（1 = 物理值：波面折射方向差 × 水中路径长） */
 const REFR_K=1.0;
+/** 下行光程吸收相对视线吸收的倍率：光从水面到物体这段的衰减（1 = 与视线同一吸收系数） */
+const LIGHT_ATT=0.9;
 /** 水中每单位路径的雾化系数与上限（上限防止背景整片糊成单色） */
 const HAZE_K=0.24, HAZE_MAX=0.42;
 
@@ -66,7 +68,8 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
     uMin:{value:box.min.clone()}, uMax:{value:box.max.clone()},
     uSigma:{value:new THREE.Vector3(0.5,0.18,0.24)}, uSigmaK:{value:0.4},
     uShafts:{value:0.1}, uShaftCol:{value:new THREE.Vector3(1,0.95,0.85)},
-    uSteps:{value:14}, tCau:{value:causticsTex},   // march 步数随画质档缩放；焦散调制用烘好的网纹贴图
+    uLightAtt:{value:LIGHT_ATT},                      // 下行光程吸收倍率（0 = 关）
+    uSteps:{value:14}, ...CAU_U,   // march 步数随画质档缩放；焦散调制读实时波面生成的焦散图（caustics-gen.js）
     uShadowOn:{value:0}, tShadow:{value:/** @type {THREE.Texture|null} */ (null)}, uShadowM:{value:new THREE.Matrix4()},
     uLightDir:{value:new THREE.Vector3(0.05,-1,0.1)},
     uMirrorOn:{value:0}, tMirror:{value:/** @type {THREE.Texture|null} */ (null)}, uMirrorVP:{value:new THREE.Matrix4()},
@@ -87,11 +90,12 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       uniform mat4 uProjInv, uViewInv, uVP;
       uniform vec2 uRes, uLampHalf, uLampXZ, uLampXZ2, uTexel;
       uniform vec3 uCam, uSky, uDeep, uLampCol, uSigma, uShaftCol, uLightDir, uMin, uMax, uColor;
-      uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb,
+      uniform float uFrame, uTime, uFlow, uChop, uWaterY, uLampY, uLampK, uSigmaK, uShafts, uShadowOn, uTurb, uLightAtt,
                     uMirrorOn, uSideOn, uWaterOn,
                     uNear, uFar, uScale, uDofOn, uFocus, uK, uMaxR, uTaps, uHazeOn, uDensity, uMaxMix;
       uniform mat4 uShadowM, uMirrorVP, uMirrorLVP, uMirrorRVP;
-      uniform sampler2D tShadow, tMirror, tMirrorL, tMirrorR, tCau;
+      uniform sampler2D tShadow, tMirror, tMirrorL, tMirrorR;
+      ${CAUSTICS_GLSL}
       uniform float uSteps;
       varying vec2 vUv;
       #define REFR_K ${REFR_K.toFixed(2)}
@@ -99,14 +103,11 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
       float ign(vec2 p){ return fract(52.9829189*fract(dot(p, vec2(0.06711056,0.00583715)))); }
       float viewZ(float d){ d=d*2.0-1.0; return 2.0*uNear*uFar/(uFar+uNear-d*(uFar-uNear)); }
       float coc(vec2 uv){ return min(abs(1.0/uFocus-1.0/viewZ(texture2D(tHalf, uv).a))*uK*uScale, uMaxR*uScale); }
-      // 光柱用的焦散调制：烘好的 Voronoi 网纹贴图采样（形状与原解析式同一族）
+      // 光柱用的焦散调制：水柱中这一点的焦散光强（实时波面生成图，单通道、固定模糊档）——
+      // 近水面光还没聚焦（≈1），往下网纹逐渐成形，光柱被切成一缕缕
       float cauLite(vec3 w){
-        float depth=max(uWaterY-w.y, 0.0);
-        vec2 s=w.xz-uLightDir.xz/max(-uLightDir.y,0.2)*depth;
-        vec2 p=s*6.2831853/0.35;
-        float c=texture2D(tCau, p*0.15915494+vec2(uTime*0.021,uTime*0.017)).r*1.6
-               +0.6*texture2D(tCau, (p*0.47+3.1)*0.15915494-vec2(uTime*0.013,-uTime*0.019)).r;
-        return mix(1.0, 0.35+1.1*clamp(c,0.0,2.5), min(uShafts,1.0));
+        float c=cauMono(w, 1.5);
+        return mix(1.0, 0.35+0.65*clamp(c,0.0,3.2), min(uShafts,1.0));
       }
       // 主相机阴影图上的可见性（光柱被石头/沉木/鱼剪影切开）
       float shadowVis(vec3 p){
@@ -265,6 +266,13 @@ export function createWaterPass({ camera, scene, light, waterY, box, waterUnifor
             }
             S*=phase*uShafts*3.4*scat;
             S+=scat*(1.0-T.g)*0.05*uShafts;   // 深水微弱悬浮纱
+          }
+          // 下行光程（学自 tidewater Underwater 的"按水深衰减的日光/天光"）：照到缸内物体上的光
+          // 先从水面走下来 dn 深——红光丢得最快，越深越暗、越偏青，缸里自然上亮下暗。
+          // 只对落在水体盒内的命中点（背光幕、房间不经过水）；视线那一段由下面的 T 负责
+          if(tSc<=th.y+1e-3 && uLightAtt>0.0){
+            float dn=max(uWaterY-P.y, 0.0);
+            col*=exp(-sig*dn*uLightAtt);
           }
           col=col*T+S;
           // ---- 弯月线：水面贴玻璃处一条银线 ----

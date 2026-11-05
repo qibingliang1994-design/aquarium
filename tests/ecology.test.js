@@ -5,7 +5,7 @@ import { PRESETS } from '../src/scenes/presets.js';
 import { SPECIES } from '../src/entities/fish/species.js';
 
 const lengths = Object.fromEntries(SPECIES.map(s => [s.id, s.L]));
-const names = { lion: '狮子鱼', mandarin: '麒麟鱼', clown: '小丑鱼', scalare: '神仙鱼', tetra: '霓虹脂鲤' };
+const names = { gourami: '丽丽', mandarin: '麒麟鱼', clown: '小丑鱼', scalare: '神仙鱼', tetra: '霓虹脂鲤' };
 const note = fish => mixNote(fish, { lengths, names });
 
 describe('物种生态标签', () => {
@@ -18,17 +18,17 @@ describe('物种生态标签', () => {
       expect(ecologyTags(id)).toHaveLength(2);
     }
   });
-  it('肉食鱼只有狮子鱼和神仙鱼', () => {
-    expect(FISH_IDS.filter(id => ECOLOGY[id].predator)).toEqual(['lion', 'scalare']);
+  it('肉食鱼只有神仙鱼', () => {
+    expect(FISH_IDS.filter(id => ECOLOGY[id].predator)).toEqual(['scalare']);
   });
 });
 
 describe('mixNote', () => {
   const byId = Object.fromEntries(PRESETS.map(p => [p.id, p.fish]));
   it.each([
-    ['classic', '淡水鱼和海水鱼'], ['planted', '神仙鱼会把霓虹脂鲤当点心'],
+    ['classic', '26 °C'], ['planted', '神仙鱼会把霓虹脂鲤当点心'],
     ['stream', '26 °C'], ['river', '26 °C'],
-    ['reef', '狮子鱼会把麒麟鱼当点心'],
+    ['reef', null],
     ['pond', null], ['lotus', null], ['garden', null], ['outdoor', null], ['iwagumi', null],
     ['donha', null], ['yururi', null], ['ashy', null],
   ])('预设 %s', (id, want) => {
@@ -45,9 +45,10 @@ describe('mixNote', () => {
     expect(note({ gold: 3, tetra: 0 })).toBeNull();
   });
   it('淡海水优先于冷热水与肉食', () => {
-    expect(note({ gold: 1, lion: 1, mandarin: 1 })).toContain('淡水鱼和海水鱼');
+    expect(note({ gold: 1, scalare: 1, mandarin: 1 })).toContain('淡水鱼和海水鱼');
   });
-  it('小丑鱼（0.2）比狮子鱼的 0.7 倍（0.182）大，不算点心', () => {
-    expect(note({ lion: 1, clown: 4 })).toBeNull();
+  it('点心线是肉食鱼体长的 0.7 倍：丽丽 0.22 < 0.266 算点心，长到 0.3 就不算', () => {
+    expect(note({ scalare: 1, gourami: 2 })).toContain('神仙鱼会把丽丽当点心');
+    expect(mixNote({ scalare: 1, gourami: 2 }, { lengths: { ...lengths, gourami: 0.3 }, names })).toBeNull();
   });
 });

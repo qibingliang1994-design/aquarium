@@ -10,20 +10,20 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
  * ================================================================ */
 
 const FRAG=/* glsl */`
-uniform sampler2D tSrc; uniform vec2 uPx;
+uniform sampler2D tSrc, tAO; uniform vec2 uPx; uniform float uAO;
 varying vec2 vUv;
 float lum(vec2 uv){
   vec3 c=max(texture2D(tSrc,uv).rgb,vec3(0.));
   float l=dot(c,vec3(0.299,0.587,0.114));
   return sqrt(l/(1.+l));
 }
-void main(){
+vec3 fxaa(){
   vec3 cM=texture2D(tSrc,vUv).rgb;
   float lM=lum(vUv);
   float lS=lum(vUv-vec2(0.,uPx.y)), lN=lum(vUv+vec2(0.,uPx.y)), lW=lum(vUv-vec2(uPx.x,0.)), lE=lum(vUv+vec2(uPx.x,0.));
   float lMax=max(lM,max(max(lN,lS),max(lE,lW))), lMin=min(lM,min(min(lN,lS),min(lE,lW)));
   float range=lMax-lMin;
-  if(range<max(0.0312,lMax*0.125)){ gl_FragColor=vec4(cM,1.); return; }
+  if(range<max(0.0312,lMax*0.125)) return cM;
   float lSW=lum(vUv-uPx), lNE=lum(vUv+uPx), lNW=lum(vUv+vec2(-uPx.x,uPx.y)), lSE=lum(vUv+vec2(uPx.x,-uPx.y));
   float lNS=lN+lS, lWE=lW+lE;
   float edgeH=abs(-2.*lW+lNW+lSW)+abs(-2.*lM+lNS)*2.+abs(-2.*lE+lNE+lSE);
@@ -64,20 +64,30 @@ void main(){
   fin=max(fin,sub*sub*0.75);
   vec2 fuv=vUv;
   if(horz) fuv.y+=stepLen*fin; else fuv.x+=stepLen*fin;
-  gl_FragColor=vec4(texture2D(tSrc,fuv).rgb,1.);
+  return texture2D(tSrc,fuv).rgb;
+}
+void main(){
+  vec3 c=fxaa();
+  // 环境光遮蔽（gtao.js，半分辨率已去噪）收尾乘上：AO 是低频项，放在抗锯齿之后无可见差别，省一遍全屏 pass
+  if(uAO>0.) c*=mix(1.,texture2D(tAO,vUv).r,uAO);
+  gl_FragColor=vec4(c,1.);
 }`;
 
 /** 全屏 FXAA：src 纹理 → dst 渲染目标（同尺寸，仅颜色） */
 export function createEdgeAA(){
   const mat=new THREE.ShaderMaterial({
-    uniforms:{ tSrc:{ value:null }, uPx:{ value:new THREE.Vector2(1,1) } },
+    uniforms:{ tSrc:{ value:null }, uPx:{ value:new THREE.Vector2(1,1) }, tAO:{ value:null }, uAO:{ value:0 } },
     vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
     fragmentShader:FRAG, depthTest:false, depthWrite:false });
   const quad=new FullScreenQuad(mat);
   return {
-    /** @param {THREE.WebGLRenderer} renderer @param {THREE.Texture} src @param {THREE.WebGLRenderTarget} dst */
-    render(renderer, src, dst){
+    /** ao：环境光遮蔽贴图（r = 可见度）与强度 0..1；不传 = 不乘
+     * @param {THREE.WebGLRenderer} renderer @param {THREE.Texture} src @param {THREE.WebGLRenderTarget} dst
+     * @param {{ texture:THREE.Texture, k:number }|null} [ao] */
+    render(renderer, src, dst, ao=null){
       mat.uniforms.tSrc.value=src;
+      mat.uniforms.tAO.value=ao?.texture ?? null;
+      mat.uniforms.uAO.value=ao ? ao.k : 0;
       mat.uniforms.uPx.value.set(1/dst.width, 1/dst.height);
       renderer.setRenderTarget(dst);
       quad.render(renderer);

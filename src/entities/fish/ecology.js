@@ -18,9 +18,10 @@ export const ECOLOGY={
   cory:{ water:'fresh', temp:'warm' },         // 熊猫鼠 C. panda：20–25 °C，冷水热带都合得来
   koi:{ water:'fresh', temp:'cold' },
   clown:{ water:'salt', temp:'tropical' },
-  lion:{ water:'salt', temp:'tropical', predator:true },
   mandarin:{ water:'salt', temp:'tropical' },
-  parrot:{ water:'salt', temp:'tropical' },
+  ytang:{ water:'salt', temp:'tropical' },
+  btang:{ water:'salt', temp:'tropical' },
+  idol:{ water:'salt', temp:'tropical' },
   guppy:{ water:'fresh', temp:'tropical' },
   betta:{ water:'fresh', temp:'tropical' },    // 半月斗鱼：26 °C 左右，独居
   harlequin:{ water:'fresh', temp:'tropical' },

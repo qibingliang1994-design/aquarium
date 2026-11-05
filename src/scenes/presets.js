@@ -6,7 +6,8 @@
  * 大户外池塘：不规则石岸（tank outdoor），锦鲤 / 金鱼 / 鼠鱼，睡莲（含荷花）与香蒲，岸上松、秋枫、岸草和石灯
  * v2.1.11 新增：江南园林（明式红木缸 + 太湖石 / 石拱桥 / 青花瓷罐 + 水墨远山背景）
  * v2.0 新增：荷兰草缸（无边框缸）+ 三个自然水域（睡莲池塘 / 山间溪流 / 林间小河）
- * classic = v1.7 之前写死的布局逐项转换而来（同位置、同鱼群），保证老玩家无感升级
+ * classic = v1.7 之前写死的布局逐项转换而来（同位置）；鱼群后来改成全淡水照片皮鱼（海水卡通鱼只留在珊瑚礁缸，
+ *   两种画风不再挤在同一缸）。已存档的经典缸不受影响，场景菜单里「恢复预设」才会换成新鱼群
  * ================================================================ */
 
 /** @typedef {import('./scene-doc.js').SceneDoc} SceneDoc */
@@ -18,7 +19,7 @@ const it = (type, x, z, s=1, rot=0, seed) => ({ type, x, z, s, rot, seed: seed ?
 const RAW = [
   {
     id:'classic', presetId:'classic', name:'经典混养', theme:'fresh', tank:'classic',
-    fish:{ tetra:24, gold:4, angel:3, cory:5, koi:2, clown:4, lion:2, mandarin:2, parrot:3 },
+    fish:{ tetra:24, gold:4, cory:5, koi:2, guppy:6, betta:1, harlequin:12, rummy:10 },
     items:[
       // 岩石：原 [x,z,r]，圆石基准半径 0.2 → s=r/0.2
       it('rock',-1.22,-0.35,1.7,0.4), it('rock',-0.94,-0.42,1.0,2.1), it('rock',-1.5,-0.2,0.75,4.0),
@@ -37,7 +38,7 @@ const RAW = [
   },
   {
     id:'reef', presetId:'reef', name:'珊瑚礁', theme:'reef', tank:'reef',
-    fish:{ clown:6, angel:4, lion:2, mandarin:3, parrot:4 },
+    fish:{ clown:6, angel:4, mandarin:3, ytang:3, btang:3, idol:2 },
     items:[
       // 礁岩骨架：左右两座礁台 + 中后方矮礁，前景留白沙给鱼活动
       it('liveRock',-1.3,-0.48,2.0,0.3), it('liveRock',-0.92,-0.6,1.5,1.9), it('liveRock',-1.65,-0.2,1.2,3.1),

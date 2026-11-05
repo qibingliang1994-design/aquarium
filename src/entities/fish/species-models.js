@@ -5,19 +5,21 @@ import { prepareFishModel } from '../../fish/glb-style.js';
 import { photoSource } from '../../fish/photo-fish.js';
 
 // 物种 → GLB。两类：
-//  照片皮模型（aquarium-editor，MIT）：单网格 + 照片贴图 + 鳍分区与游动参数，走 fish/photo-fish.js 的实例化游动着色器
+//  照片皮模型（淡水鱼来自 aquarium-editor，MIT；海水鱼 *-photo.glb 由 scripts/photo-fish 从照片生成）：
+//    单网格 + 照片贴图 + 鳍分区与游动参数，走 fish/photo-fish.js 的实例化游动着色器
 //  骨骼动画模型（Quaternius，CC0；锦鲤为用户提供）：走 fish-vat.js 的实例化蒙皮
 /** @type {Record<string, string>} */
 const FILES = {
   tetra: 'fish-models/species/species-neon.glb',
   gold:  'fish-models/species/species-ryukin.glb',
-  angel: 'fish-models/species/species-butterfly.glb',
+  angel: 'fish-models/species/species-butterfly-photo.glb',
   cory:  'fish-models/species/species-panda.glb',
   koi:   'fish-models/species/species-koi.glb',
-  clown: 'fish-models/species/species-clown.glb',
-  lion:  'fish-models/species/species-lion.glb',
-  mandarin: 'fish-models/species/species-mandarin.glb',
-  parrot: 'fish-models/species/species-parrot.glb',
+  clown: 'fish-models/species/species-clown-photo.glb',
+  mandarin: 'fish-models/species/species-mandarin-photo.glb',
+  ytang: 'fish-models/species/species-ytang-photo.glb',
+  btang: 'fish-models/species/species-btang-photo.glb',
+  idol:  'fish-models/species/species-idol-photo.glb',
   guppy: 'fish-models/species/species-guppy.glb',
   betta: 'fish-models/species/species-betta.glb',
   harlequin: 'fish-models/species/species-harlequin.glb',

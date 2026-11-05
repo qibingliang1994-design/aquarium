@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rrange, vnoise } from '../../utils.js';
 import { injectCaustics } from '../../scene/caustics.js';
-import { shared, injectSway, setPhase, castAll, injectSurfaceDetail, UP } from './common.js';
+import { shared, injectSway, injectTranslucency, setPhase, castAll, injectSurfaceDetail, UP } from './common.js';
 
 /* ================================================================
  * 珊瑚：鹿角珊瑚（立体分叉）/ 海扇（平面分叉 + 摆动）/ 脑珊瑚（沟回半球）/ 海葵（触手摆动）
@@ -87,6 +87,7 @@ export function buildCoralFan(/** @type {any} */ rng){
   const mat=shared('mat:fan', ()=>{
     const m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.7, side:THREE.DoubleSide});
     injectSway(m, 0.045, 3.0, 'fan', true, 0.7);
+    injectTranslucency(m, { k:0.55, tint:[1.15, 0.95, 0.8] });   // 海扇是薄网：逆光透出本色
     return m;
   });
   const [c0,c1]=pick(rng, [[0x9a2a40,0xff7a6a],[0x5e3496,0xc890ff],[0xb07f26,0xffe08a]]);
@@ -153,6 +154,7 @@ export function buildAnemone(/** @type {any} */ rng){
   const tentMat=shared('mat:tentacle', ()=>{
     const m=new THREE.MeshPhysicalMaterial({vertexColors:true, roughness:0.35, sheen:0.6, sheenColor:new THREE.Color(0xffffff), sheenRoughness:0.3});
     injectSway(m, 0.035, 6.0, 'tentacle', true, 0.2);
+    injectTranslucency(m, { k:0.7, tint:[1.1, 1.0, 1.0] });       // 海葵触手半透明
     return m;
   });
   const colMat=shared('mat:anemoneCol', ()=>new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.55}));

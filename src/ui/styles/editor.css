@@ -68,7 +68,7 @@ body.is-editing .scene-switch{pointer-events:none}   /* 缸名按钮自带 point
 .stepper output{min-width:24px;text-align:center;font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink)}
 .fish-row[data-sp=tetra]{--sp:#3cc8ff} .fish-row[data-sp=gold]{--sp:#ff9a3c} .fish-row[data-sp=angel]{--sp:#ffd24a}
 .fish-row[data-sp=cory]{--sp:#cdb48e} .fish-row[data-sp=koi]{--sp:#ff6a4f} .fish-row[data-sp=clown]{--sp:#ff7a1a}
-.fish-row[data-sp=lion]{--sp:#ef5a3c} .fish-row[data-sp=mandarin]{--sp:#2fd8c8} .fish-row[data-sp=parrot]{--sp:#3fe0b0}
+.fish-row[data-sp=mandarin]{--sp:#2fd8c8} .fish-row[data-sp=ytang]{--sp:#f5d22e} .fish-row[data-sp=btang]{--sp:#3d6cff} .fish-row[data-sp=idol]{--sp:#e8e4d0}
 .fish-row[data-sp=guppy]{--sp:#ff6f9c} .fish-row[data-sp=betta]{--sp:#5a6cff} .fish-row[data-sp=harlequin]{--sp:#e8845a}
 .fish-row[data-sp=rummy]{--sp:#e8f0f4} .fish-row[data-sp=ember]{--sp:#ff7a3a} .fish-row[data-sp=oto]{--sp:#b9a77c}
 .fish-row[data-sp=ram]{--sp:#ffc94a} .fish-row[data-sp=scalare]{--sp:#cfd8dc} .fish-row[data-sp=gourami]{--sp:#ff5a6a}

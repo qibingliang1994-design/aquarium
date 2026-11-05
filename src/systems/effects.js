@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { rand, makeRng } from '../utils.js';
 import { precipBudget } from './weather.js';
 import { U } from '../uniforms.js';
+import { causticsOn, CAU_U, CAUSTICS_GLSL } from '../scene/caustics.js';
+
+const _tmpV=new THREE.Vector3();
 
 class Bubbles {
   /** @param {any} opts */
@@ -76,42 +79,58 @@ class MarineSnow {
   hx=1.8; hz=0.62;               // 回绕半宽。默认是经典缸；大池塘由 setArea 放开
   /** @param {any} opts */
   constructor({ tankGroup }){
-    this.N=900;                    // 池子按开缸浊度的 3 倍分配；平时只画前 BASE 颗（setDensity）
-    this.BASE=300;
+    this.N=1350;                   // 池子按开缸浊度的 3 倍分配；平时只画前 BASE 颗（setDensity）
+    this.BASE=450;
     const pos=new Float32Array(this.N*3), size=new Float32Array(this.N), seed=new Float32Array(this.N);
     this.sp=new Float32Array(this.N);
     for(let i=0;i<this.N;i++){
       pos[i*3]=rand(-1.7,1.7); pos[i*3+1]=rand(0.4,1.6); pos[i*3+2]=rand(-0.62,0.62);
       this.sp[i]=rand(0.006,0.02);
-      size[i]=rand(0.006,0.018); seed[i]=rand(10);
+      const r=Math.random(); size[i]=0.003+0.009*r*r; seed[i]=rand(10);   // 绝大多数是细屑，偶有大一点的絮
     }
     this.geo=new THREE.BufferGeometry();
     this.geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
     this.geo.setAttribute('aSize', new THREE.BufferAttribute(size,1));
     this.geo.setAttribute('aSeed', new THREE.BufferAttribute(seed,1));
-    // 圆形柔边粒子：世界尺寸透视缩放，贴近镜头/远处淡出，缓慢闪烁
-    const uScale={ value:1 };
+    // 圆形柔边粒子：世界尺寸透视缩放。真实的悬浮物是很细的屑：
+    // - 算出的像素直径不足 1 px 时不画成 1 px 的亮点，而按覆盖面积降不透明度（远处的屑只剩若有若无的微光）
+    // - 离相机越远越淡（水体合成 pass 按背景深度吸收，不知道粒子在哪，这里自己补上纵深）
+    // - 越深越暗（下行光被吸收）；穿过焦散亮线时闪一下（查实时焦散图）；夜里跟着暗下去
+    const uScale={ value:1 }, uRef={ value:5 };
     const fit=()=>{ uScale.value=Math.min(devicePixelRatio,2)*innerHeight*0.5/Math.tan(THREE.MathUtils.degToRad(22.5)); };
     fit(); addEventListener('resize',fit);
     this.pts=new THREE.Points(this.geo, new THREE.ShaderMaterial({
       transparent:true, depthWrite:false,
-      uniforms:{ uScale, uTime:U.time, uColor:{value:new THREE.Color(0xd6e8ee)} },
+      uniforms:{ ...CAU_U, uScale, uRef, uTime:U.time, uNight:U.night, uCOn:causticsOn, uColor:{value:new THREE.Color(0xd6e8ee)} },
       vertexShader:`
-        attribute float aSize, aSeed; uniform float uScale, uTime; varying float vA;
+        attribute float aSize, aSeed; uniform float uScale, uRef, uTime, uNight, uCOn; varying float vA, vG, vSz;
+        #define CAU_VERTEX
+        ${CAUSTICS_GLSL}
         void main(){
-          vec4 mv=modelViewMatrix*vec4(position,1.0);
-          gl_PointSize=clamp(aSize*uScale/-mv.z, 1.0, 14.0);
-          vA=(0.45+0.35*sin(uTime*1.3+aSeed*6.0))*smoothstep(0.25,1.2,-mv.z)*(1.0-smoothstep(7.0,11.0,-mv.z));
+          vec4 wp=modelMatrix*vec4(position,1.0);
+          vec4 mv=viewMatrix*wp;
+          float z=-mv.z, px=aSize*uScale/max(z,1e-3);
+          vSz=clamp(px, 1.0, 7.0); gl_PointSize=vSz;
+          float cov=clamp(px*px, 0.0, 1.0);                                        // 细于 1 px：按面积比降透明度
+          float fog=clamp(exp(-0.45*(z-uRef)), 0.0, 1.4);                          // 以缸心为基准，前亮后淡
+          float dn=max(uCauA.z-wp.y, 0.0);
+          float lit=exp(-0.3*dn)*mix(1.0, 0.18, uNight);                           // 越深越暗、夜里暗
+          vG=max(cauMono(wp.xyz, 0.5)-1.1, 0.0)*1.6*uCOn*lit;                       // 焦散亮线扫过时闪一下
+          float tw=0.75+0.25*sin(uTime*1.3+aSeed*6.0);
+          vA=(0.8*lit+vG)*tw*cov*fog*smoothstep(0.25,1.2,z)*(1.0-smoothstep(7.0,11.0,z));
           gl_Position=projectionMatrix*mv;
         }`,
       fragmentShader:`
-        uniform vec3 uColor; varying float vA;
+        uniform vec3 uColor; varying float vA, vG, vSz;
         void main(){
+          // 只有几个像素大的点采样不到圆心，柔边会把它整个吃掉：小点画实心，大点（近处的絮）才是柔边圆
           float d=length(gl_PointCoord-0.5);
-          float a=smoothstep(0.5,0.05,d);
-          gl_FragColor=vec4(uColor, a*a*vA*0.55);
+          float a=mix(1.0, smoothstep(0.5,0.1,d), smoothstep(1.5,3.5,vSz));
+          gl_FragColor=vec4(uColor*(1.0+vG*0.6), min(a*a*vA*0.6, 1.0));
         }`,
     }));
+    // 纵深淡出的基准：相机到缸心（tankGroup 原点）的距离
+    this.pts.onBeforeRender=(_r, _s, cam)=>{ uRef.value=cam.position.distanceTo(tankGroup.getWorldPosition(_tmpV)); };
     this.pts.frustumCulled=false;
     tankGroup.add(this.pts);
     this.setDensity(1);

@@ -6,7 +6,8 @@ import { TANK, createTank } from './scene/tank.js';
 import { groundY } from './scene/ground.js';
 import { createWorld } from './scene/setup.js';
 import { createDayNight } from './scene/daynight.js';
-import { setCausticsEnabled } from './scene/caustics.js';
+import { setCausticsEnabled, causticsOn } from './scene/caustics.js';
+import { updateCaustics, setCausticsWaterY } from './scene/caustics-gen.js';
 import { createEffects } from './systems/effects.js';
 import { Feeder } from './systems/feeder.js';
 import { createLure } from './systems/lure.js';
@@ -72,6 +73,7 @@ const waterPass=createWaterPass({ camera, scene, light:hoodSpot, waterY:TANK.wat
 const lens=waterPass;               // 镜头（景深/雾化）API 已并入水体 pass；保留别名，调用点不变
 composer.insertPass(waterPass, 1);
 const focusPt=new THREE.Vector3();
+setCausticsWaterY(TANK.waterY);
 
 const air={ x:1.6, z:0.5, on:true };          // 气泡发射点：场景里第一个气石（scene-runtime 原地更新）
 const { bubbles, snow, ripples, precip }=createEffects({ tankGroup, air, sandHeight:groundY, waterY:TANK.waterY, scene });
@@ -509,6 +511,9 @@ function frame(){
   reflect.setDim(reflectDim(dayNight.k, wxNow));
   runtime.glowShore(dayNight.k);                 // 先点灯，反射 pass 里的石灯才是亮的
   reflect.render(natural && !editor.active && waterMesh.visible);
+
+  // 焦散：按实时波面重新泼溅（光子泼溅，学自 tidewater）。波随天气的浪与水流走；焦散关时不画
+  updateCaustics(renderer, hoodSpot, { t, dt, flow, chop:U.chop.value, on:causticsOn.value>0 });
 
   // 阴影贴图限频：鱼游得慢，降频更新肉眼看不出，省下大半帧的投影 pass（它要把全部投影物再画一遍）；
   // 频率随画质档走（高清 30 Hz → 极速 10 Hz，学自 aquarium-editor 的分级阴影）

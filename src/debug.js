@@ -4,6 +4,8 @@ import { sstep } from './utils.js';
 import { schoolNames, personaTags } from './entities/fish/identity.js';
 import { mixNoteFor } from './ui/encyclopedia.js';
 import { vatSelfCheck } from './fish/fish-pose.js';
+import { causticStats } from './scene/caustics-gen.js';
+import { setMossShells } from './scenes/items/moss-shell.js';
 
 /* ================================================================
  * window.__aqDebug：自动化验证用的调试钩子
@@ -71,6 +73,19 @@ export function installDebug(/** @type {any} */  d){
       return { cling:c ? { mode:c.mode, w:+c.w.toFixed(2), t:+c.t.toFixed(1) } : null, breath:b ? { mode:b.mode, t:+b.t.toFixed(1) } : null }; },
     velOf:(/** @type {number} */ si,/** @type {number} */ ii)=>schools[si].vel[ii].toArray().map((/** @type {any} */ v)=>+v.toFixed(3)),
     bloom:(/** @type {any} */ on)=>{ bloom.enabled=on; },
+    ao:(/** @type {number|undefined} */ k, /** @type {Record<string, number>|undefined} */ params)=>{   // 环境光遮蔽：k = 强度（0 关）；params = { uRadius, uPower, uMaxPx, uThin }
+      const rp=d.renderPass; if(k!==undefined) rp.setAO(k);
+      if(params) for(const [n, v] of Object.entries(params)) if(rp.ao.uniforms[n]) rp.ao.uniforms[n].value=v;
+      return { k:rp.aoK, radius:rp.ao.uniforms.uRadius.value, power:rp.ao.uniforms.uPower.value, maxPx:rp.ao.uniforms.uMaxPx.value, thin:rp.ao.uniforms.uThin.value };
+    },
+    lightAtt:(/** @type {number|undefined} */ k)=>{ if(k!==undefined) d.waterPass.uniforms.uLightAtt.value=k; return d.waterPass.uniforms.uLightAtt.value; },   // 下行光程吸收倍率（0 = 关）
+    mossShells:(/** @type {number} */ level)=>setMossShells(level),   // 苔藓绒毛壳层：按画质档的层数表（0 = 满层，6 = 只剩核）
+    leafTr:(/** @type {number|undefined} */ k)=>{   // 叶片透光强度（水草 / 海扇 / 海葵触手；按材质首个值返回）
+      /** @type {number[]} */ const vals=[]; const seen=new Set();
+      scene.traverse((/** @type {any} */ o)=>{ const u=o.material?.userData?.leafTr; if(!u || seen.has(u)) return; seen.add(u); if(k!==undefined) u.value=k; vals.push(u.value); });
+      return vals;
+    },
+    caustics:(/** @type {'fine'|'broad'} */ layer='fine')=>causticStats(renderer, layer),   // 焦散生成图统计：mean ≈ 1、dark = 暗区占比、max = 峰值
     haze:(/** @type {boolean} */ on, /** @type {number} */ k, /** @type {number} */ max)=>{ lens.setHaze(on); if(k!==undefined) lens.uniforms.uDensity.value=k; if(max!==undefined) lens.uniforms.uMaxMix.value=max; },   // 水体纵深（k = 每单位雾化系数）
     dof:(/** @type {boolean} */ on, /** @type {number} */ k)=>{ lens.setDof(on); if(k!==undefined) lens.uniforms.uK.value=k; },   // 景深（k = 弥散圆强度）
     scene:()=>scene,

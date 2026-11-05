@@ -153,12 +153,12 @@ describe('预设', () => {
     expect(placeLimits('lily', 1, boundsFor('outdoor')).x).toBeLessThanOrEqual(boundsFor('outdoor').place.x);
   });
 
-  it('经典混养保留旧版鱼群数量', () => {
+  it('经典混养只养淡水鱼：海水卡通鱼只留在珊瑚礁缸，两种画风不同缸', () => {
     const classic = PRESETS.find(p => p.id === 'classic');
-    // 旧版九种：classic 预设的默认条数与物种表一致；后加的照片皮物种（guppy/betta/harlequin）不入旧预设
-    const legacy = ['tetra','gold','angel','cory','koi','clown','lion','mandarin','parrot'];
-    for (const id of legacy) expect(classic.fish[id]).toBe(SPECIES.find(s => s.id === id).count);
-    for (const id of ['guppy','betta','harlequin']) expect(classic.fish[id] ?? 0).toBe(0);
+    for (const id of ['angel','clown','lion','mandarin','parrot']) expect(classic.fish[id] ?? 0).toBe(0);
+    // 旧版的淡水老面孔还在，条数与物种表默认一致
+    for (const id of ['tetra','gold','cory','koi']) expect(classic.fish[id]).toBe(SPECIES.find(s => s.id === id).count);
+    expect(Object.values(classic.fish).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(FISH_TOTAL_MAX);
   });
 });
 

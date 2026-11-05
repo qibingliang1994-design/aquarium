@@ -26,7 +26,7 @@ describe('物种生态标签', () => {
 describe('mixNote', () => {
   const byId = Object.fromEntries(PRESETS.map(p => [p.id, p.fish]));
   it.each([
-    ['classic', '淡水鱼和海水鱼'], ['planted', '神仙鱼会把霓虹脂鲤当点心'],
+    ['classic', '26 °C'], ['planted', '神仙鱼会把霓虹脂鲤当点心'],
     ['stream', '26 °C'], ['river', '26 °C'],
     ['reef', '狮子鱼会把麒麟鱼当点心'],
     ['pond', null], ['lotus', null], ['garden', null], ['outdoor', null], ['iwagumi', null],

@@ -14,7 +14,7 @@ const FILES = {
   angel: 'fish-models/species/species-butterfly.glb',
   cory:  'fish-models/species/species-panda.glb',
   koi:   'fish-models/species/species-koi.glb',
-  clown: 'fish-models/species/species-clown.glb',
+  clown: 'fish-models/species/species-clown-photo.glb',   // 照片皮（scripts/photo-fish 由照片生成）；原 Quaternius 卡通模型 species-clown.glb 暂留作对照
   lion:  'fish-models/species/species-lion.glb',
   mandarin: 'fish-models/species/species-mandarin.glb',
   parrot: 'fish-models/species/species-parrot.glb',

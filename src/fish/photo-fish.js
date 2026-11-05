@@ -1,6 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
-import { decorateFishMaterial } from './glb-style.js';
+import { decorateFishMaterial, FIN_TR, FIN_TINT } from './glb-style.js';
+import { injectTranslucency } from '../scenes/items/common.js';
 import { U } from '../uniforms.js';
 
 /* ================================================================
@@ -13,7 +14,7 @@ import { U } from '../uniforms.js';
  * 逐实例状态（photo-gait.js 每帧给出）：
  *   aSwim = (尾摆相位[周], 尾摆幅度倍率, 身体弯曲[1/m], 胸鳍张开[rad])
  *   aFin  = (胸鳍划水相位[周], 划水幅度[rad], 背鳍/臀鳍竖起 0..1, 腹鳍张开 0..1)
- * 本项目的改动：只保留实例化分支；鳍片（部位 1–5）带一点透光；与本项目的焦散/逆光轮廓合成（decorateFishMaterial）
+ * 本项目的改动：只保留实例化分支；鳍片（部位 1–5）逆光透光（injectTranslucency）；与本项目的焦散/逆光轮廓合成（decorateFishMaterial）
  * ================================================================ */
 
 const SWIM_HEAD = /* glsl */`
@@ -157,11 +158,11 @@ export class PhotoFish {
       Object.assign(sh.uniforms, u);
       sh.vertexShader = swimVertex(sh.vertexShader);
       deco(sh, r);
-      // 鳍膜很薄：迎光面的光透到背面，按逆光强度（随昼夜）补一点自身色
-      sh.fragmentShader = 'varying float vFinP;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
-        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vFinP * uRimK * 0.3;');
+      sh.fragmentShader = 'varying float vFinP;\n' + sh.fragmentShader;
     };
     mat.customProgramCacheKey = ()=> `photofish_${causticK ? 'c' : ''}`;
+    // 鳍膜很薄：逆光时透出自身颜色（与低模鳍同一套透光项，光色已含阴影；原来是按轮廓强度补的自发光，夜里也亮）
+    injectTranslucency(mat, { k:FIN_TR, mask:'vFinP', tint:FIN_TINT });
     this.material = mat;
     const mesh = new THREE.InstancedMesh(geo, mat, capacity);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

@@ -59,3 +59,20 @@ Copyright (c) 2026 SkentSun），由侧面照片生成的单网格模型：一�
 渲染走 `src/fish/photo-fish.js`（游动着色器移植自原项目 fishlib.js）：每物种一个 InstancedMesh，
 顶点着色器按逐实例状态摆尾、弯身、开合各鳍、转眼、鼓鳃；贴图透明度只有 0/1，按 alphaTest 镂空。
 步态由 `src/fish/photo-gait.js` 从鱼的真实运动推出，School 按物种体长 `L` 缩放（模型米制 → 场景）。
+
+## 照片生成的照片皮模型（本项目 `scripts/photo-fish/`）
+
+aquarium-editor 只有淡水鱼；海水鱼用同一格式从一张侧面照片生成，游动、鳍透光与上面的照片皮模型完全一致。
+
+| 文件 | 物种 | 照片来源与授权 |
+| --- | --- | --- |
+| species-clown-photo.glb | 公子小丑（*Amphiprion ocellaris*） | [Nick Hobgood，Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Amphiprion_ocellaris_(Clown_anemonefish)_Nemo.jpg)，**CC BY-SA 3.0**——本文件（含贴图）是该照片的衍生作品，按 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) 发布；改动：抠图、摆正、裁切缩放、生成网格 |
+
+生成流程（源照片放在 `_fish_build/photos/`，不进仓库）：
+
+```bash
+python -I -X utf8 scripts/photo-fish/build.py scripts/photo-fish/clown.json
+blender -b --factory-startup --python scripts/photo-fish/blender_export.py -- _fish_build/out/clown/mesh.json public/fish-models/species/species-clown-photo.glb
+```
+
+原 Quaternius 卡通小丑鱼 `species-clown.glb` 暂留作对照（`species-models.js` 已不再引用）。

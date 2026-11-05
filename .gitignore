@@ -32,3 +32,4 @@ Thumbs.db
 
 # Cursor IDE 本地 MCP 配置（含本机绝对路径）
 .cursor/
+_fish_build/
